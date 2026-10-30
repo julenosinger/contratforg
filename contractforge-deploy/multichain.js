@@ -234,6 +234,7 @@ function setMultichainMode(mode){
   const hadSource = !!(pendingSource && pendingSource.code);
   logConsole('ok','Multichain mode: '+MC_MODES[mode].label+(hadSource?' — generate the contract again to apply it.':''));
   renderCtorArgs();
+  if(typeof renderNetBanner === 'function') renderNetBanner();
   if(typeof renderMultiDeployPanel === 'function') renderMultiDeployPanel();
 }
 

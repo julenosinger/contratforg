@@ -271,6 +271,7 @@ function updateSideNet(){
     if(bannerGas) bannerGas.textContent = net.gasSymbol;
   }
 
+  if(typeof renderNetBanner === 'function') renderNetBanner();
   if(typeof renderCtorArgs === 'function') renderCtorArgs();
   if(typeof renderMultiDeployPanel === 'function') renderMultiDeployPanel();
 

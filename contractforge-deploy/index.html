@@ -27,13 +27,16 @@
       <div class="tag">On-Chain Contract Foundry</div>
     </div>
 
+    <nav class="nav" aria-label="Sections">
     <div class="nav-group">
-      <h4>Simple contracts</h4>
-      <div class="nav-item active" data-section="simple"><span class="num">01</span> Token / Escrow / NFT</div>
+      <h4>Start here</h4>
+      <div class="nav-item" data-section="wizard"><span class="num">14</span> Contract Wizard</div>
+      <div class="nav-item" data-section="nlai"><span class="num">15</span> AI → Solidity</div>
     </div>
 
     <div class="nav-group">
-      <h4>Advanced contracts</h4>
+      <h4>Create</h4>
+      <div class="nav-item active" data-section="simple"><span class="num">01</span> Token / Escrow / NFT</div>
       <div class="nav-item" data-section="swap"><span class="num">02</span> Swap / AMM</div>
       <div class="nav-item" data-section="treasury"><span class="num">03</span> Treasury</div>
       <div class="nav-item" data-section="vault"><span class="num">04</span> Vault (ERC-4626)</div>
@@ -42,27 +45,23 @@
     </div>
 
     <div class="nav-group">
-      <h4>Deploy</h4>
+      <h4>Publish</h4>
       <div class="nav-item" data-section="deploy"><span class="num">07</span> Compile &amp; Deploy</div>
-    </div>
-
-    <div class="nav-group">
-      <h4>Tools</h4>
-      <div class="nav-item" data-section="auditor"><span class="num">08</span> AI Auditor</div>
-      <div class="nav-item" data-section="playground"><span class="num">09</span> ABI Playground</div>
       <div class="nav-item" data-section="history"><span class="num">10</span> Deploy History</div>
-      <div class="nav-item" data-section="gas"><span class="num">11</span> Gas Estimator</div>
       <div class="nav-item" data-section="verify"><span class="num">12</span> Verify on Explorer</div>
       <div class="nav-item" data-section="share"><span class="num">13</span> Share / Export</div>
     </div>
 
     <div class="nav-group">
-      <h4>Pro features</h4>
-      <div class="nav-item" data-section="wizard"><span class="num">14</span> Contract Wizard</div>
-      <div class="nav-item" data-section="nlai"><span class="num">15</span> AI → Solidity</div>
+      <h4>Check &amp; analyze</h4>
+      <div class="nav-item" data-section="auditor"><span class="num">08</span> AI Auditor</div>
+      <div class="nav-item" data-section="playground"><span class="num">09</span> ABI Playground</div>
+      <div class="nav-item" data-section="gas"><span class="num">11</span> Gas Estimator</div>
       <div class="nav-item" data-section="analytics"><span class="num">16</span> Analytics</div>
       <div class="nav-item" data-section="tests"><span class="num">17</span> Test Generator</div>
     </div>
+
+    </nav>
 
     <div class="net-pill">
       <div class="row"><span>active network</span><b id="sidenet">Arc Testnet</b></div>
@@ -71,15 +70,15 @@
     </div>
     <div class="mc-box" id="mcSelector"></div>
     <div class="tier-widget">
-      <div class="tier-label">Mode</div>
-      <div class="tier-badge pro" style="color:#5FB37D;border-color:#0A2E14;background:#081408;"><span class="dot" style="background:#5FB37D;"></span> Testnet — All features free</div>
-      <div style="font-family:var(--mono);font-size:10px;color:#5C6B65;margin-bottom:10px;">Tier gates disabled</div>
+      <div class="tier-label">Appearance</div>
       <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light mode</button>
     </div>
   </aside>
 
   <!-- ===================== MAIN ===================== -->
   <main>
+
+    <div class="net-banner testnet" id="netBanner" role="status" aria-live="polite"></div>
 
     <div class="page-head">
       <div>
@@ -90,7 +89,7 @@
       <div class="head-meta">
         ARC · ROBINHOOD · ETH SEPOLIA<br>
         POLYGON AMOY · BASE/ARB/OP SEPOLIA<br>
-        <b>v2.0 — single file</b>
+        <b id="headVersion">v3.0 — multichain</b>
       </div>
     </div>
 
@@ -800,5 +799,6 @@
 <script src="app.js"></script>
 <script src="multichain.js"></script>
 <script src="multideploy.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 export function loadApp({ alerts } = {}) {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<script[^>]*src=[^>]*><\/script>/g, '');
-  const files = ['app.js', 'multichain.js', 'multideploy.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8'));
+  const files = ['app.js', 'multichain.js', 'multideploy.js', 'ui.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8'));
   const pageErrors = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => pageErrors.push(e.detail?.message || e.message));
