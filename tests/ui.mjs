@@ -55,6 +55,46 @@ ok(/Multi-deploy mode/.test(banner.textContent), 'banner shows the multichain mo
 ev("setMultichainMode('single')");
 ok(!/mode/.test(banner.textContent), 'no mode label in single mode');
 
+/* current contract bar */
+const bar = doc.getElementById('currentContract');
+ok(bar.style.display === 'none', 'bar hidden before anything is generated');
+ev("renderSimpleForm('erc20')"); ev("genSimple('erc20')");
+ok(bar.style.display === 'flex' && /ArcDollar\.sol/.test(bar.textContent), 'bar shows the generated contract', bar.textContent);
+ok(!/constructor argument/.test(bar.textContent), 'no constructor chip when there are none');
+eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Audit', 'Copy', 'Download', 'Publish'], 'bar actions');
+doc.querySelector('.nav-item[data-section="swap"]').click();
+[...bar.querySelectorAll('button')].find((b) => b.textContent === 'Publish').click();
+eq(visible(), ['sec-deploy'], 'Publish opens Compile & Deploy from any section');
+eq(doc.querySelector('.nav-item.active')?.dataset.section, 'deploy', 'menu follows Publish');
+[...bar.querySelectorAll('button')].find((b) => b.textContent === 'Audit').click();
+eq(visible(), ['sec-auditor'], 'Audit opens the auditor');
+let copied = null; w.navigator.clipboard = { writeText: (t) => { copied = t; return Promise.resolve(); } };
+[...bar.querySelectorAll('button')].find((b) => b.textContent === 'Copy').click();
+ok(copied && copied.includes('contract ArcDollar'), 'Copy copies the source');
+ev("setMultichainMode('portable')"); ev("renderSimpleForm('escrow')"); ev("activeNetwork='arc'"); ev("genSimple('escrow')");
+ok(/Portable/.test(bar.textContent) && /1 constructor argument/.test(bar.textContent), 'bar shows mode and constructor arguments', bar.textContent);
+ev("setMultichainMode('single')");
+const sticky = doc.querySelector('.sticky-top');
+ok(sticky.contains(banner) && sticky.contains(bar), 'banner and bar share the sticky header');
+
+/* advanced options keep ids and values */
+for (const [tpl, ids] of Object.entries({ erc20: ['s_decimals', 's_cap', 's_burn'], erc721: ['s_royalty', 's_baseuri'], escrow: ['s_token', 's_timeout'], vesting: ['s_token', 's_cliff'], paywall: ['s_token'], dao: ['s_quorum', 's_voting', 's_delay', 's_threshold'], smartwallet: ['s_entrypoint', 's_session'], staking: ['s_token', 's_reward', 's_exitfee'] })) {
+  ev(`renderSimpleForm('${tpl}')`);
+  await new Promise((r) => setTimeout(r, 0)); // the form is reorganised right after it renders
+  const d = doc.querySelector('#simpleForm details.adv');
+  ok(!!d, `${tpl}: advanced block`);
+  eq(ids.map((id) => !!d?.querySelector('#' + id)), ids.map(() => true), `${tpl}: advanced fields moved`);
+  ok(!!doc.querySelector('#simpleForm .btnrow button'), `${tpl}: generate button still outside`);
+  ok(!d?.querySelector('#s_name'), `${tpl}: name stays visible`);
+}
+for (const [sec, ids] of Object.entries({ 'sec-swap': ['swap_fee', 'swap_multi'], 'sec-treasury': ['tre_streaming', 'tre_tokens'], 'sec-vault': ['vault_perf', 'vault_cap'], 'sec-multisend': ['ms_max', 'ms_fee', 'ms_owner'], 'sec-crosschain': ['cc_tokenmessenger', 'cc_msgtransmitter', 'cc_usdc', 'cc_resume'] })) {
+  const d = doc.querySelector(`#${sec} details.adv`);
+  ok(!!d, `${sec}: advanced block`);
+  eq(ids.map((id) => !!d?.querySelector('#' + id)), ids.map(() => true), `${sec}: advanced fields moved`);
+}
+ev("renderSimpleForm('erc20')"); await new Promise((r) => setTimeout(r, 0)); doc.getElementById('s_decimals').value = '6'; ev("genSimple('erc20')");
+ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value changed inside Advanced options is used');
+
 /* texts */
 ok(!/All features free|Tier gates/.test(doc.querySelector('.spine').textContent), 'stale tier text removed');
 ok(/multichain/.test(doc.getElementById('headVersion').textContent), 'version text updated');

@@ -206,6 +206,7 @@ function collectCtorValues(abiInputs){
 
 /* ---------------- UI: constructor arguments panel ---------------- */
 function renderCtorArgs(){
+  if(typeof renderCurrentContract === 'function') renderCurrentContract();
   const box = document.getElementById('ctorArgsPanel');
   if(!box) return;
   const hasSource = !!(pendingSource && pendingSource.code);
