@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://contractforge.pages.dev/sitemap.xml
