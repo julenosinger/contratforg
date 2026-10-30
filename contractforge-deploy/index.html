@@ -69,6 +69,7 @@
       <div class="row"><span>chain id</span><b id="sidechain">5042002</b></div>
       <div class="row"><span>gas token</span><b id="sidegas">USDC</b></div>
     </div>
+    <div class="mc-box" id="mcSelector"></div>
     <div class="tier-widget">
       <div class="tier-label">Mode</div>
       <div class="tier-badge pro" style="color:#5FB37D;border-color:#0A2E14;background:#081408;"><span class="dot" style="background:#5FB37D;"></span> Testnet — All features free</div>
@@ -359,11 +360,13 @@
             </select>
           </div>
         </div>
+        <div class="mc-panel" id="ctorArgsPanel" style="display:none;"></div>
         <div class="btnrow">
           <button class="btn btn-primary" onclick="compileAndDeploy()">Compile and deploy</button>
           <button class="btn btn-ghost" onclick="downloadSource()">Download .sol</button>
           <button class="btn btn-ghost" onclick="copySource()">Copy code</button>
         </div>
+        <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
         <div class="console" id="deployConsole">
           <div class="line"><span class="t">[boot]</span><span class="msg">Waiting for contract generation and wallet connection…</span></div>
         </div>
@@ -795,5 +798,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" integrity="sha512-FDcVY+g7vc5CXANbrTSg1K5qLyriCsGDYCE02Li1tXEYdNQPvLPHNE+rT2Mjei8N7fZbe0WLhw27j2SrGRpdMg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="app.js"></script>
+<script src="multichain.js"></script>
+<script src="multideploy.js"></script>
 </body>
 </html>

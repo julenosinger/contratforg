@@ -271,6 +271,9 @@ function updateSideNet(){
     if(bannerGas) bannerGas.textContent = net.gasSymbol;
   }
 
+  if(typeof renderCtorArgs === 'function') renderCtorArgs();
+  if(typeof renderMultiDeployPanel === 'function') renderMultiDeployPanel();
+
   // Body mainnet mode class
   document.body.classList.toggle('mainnet-mode', !!net.isMainnet);
   const headMeta = document.querySelector('.head-meta');
@@ -635,7 +638,7 @@ function renderSimpleForm(id){
 function genSimple(id){
   const net=NETWORKS[activeNetwork];
   const g=(id)=>document.getElementById(id)?.value ?? '';
-  let code='', name='';
+  let code='', name='', mcSpecs=[];
 
   if(id==='dao'){
     genSimpleDAO(); return;
@@ -737,6 +740,10 @@ contract ${name} {
     const royalty=g('s_royalty')||'0';
     const baseuri=g('s_baseuri')||'';
     const usdc = net.usdc;
+    mcSpecs = [
+      { kind:'addr', name:'usdc', type:'address', value: usdc==='' ? '0x0000000000000000000000000000000000000000' : usdc, param:'usdc_', hint:'usdc', optional: /^0+(\.0+)?$/.test(String(price).trim()) },
+      { kind:'scaled', name:'mintPrice', expr: price, tokenParam:'usdc_' }
+    ];
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
@@ -828,6 +835,10 @@ contract ${name} {
     const token=resolveToken(g('s_token'),'usdc');
     const amount=g('s_amount')||'0';
     const timeout=g('s_timeout')||'14';
+    mcSpecs = [
+      { kind:'addr', name:'token', type:'IERC20', value:token, param:'token_', hint:'usdc', userSet:!!g('s_token').trim() },
+      { kind:'scaled', name:'amount', expr:amount, tokenParam:'token_' }
+    ];
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
@@ -903,6 +914,10 @@ contract ${name} {
     const amount=g('s_amount')||'0';
     const duration=g('s_duration')||'365';
     const cliff=g('s_cliff')||'0';
+    mcSpecs = [
+      { kind:'addr', name:'token', type:'IERC20', value:token, param:'token_', hint:'usdc', userSet:!!g('s_token').trim() },
+      { kind:'scaled', name:'totalAmount', expr:amount, tokenParam:'token_' }
+    ];
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
@@ -966,6 +981,10 @@ contract ${name} {
     const amount=g('s_amount')||'0';
     const duration=g('s_duration')||'30';
     const beneficiary=g('s_beneficiary')||'0x0000000000000000000000000000000000bEEF';
+    mcSpecs = [
+      { kind:'addr', name:'token', type:'IERC20', value:token, param:'token_', hint:'usdc', userSet:!!g('s_token').trim() },
+      { kind:'scaled', name:'pricePerPeriod', expr:amount, tokenParam:'token_' }
+    ];
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
@@ -1007,14 +1026,205 @@ contract ${name} {
 }`;
   }
 
+  code = portabilize(code, mcSpecs);
   showCode('simpleCode', name+'.sol', code);
   pendingSource = { name, code };
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
 
 /* ======================================================================
    SECTION 02 — SWAP / AMM
    ====================================================================== */
+/* Shared constant-product pair source. P0/P1 are the suffixes used for the two
+   sides ('A','B' for the single-pair contract, '0','1' for factory pairs). */
+function ammPairSource(o){
+  const {contract, P0, P1, fee, title, notice, ctor, hasFactoryVar} = o;
+  const t0=`token${P0}`, t1=`token${P1}`, r0=`reserve${P0}`, r1=`reserve${P1}`;
+  const a0=`amount${P0}`, a1=`amount${P1}`;
+  const a0d=`amount${P0}Desired`, a1d=`amount${P1}Desired`, a0m=`amount${P0}Min`, a1m=`amount${P1}Min`;
+  const s01=`swap${P0}to${P1}`, s10=`swap${P1}to${P0}`;
+  return `/// @title ${title}
+${notice}/// @dev Constant-product (x*y=k) pool. ${fee} bps fee stays in the reserves for liquidity providers.
+///      Safe-by-default: slippage limits and deadlines on every call, minimum liquidity locked on the
+///      first deposit, deposits taken at the pool ratio (no donated excess), reentrancy guard, and
+///      fee-on-transfer tokens are rejected. Tokens sent to the pool directly (not through these
+///      functions) are not tracked and cannot be recovered.
+contract ${contract} {
+    IERC20 public immutable ${t0};
+    IERC20 public immutable ${t1};
+    uint256 public ${r0};
+    uint256 public ${r1};
+    uint256 public constant FEE_BPS = ${fee};
+    uint256 public constant MINIMUM_LIQUIDITY = 1000;
+    uint256 public totalShares;
+    mapping(address => uint256) public shares;
+${hasFactoryVar?'    address public factory;\n':''}    uint256 private _locked = 1;
+
+    event LiquidityAdded(address indexed provider, uint256 ${a0}, uint256 ${a1}, uint256 sharesMinted);
+    event LiquidityRemoved(address indexed provider, uint256 ${a0}, uint256 ${a1}, uint256 sharesBurned);
+    event Swap(address indexed user, address tokenIn, uint256 amountIn, uint256 amountOut);
+
+    modifier nonReentrant() {
+        require(_locked == 1, "reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
+
+    modifier ensure(uint256 deadline) {
+        require(block.timestamp <= deadline, "expired");
+        _;
+    }
+
+${ctor}
+
+    /// @notice Add liquidity at the current pool ratio. Only the amounts actually needed are pulled.
+    /// @param ${a0d} Max amount of ${t0} to deposit
+    /// @param ${a1d} Max amount of ${t1} to deposit
+    /// @param ${a0m} Revert if less than this ${t0} would be deposited
+    /// @param ${a1m} Revert if less than this ${t1} would be deposited
+    /// @param deadline Unix time after which the call reverts
+    function addLiquidity(
+        uint256 ${a0d},
+        uint256 ${a1d},
+        uint256 ${a0m},
+        uint256 ${a1m},
+        uint256 deadline
+    ) external nonReentrant ensure(deadline) returns (uint256 ${a0}, uint256 ${a1}, uint256 mintedShares) {
+        require(${a0d} > 0 && ${a1d} > 0, "zero amounts");
+
+        if (totalShares == 0) {
+            (${a0}, ${a1}) = (${a0d}, ${a1d});
+        } else {
+            uint256 ${a1}Optimal = (${a0d} * ${r1}) / ${r0};
+            if (${a1}Optimal <= ${a1d}) {
+                (${a0}, ${a1}) = (${a0d}, ${a1}Optimal);
+            } else {
+                uint256 ${a0}Optimal = (${a1d} * ${r0}) / ${r1};
+                (${a0}, ${a1}) = (${a0}Optimal, ${a1d});
+            }
+        }
+        require(${a0} >= ${a0m} && ${a1} >= ${a1m}, "slippage exceeded");
+
+        if (totalShares == 0) {
+            mintedShares = _sqrt(${a0} * ${a1});
+            require(mintedShares > MINIMUM_LIQUIDITY, "insufficient initial liquidity");
+            mintedShares -= MINIMUM_LIQUIDITY;
+            totalShares = MINIMUM_LIQUIDITY;      // locked forever, keeps the pool from ever being empty
+            shares[address(0)] = MINIMUM_LIQUIDITY;
+        } else {
+            uint256 s0 = (${a0} * totalShares) / ${r0};
+            uint256 s1 = (${a1} * totalShares) / ${r1};
+            mintedShares = s0 < s1 ? s0 : s1;
+        }
+        require(mintedShares > 0, "insufficient liquidity minted");
+
+        ${r0} += ${a0};
+        ${r1} += ${a1};
+        totalShares += mintedShares;
+        shares[msg.sender] += mintedShares;
+
+        emit LiquidityAdded(msg.sender, ${a0}, ${a1}, mintedShares);
+        _pull(${t0}, ${a0});
+        _pull(${t1}, ${a1});
+    }
+
+    /// @notice Burn shares and receive the proportional amount of both tokens.
+    function removeLiquidity(
+        uint256 shareAmount,
+        uint256 ${a0m},
+        uint256 ${a1m},
+        uint256 deadline
+    ) external nonReentrant ensure(deadline) returns (uint256 ${a0}, uint256 ${a1}) {
+        require(shareAmount > 0 && shares[msg.sender] >= shareAmount, "insufficient shares");
+        ${a0} = (${r0} * shareAmount) / totalShares;
+        ${a1} = (${r1} * shareAmount) / totalShares;
+        require(${a0} > 0 && ${a1} > 0, "insufficient liquidity burned");
+        require(${a0} >= ${a0m} && ${a1} >= ${a1m}, "slippage exceeded");
+
+        shares[msg.sender] -= shareAmount;
+        totalShares -= shareAmount;
+        ${r0} -= ${a0};
+        ${r1} -= ${a1};
+
+        emit LiquidityRemoved(msg.sender, ${a0}, ${a1}, shareAmount);
+        _push(${t0}, msg.sender, ${a0});
+        _push(${t1}, msg.sender, ${a1});
+    }
+
+    /// @notice Swap ${t0} -> ${t1}
+    function ${s01}(uint256 amountIn, uint256 minAmountOut, uint256 deadline)
+        external nonReentrant ensure(deadline) returns (uint256 amountOut)
+    {
+        require(amountIn > 0, "zero amount");
+        amountOut = _quote(amountIn, ${r0}, ${r1});
+        require(amountOut > 0, "insufficient output");
+        require(amountOut >= minAmountOut, "slippage exceeded");
+
+        ${r0} += amountIn;
+        ${r1} -= amountOut;
+
+        emit Swap(msg.sender, address(${t0}), amountIn, amountOut);
+        _pull(${t0}, amountIn);
+        _push(${t1}, msg.sender, amountOut);
+    }
+
+    /// @notice Swap ${t1} -> ${t0}
+    function ${s10}(uint256 amountIn, uint256 minAmountOut, uint256 deadline)
+        external nonReentrant ensure(deadline) returns (uint256 amountOut)
+    {
+        require(amountIn > 0, "zero amount");
+        amountOut = _quote(amountIn, ${r1}, ${r0});
+        require(amountOut > 0, "insufficient output");
+        require(amountOut >= minAmountOut, "slippage exceeded");
+
+        ${r1} += amountIn;
+        ${r0} -= amountOut;
+
+        emit Swap(msg.sender, address(${t1}), amountIn, amountOut);
+        _pull(${t1}, amountIn);
+        _push(${t0}, msg.sender, amountOut);
+    }
+
+    /// @notice Expected output for an input amount at the current reserves (0 if the pool is empty).
+    function getAmountOut(uint256 amountIn, bool ${P0.toLowerCase()==='a'?'aToB':'zeroToOne'}) external view returns (uint256) {
+        return ${P0.toLowerCase()==='a'?'aToB':'zeroToOne'} ? _quote(amountIn, ${r0}, ${r1}) : _quote(amountIn, ${r1}, ${r0});
+    }
+
+    function _quote(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) private pure returns (uint256) {
+        if (amountIn == 0 || reserveIn == 0 || reserveOut == 0) return 0;
+        uint256 amountInWithFee = amountIn * (10000 - FEE_BPS);
+        return (amountInWithFee * reserveOut) / (reserveIn * 10000 + amountInWithFee);
+    }
+
+    /// @dev Pull exactly \`amount\` from the caller; rejects tokens that take a fee on transfer.
+    function _pull(IERC20 token, uint256 amount) private {
+        uint256 balBefore = token.balanceOf(address(this));
+        _call(address(token), abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amount)));
+        require(token.balanceOf(address(this)) - balBefore == amount, "unsupported token (fee on transfer)");
+    }
+
+    function _push(IERC20 token, address to, uint256 amount) private {
+        _call(address(token), abi.encodeCall(IERC20.transfer, (to, amount)));
+    }
+
+    /// @dev Works with tokens that return nothing (e.g. USDT) as well as tokens that return a bool.
+    function _call(address token, bytes memory data) private {
+        (bool ok, bytes memory ret) = token.call(data);
+        require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "token transfer failed");
+    }
+
+    function _sqrt(uint256 y) private pure returns (uint256 z) {
+        if (y > 3) {
+            z = y;
+            uint256 x = y / 2 + 1;
+            while (x < z) { z = x; x = (y / x + x) / 2; }
+        } else if (y != 0) { z = 1; }
+    }
+}`;
+}
+
 function genSwap(){
   const net=NETWORKS[activeNetwork];
   const name=(document.getElementById('swap_name').value||'ArcSwapAMM').replace(/[^A-Za-z0-9]/g,'');
@@ -1024,201 +1234,71 @@ function genSwap(){
   const kind=document.getElementById('swap_kind').value;
   const multi=document.getElementById('swap_multi').value;
 
+  if(!/^\d+$/.test(String(fee).trim()) || Number(fee) >= 10000){
+    alert('Pool fee must be a whole number of basis points below 10000 (30 = 0.30%).');
+    return;
+  }
+  const ZERO='0x0000000000000000000000000000000000000000';
+  const portable = isPortable();
+  const needsTokens = !(kind==='amm' && multi==='factory');
+  const tokA = portable ? 'tokenA_' : tokenA, tokB = portable ? 'tokenB_' : tokenB;
+  if(needsTokens && !portable){
+    if(tokenA===ZERO || tokenB===ZERO){
+      alert('No default token for '+net.label+'. Enter the Token A and Token B addresses.');
+      return;
+    }
+    if(tokenA.toLowerCase()===tokenB.toLowerCase()){
+      alert('Token A and Token B must be different.');
+      return;
+    }
+  }
+
+  const ierc20 = `interface IERC20 {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}`;
+
   let code;
   if(kind==='amm' && multi==='single'){
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IERC20 {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
+${ierc20}
 
-/// @title ${name} — Constant-product AMM (x*y=k) for a single pair
-/// @notice Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
-/// @dev Fee: ${fee} bps per swap, distributed to liquidity providers via reserves
-contract ${name} {
-    IERC20 public tokenA = IERC20(${tokenA});
-    IERC20 public tokenB = IERC20(${tokenB});
-    uint256 public reserveA;
-    uint256 public reserveB;
-    uint256 public constant FEE_BPS = ${fee};
-    uint256 public totalShares;
-    mapping(address => uint256) public shares;
-
-    event LiquidityAdded(address indexed provider, uint256 amountA, uint256 amountB, uint256 sharesMinted);
-    event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB, uint256 sharesBurned);
-    event Swap(address indexed user, address tokenIn, uint256 amountIn, uint256 amountOut);
-
-    function addLiquidity(uint256 amountA, uint256 amountB) external returns (uint256 mintedShares) {
-        require(amountA > 0 && amountB > 0, "zero amounts");
-        require(tokenA.transferFrom(msg.sender, address(this), amountA), "transferFrom A failed");
-        require(tokenB.transferFrom(msg.sender, address(this), amountB), "transferFrom B failed");
-
-        if (totalShares == 0) {
-            mintedShares = sqrt(amountA * amountB);
-        } else {
-            uint256 shareA = (amountA * totalShares) / reserveA;
-            uint256 shareB = (amountB * totalShares) / reserveB;
-            mintedShares = shareA < shareB ? shareA : shareB;
-        }
-        require(mintedShares > 0, "insufficient liquidity minted");
-
-        reserveA += amountA;
-        reserveB += amountB;
-        totalShares += mintedShares;
-        shares[msg.sender] += mintedShares;
-
-        emit LiquidityAdded(msg.sender, amountA, amountB, mintedShares);
-    }
-
-    function removeLiquidity(uint256 shareAmount) external returns (uint256 amountA, uint256 amountB) {
-        require(shares[msg.sender] >= shareAmount, "insufficient shares");
-        amountA = (reserveA * shareAmount) / totalShares;
-        amountB = (reserveB * shareAmount) / totalShares;
-
-        shares[msg.sender] -= shareAmount;
-        totalShares -= shareAmount;
-        reserveA -= amountA;
-        reserveB -= amountB;
-
-        require(tokenA.transfer(msg.sender, amountA), "transfer A failed");
-        require(tokenB.transfer(msg.sender, amountB), "transfer B failed");
-
-        emit LiquidityRemoved(msg.sender, amountA, amountB, shareAmount);
-    }
-
-    /// @notice Swap tokenA -> tokenB
-    function swapAtoB(uint256 amountIn, uint256 minAmountOut) external returns (uint256 amountOut) {
-        require(amountIn > 0, "zero amount");
-        require(tokenA.transferFrom(msg.sender, address(this), amountIn), "transferFrom failed");
-
-        uint256 amountInWithFee = amountIn * (10000 - FEE_BPS) / 10000;
-        amountOut = (reserveB * amountInWithFee) / (reserveA + amountInWithFee);
-        require(amountOut >= minAmountOut, "slippage exceeded");
-
-        reserveA += amountIn;
-        reserveB -= amountOut;
-
-        require(tokenB.transfer(msg.sender, amountOut), "transfer out failed");
-        emit Swap(msg.sender, address(tokenA), amountIn, amountOut);
-    }
-
-    /// @notice Swap tokenB -> tokenA
-    function swapBtoA(uint256 amountIn, uint256 minAmountOut) external returns (uint256 amountOut) {
-        require(amountIn > 0, "zero amount");
-        require(tokenB.transferFrom(msg.sender, address(this), amountIn), "transferFrom failed");
-
-        uint256 amountInWithFee = amountIn * (10000 - FEE_BPS) / 10000;
-        amountOut = (reserveA * amountInWithFee) / (reserveB + amountInWithFee);
-        require(amountOut >= minAmountOut, "slippage exceeded");
-
-        reserveB += amountIn;
-        reserveA -= amountOut;
-
-        require(tokenA.transfer(msg.sender, amountOut), "transfer out failed");
-        emit Swap(msg.sender, address(tokenB), amountIn, amountOut);
-    }
-
-    function getAmountOut(uint256 amountIn, bool aToB) external view returns (uint256) {
-        uint256 amountInWithFee = amountIn * (10000 - FEE_BPS) / 10000;
-        if (aToB) return (reserveB * amountInWithFee) / (reserveA + amountInWithFee);
-        return (reserveA * amountInWithFee) / (reserveB + amountInWithFee);
-    }
-
-    function sqrt(uint256 y) internal pure returns (uint256 z) {
-        if (y > 3) {
-            z = y;
-            uint256 x = y / 2 + 1;
-            while (x < z) { z = x; x = (y / x + x) / 2; }
-        } else if (y != 0) { z = 1; }
-    }
-}`;
+` + ammPairSource({
+      contract:name, P0:'A', P1:'B', fee,
+      title:`${name} — Constant-product AMM (x*y=k) for a single pair`,
+      notice:`/// @notice Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})\n`,
+      hasFactoryVar:false,
+      ctor:`    constructor(${portable?'address tokenA_, address tokenB_':''}) {
+        IERC20 a = IERC20(${tokA});
+        IERC20 b = IERC20(${tokB});
+        require(address(a) != address(b), "identical tokens");
+        require(address(a).code.length > 0 && address(b).code.length > 0, "token is not a contract");
+        tokenA = a;
+        tokenB = b;
+    }`
+    });
   } else if(kind==='amm' && multi==='factory'){
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IERC20 {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-}
+${ierc20}
 
-/// @title ${name}Pair — individual constant-product pair
-contract ${name}Pair {
-    IERC20 public token0;
-    IERC20 public token1;
-    uint256 public reserve0;
-    uint256 public reserve1;
-    uint256 public constant FEE_BPS = ${fee};
-    uint256 public totalShares;
-    mapping(address => uint256) public shares;
-    address public factory;
-
-    event Swap(address indexed user, address tokenIn, uint256 amountIn, uint256 amountOut);
-    event LiquidityAdded(address indexed provider, uint256 amount0, uint256 amount1, uint256 mintedShares);
-    event LiquidityRemoved(address indexed provider, uint256 amount0, uint256 amount1, uint256 burnedShares);
-
-    constructor(address _token0, address _token1) {
+` + ammPairSource({
+      contract:`${name}Pair`, P0:'0', P1:'1', fee,
+      title:`${name}Pair — individual constant-product pair`,
+      notice:'',
+      hasFactoryVar:true,
+      ctor:`    constructor(address _token0, address _token1) {
+        require(_token0 != address(0) && _token0 != _token1, "invalid tokens");
+        require(_token0.code.length > 0 && _token1.code.length > 0, "token is not a contract");
         factory = msg.sender;
         token0 = IERC20(_token0);
         token1 = IERC20(_token1);
-    }
-
-    function addLiquidity(uint256 amount0, uint256 amount1) external returns (uint256 minted) {
-        require(amount0 > 0 && amount1 > 0, "zero amounts");
-        require(token0.transferFrom(msg.sender, address(this), amount0), "transferFrom0 failed");
-        require(token1.transferFrom(msg.sender, address(this), amount1), "transferFrom1 failed");
-
-        if (totalShares == 0) {
-            minted = sqrt(amount0 * amount1);
-        } else {
-            uint256 s0 = (amount0 * totalShares) / reserve0;
-            uint256 s1 = (amount1 * totalShares) / reserve1;
-            minted = s0 < s1 ? s0 : s1;
-        }
-        require(minted > 0, "insufficient minted");
-        reserve0 += amount0; reserve1 += amount1;
-        totalShares += minted; shares[msg.sender] += minted;
-        emit LiquidityAdded(msg.sender, amount0, amount1, minted);
-    }
-
-    function removeLiquidity(uint256 shareAmount) external returns (uint256 amount0, uint256 amount1) {
-        require(shares[msg.sender] >= shareAmount, "insufficient shares");
-        amount0 = (reserve0 * shareAmount) / totalShares;
-        amount1 = (reserve1 * shareAmount) / totalShares;
-        shares[msg.sender] -= shareAmount; totalShares -= shareAmount;
-        reserve0 -= amount0; reserve1 -= amount1;
-        require(token0.transfer(msg.sender, amount0), "transfer0 failed");
-        require(token1.transfer(msg.sender, amount1), "transfer1 failed");
-        emit LiquidityRemoved(msg.sender, amount0, amount1, shareAmount);
-    }
-
-    function swap0to1(uint256 amountIn, uint256 minOut) external returns (uint256 amountOut) {
-        require(token0.transferFrom(msg.sender, address(this), amountIn), "transferFrom failed");
-        uint256 amtFee = amountIn * (10000 - FEE_BPS) / 10000;
-        amountOut = (reserve1 * amtFee) / (reserve0 + amtFee);
-        require(amountOut >= minOut, "slippage");
-        reserve0 += amountIn; reserve1 -= amountOut;
-        require(token1.transfer(msg.sender, amountOut), "transfer failed");
-        emit Swap(msg.sender, address(token0), amountIn, amountOut);
-    }
-
-    function swap1to0(uint256 amountIn, uint256 minOut) external returns (uint256 amountOut) {
-        require(token1.transferFrom(msg.sender, address(this), amountIn), "transferFrom failed");
-        uint256 amtFee = amountIn * (10000 - FEE_BPS) / 10000;
-        amountOut = (reserve0 * amtFee) / (reserve1 + amtFee);
-        require(amountOut >= minOut, "slippage");
-        reserve1 += amountIn; reserve0 -= amountOut;
-        require(token0.transfer(msg.sender, amountOut), "transfer failed");
-        emit Swap(msg.sender, address(token1), amountIn, amountOut);
-    }
-
-    function sqrt(uint256 y) internal pure returns (uint256 z) {
-        if (y > 3) { z = y; uint256 x = y / 2 + 1; while (x < z) { z = x; x = (y / x + x) / 2; } }
-        else if (y != 0) { z = 1; }
-    }
-}
+    }`
+    }) + `
 
 /// @title ${name}Factory — creates pairs on demand
 /// @notice Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
@@ -1230,6 +1310,7 @@ contract ${name}Factory {
 
     function createPair(address tokenX, address tokenY) external returns (address pair) {
         require(tokenX != tokenY, "identical tokens");
+        require(tokenX != address(0) && tokenY != address(0), "zero address");
         require(getPair[tokenX][tokenY] == address(0), "pair exists");
         (address token0, address token1) = tokenX < tokenY ? (tokenX, tokenY) : (tokenY, tokenX);
         pair = address(new ${name}Pair(token0, token1));
@@ -1245,19 +1326,18 @@ contract ${name}Factory {
     code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IERC20 {
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    function transfer(address to, uint256 amount) external returns (bool);
-}
+${ierc20}
 
 /// @title ${name} — StableFX-style swap order book (PvP, no AMM)
 /// @notice Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
-/// @dev Limit orders: maker deposits tokenA and sets an exchange rate, taker fills with tokenB
+/// @dev Limit orders: maker deposits tokenA and sets an exchange rate, taker fills with tokenB.
+///      The fee is paid in tokenB to feeCollector (the deployer). Prices cannot be changed after creation.
 contract ${name} {
-    IERC20 public tokenA = IERC20(${tokenA});
-    IERC20 public tokenB = IERC20(${tokenB});
+    IERC20 public immutable tokenA;
+    IERC20 public immutable tokenB;
     uint256 public constant FEE_BPS = ${fee};
     address public feeCollector;
+    uint256 private _locked = 1;
 
     struct Order {
         address maker;
@@ -1272,51 +1352,88 @@ contract ${name} {
     event OrderFilled(uint256 indexed id, address indexed taker, uint256 amountAFilled, uint256 amountBPaid);
     event OrderCancelled(uint256 indexed id);
 
-    constructor() { feeCollector = msg.sender; }
+    modifier nonReentrant() {
+        require(_locked == 1, "reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
 
-    function createOrder(uint256 amountA, uint256 priceB1e6) external returns (uint256 id) {
+    constructor(${portable?'address tokenA_, address tokenB_':''}) {
+        IERC20 a = IERC20(${tokA});
+        IERC20 b = IERC20(${tokB});
+        require(address(a) != address(b), "identical tokens");
+        require(address(a).code.length > 0 && address(b).code.length > 0, "token is not a contract");
+        tokenA = a;
+        tokenB = b;
+        feeCollector = msg.sender;
+    }
+
+    function createOrder(uint256 amountA, uint256 priceB1e6) external nonReentrant returns (uint256 id) {
         require(amountA > 0 && priceB1e6 > 0, "invalid order");
-        require(tokenA.transferFrom(msg.sender, address(this), amountA), "transferFrom failed");
         id = orders.length;
         orders.push(Order({ maker: msg.sender, amountA: amountA, priceB1e6: priceB1e6, active: true }));
+
+        uint256 balBefore = tokenA.balanceOf(address(this));
+        _call(address(tokenA), abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amountA)));
+        require(tokenA.balanceOf(address(this)) - balBefore == amountA, "unsupported token (fee on transfer)");
         emit OrderCreated(id, msg.sender, amountA, priceB1e6);
     }
 
-    function fillOrder(uint256 id, uint256 amountAToFill) external {
+    function fillOrder(uint256 id, uint256 amountAToFill) external nonReentrant {
         Order storage o = orders[id];
         require(o.active, "inactive order");
         require(amountAToFill > 0 && amountAToFill <= o.amountA, "invalid fill amount");
 
-        uint256 amountB = (amountAToFill * o.priceB1e6) / 1e6;
+        // Round the price up so a fill can never be free or underpay the maker.
+        uint256 amountB = (amountAToFill * o.priceB1e6 + 1e6 - 1) / 1e6;
         uint256 fee = (amountB * FEE_BPS) / 10000;
         uint256 net = amountB - fee;
-
-        require(tokenB.transferFrom(msg.sender, o.maker, net), "payment to maker failed");
-        if (fee > 0) require(tokenB.transferFrom(msg.sender, feeCollector, fee), "fee transfer failed");
+        address maker = o.maker;
 
         o.amountA -= amountAToFill;
-        require(tokenA.transfer(msg.sender, amountAToFill), "transfer A failed");
         if (o.amountA == 0) o.active = false;
+
+        _call(address(tokenB), abi.encodeCall(IERC20.transferFrom, (msg.sender, maker, net)));
+        if (fee > 0) _call(address(tokenB), abi.encodeCall(IERC20.transferFrom, (msg.sender, feeCollector, fee)));
+        _call(address(tokenA), abi.encodeCall(IERC20.transfer, (msg.sender, amountAToFill)));
 
         emit OrderFilled(id, msg.sender, amountAToFill, amountB);
     }
 
-    function cancelOrder(uint256 id) external {
+    function cancelOrder(uint256 id) external nonReentrant {
         Order storage o = orders[id];
         require(o.maker == msg.sender, "not maker");
         require(o.active, "inactive");
+        uint256 refund = o.amountA;
         o.active = false;
-        require(tokenA.transfer(o.maker, o.amountA), "refund failed");
+        o.amountA = 0;
+        _call(address(tokenA), abi.encodeCall(IERC20.transfer, (msg.sender, refund)));
         emit OrderCancelled(id);
     }
 
     function ordersLength() external view returns (uint256) { return orders.length; }
+
+    /// @dev Works with tokens that return nothing (e.g. USDT) as well as tokens that return a bool.
+    function _call(address token, bytes memory data) private {
+        (bool ok, bytes memory ret) = token.call(data);
+        require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "token transfer failed");
+    }
 }`;
   }
 
-  const filename = multi==='factory' ? name+'Factory.sol' : name+'.sol';
+  code = portabilize(code, []);
+  if(portable && needsTokens){
+    const fieldA = document.getElementById('swap_tokenA').value.trim(), fieldB = document.getElementById('swap_tokenB').value.trim();
+    pendingCtorArgs = [
+      { param:'tokenA_', type:'address', hint:'usdc', value: tokenA===ZERO ? '' : tokenA, userSet:!!fieldA, genNetwork:activeNetwork },
+      { param:'tokenB_', type:'address', hint:'eurc', value: tokenB===ZERO ? '' : tokenB, userSet:!!fieldB, genNetwork:activeNetwork }
+    ];
+  }
+  const filename = multi==='factory' && kind==='amm' ? name+'Factory.sol' : name+'.sol';
   showCode('swapCode', filename, code);
-  pendingSource = { name: multi==='factory'?name+'Factory':name, code };
+  pendingSource = { name: (multi==='factory' && kind==='amm')?name+'Factory':name, code };
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = filename+'  ('+net.label+')';
 }
 
@@ -1471,8 +1588,10 @@ ${signersSolList}
 
   code += `}`;
 
+  code = portabilize(code, []);
   showCode('treasuryCode', name+'.sol', code);
   pendingSource = { name, code };
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
 
@@ -1515,7 +1634,7 @@ function genVault(){
 `;
   }
 
-  const code = `// SPDX-License-Identifier: MIT
+  let code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 interface IERC20 {
@@ -1605,8 +1724,13 @@ contract ${name} {
     }
 ${strategyBlock}}`;
 
+  code = portabilize(code, [
+    { kind:'addr', name:'asset', type:'IERC20', value:asset, param:'asset_', hint:'usdc', userSet:!!document.getElementById('vault_asset').value.trim() },
+    { kind:'scaled', name:'depositCap', expr:cap, tokenParam:'asset_' }
+  ]);
   showCode('vaultCode', name+'.sol', code);
   pendingSource = { name, code };
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
 
@@ -1701,8 +1825,10 @@ contract ${name} {
 
   code += `}`;
 
+  code = portabilize(code, []);
   showCode('multisendCode', name+'.sol', code);
   pendingSource = { name, code };
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
 
@@ -1710,6 +1836,7 @@ contract ${name} {
    SECTION 06 — CROSSCHAIN PAYMENTS (CCTP)
    ====================================================================== */
 function genCrosschain(){
+  if(isPortable()){ genCrosschainV2(); return; }
   const net=NETWORKS[activeNetwork];
   const name=(document.getElementById('cc_name').value||'ArcCrossPay').replace(/[^A-Za-z0-9]/g,'');
   const tokenMessenger = document.getElementById('cc_tokenmessenger').value.trim() || net.cctp.tokenMessenger || '0x0000000000000000000000000000000000dEaD';
@@ -1953,9 +2080,11 @@ contract ${name} {
     constructor() { owner = msg.sender; }
 }`;
 
+  code = portabilize(code, []);
   showCode('crosschainCode', name+'.sol', code);
   pendingSource = { name, code };
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
+  renderCtorArgs();
 }
 
 /* ======================================================================
@@ -2036,58 +2165,79 @@ async function compileAndDeploy(){
   logConsole('warn','Starting compilation of '+pendingSource.name+'.sol…');
 
   try{
-    const version = document.getElementById('solcVersion').value;
-    await ensureSolcLoaded(version);
-
-    const input = {
-      language: 'Solidity',
-      sources: { [pendingSource.name+'.sol']: { content: pendingSource.code } },
-      settings: { outputSelection: { '*': { '*': ['abi','evm.bytecode.object'] } }, optimizer:{enabled:true, runs:200} }
-    };
-
-    const output = JSON.parse(await solcCompile(JSON.stringify(input)));
-
-    if(output.errors){
-      const fatal = output.errors.filter(e=>e.severity==='error');
-      output.errors.forEach(e=>logConsole(e.severity==='error'?'err':'warn', e.formattedMessage.split('\n')[0]));
-      if(fatal.length){ logConsole('err','Compilation failed — fix the errors above.'); return; }
-    }
-
-    const contracts = output.contracts[pendingSource.name+'.sol'];
-    const contractNames = Object.keys(contracts);
-    const target = contracts[pendingSource.name] ? pendingSource.name : contractNames[0];
-    const abi = contracts[target].abi;
-    const bytecode = '0x'+contracts[target].evm.bytecode.object;
-
-    logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
-
-    // Store for Playground, Gas Estimator, Share
-    window.__lastCompiledABI      = abi;
-    window.__lastCompiledBytecode = bytecode;
-    document.getElementById('auditContractLabel').value = pendingSource.name+'.sol';
-
-    const factory = new ethers.ContractFactory(abi, bytecode, signer);
-    logConsole('warn','Sending deploy transaction on '+NETWORKS[activeNetwork].label+'… confirm in your wallet.');
-    const contract = await factory.deploy();
-    logConsole('warn','Tx sent: '+contract.deployTransaction.hash);
-    await contract.deployed();
-    logConsole('ok','Contract deployed at: '+contract.address);
-    // Save to deploy history
-    addToDeployHistory({
-      name:    pendingSource.name,
-      address: contract.address,
-      network: activeNetwork,
-      abi:     abi,
-      txHash:  contract.deployTransaction.hash
-    });
-    const net=NETWORKS[activeNetwork];
-    if(net.explorer){
-      logConsole('ok','Explorer: '+net.explorer+'/address/'+contract.address);
-    }
-    await refreshBalance();
+    const compiled = await compilePending();
+    const ctorInputs = (compiled.abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs;
+    const ctorValues = collectCtorValues(ctorInputs);
+    await deployCompiled(compiled, ctorValues, activeNetwork);
   }catch(e){
+    if(e && e.handled) return; // already reported in the console
     logConsole('err','Error: '+(e.message||e));
   }
+}
+
+/* Compiles any source with the selected solc; resolves { name, target, abi, bytecode }. */
+async function compileSource(name, code){
+  const version = document.getElementById('solcVersion').value;
+  await ensureSolcLoaded(version);
+
+  const input = {
+    language: 'Solidity',
+    sources: { [name+'.sol']: { content: code } },
+    settings: { outputSelection: { '*': { '*': ['abi','evm.bytecode.object'] } }, optimizer:{enabled:true, runs:200} }
+  };
+
+  const output = JSON.parse(await solcCompile(JSON.stringify(input)));
+
+  if(output.errors){
+    const fatal = output.errors.filter(e=>e.severity==='error');
+    output.errors.forEach(e=>logConsole(e.severity==='error'?'err':'warn', e.formattedMessage.split('\n')[0]));
+    if(fatal.length){
+      logConsole('err','Compilation failed — fix the errors above.');
+      const err = new Error('Compilation failed'); err.handled = true; throw err;
+    }
+  }
+
+  const contracts = output.contracts[name+'.sol'];
+  const contractNames = Object.keys(contracts);
+  const target = contracts[name] ? name : contractNames[0];
+  const abi = contracts[target].abi;
+  const bytecode = '0x'+contracts[target].evm.bytecode.object;
+
+  logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
+  return { name, target, abi, bytecode };
+}
+
+async function compilePending(){
+  const compiled = await compileSource(pendingSource.name, pendingSource.code);
+  // Store for Playground, Gas Estimator, Share
+  window.__lastCompiledABI      = compiled.abi;
+  window.__lastCompiledBytecode = compiled.bytecode;
+  document.getElementById('auditContractLabel').value = pendingSource.name+'.sol';
+  return compiled;
+}
+
+/* Sends the deployment (constructor values already validated) on network netKey. */
+async function deployCompiled(compiled, ctorValues, netKey){
+  const factory = new ethers.ContractFactory(compiled.abi, compiled.bytecode, signer);
+  logConsole('warn','Sending deploy transaction on '+NETWORKS[netKey].label+'… confirm in your wallet.');
+  const contract = await factory.deploy(...ctorValues);
+  logConsole('warn','Tx sent: '+contract.deployTransaction.hash);
+  await contract.deployed();
+  logConsole('ok','Contract deployed at: '+contract.address);
+  // Save to deploy history
+  addToDeployHistory({
+    name:    compiled.name,
+    address: contract.address,
+    network: netKey,
+    abi:     compiled.abi,
+    txHash:  contract.deployTransaction.hash
+  });
+  const net=NETWORKS[netKey];
+  if(net.explorer){
+    logConsole('ok','Explorer: '+net.explorer+'/address/'+contract.address);
+  }
+  await refreshBalance();
+  return contract;
 }
 
 const SOLC_COMMITS = {
@@ -2847,6 +2997,7 @@ function loadFromUrlHash(){
     }
     if(config.name && config.code){
       pendingSource = { name: config.name, code: config.code };
+      pendingCtorArgs = []; renderCtorArgs();
       document.getElementById('pendingContractLabel').value = config.name+'.sol  ('+NETWORKS[activeNetwork].label+')';
       document.getElementById('auditContractLabel').value = config.name+'.sol';
       logConsole('ok','Configuration loaded from URL: '+config.name+'.sol');
@@ -3023,7 +3174,7 @@ function genSimpleDAO(){
   const voting = g('s_voting')||'45818';
   const delay  = g('s_delay')||'172800';
   const thresh = g('s_threshold')||'1000';
-  const code = `// SPDX-License-Identifier: MIT
+  let code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 // Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
@@ -3144,8 +3295,14 @@ contract ${name} {
 
     function proposalsLength() external view returns (uint256) { return _proposals.length; }
 }`;
+  code = portabilize(code, [
+    { kind:'addr', name:'token', type:'IERC20Votes', value:token, param:'token_', hint:'static', userSet:true, argValue:g('s_token') },
+    { kind:'uint', name:'VOTING_PERIOD', rhs:voting, param:'votingPeriod_', hint:'static', value:voting, userSet:true,
+      note:'Voting length in blocks. Block time differs per chain, so set it for this network.' }
+  ]);
   showCode('simpleCode', name+'.sol', code);
   pendingSource = {name, code};
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
 
@@ -3157,7 +3314,7 @@ function genSimpleSmartWallet(){
   const guardian  = g('s_guardian')||'0x0000000000000000000000000000000000000000';
   const session   = g('s_session')||'24';
   const spendlimit= g('s_spendlimit')||'1000';
-  const code = `// SPDX-License-Identifier: MIT
+  let code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 // Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
@@ -3246,8 +3403,14 @@ contract ${name} {
         guardian = newGuardian;
     }
 }`;
+  code = portabilize(code, [
+    { kind:'addr', name:'entryPoint', type:'address', value:entryPoint, param:'entryPoint_', hint:'entryPoint', userSet:!!g('s_entrypoint').trim(), check:false },
+    { kind:'uint', name:'DAILY_LIMIT', rhs:spendlimit+' * 10**6', param:'dailyLimit_', hint:'nativeScaled', units:spendlimit, value:'',
+      note:'Daily spend limit in the native token (smallest unit, so 18 decimals on most chains).' }
+  ]);
   showCode('simpleCode', name+'.sol', code);
   pendingSource = {name, code};
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
 
@@ -3260,7 +3423,7 @@ function genSimpleStaking(){
   const apy    = g('s_apy')||'12';
   const lock   = g('s_lock')||'30';
   const exitFee= g('s_exitfee')||'100';
-  const code = `// SPDX-License-Identifier: MIT
+  let code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 // Generated by ContractForge for ${net.label} (chainId ${net.chainIdDec})
@@ -3353,8 +3516,14 @@ contract ${name} {
         emit RewardPoolFunded(amount);
     }
 }`;
+  const sameReward = (rwdTok||stkTok) === stkTok;
+  code = portabilize(code, [
+    { kind:'addr', name:'stakingToken', type:'IERC20', value:stkTok, param:'stakingToken_', hint:'usdc', userSet:!!g('s_token').trim() },
+    { kind:'addr', name:'rewardToken', type:'IERC20', value:(rwdTok||stkTok), param: sameReward ? 'stakingToken_' : 'rewardToken_', hint: sameReward ? 'usdc' : 'static', userSet:!sameReward }
+  ]);
   showCode('simpleCode', name+'.sol', code);
   pendingSource = {name, code};
+  renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
 
@@ -3530,6 +3699,7 @@ Respond ONLY with Solidity code — no markdown, no backticks, no explanation.`;
     document.getElementById('nl_output').style.display='block';
 
     pendingSource={name:contractName, code};
+    pendingCtorArgs = []; renderCtorArgs();
     document.getElementById('pendingContractLabel').value=contractName+'.sol (AI — '+NETWORKS[activeNetwork].label+')';
     document.getElementById('auditContractLabel').value=contractName+'.sol';
     document.getElementById('test_contractLabel').value=contractName+'.sol';

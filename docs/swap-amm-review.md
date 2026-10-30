@@ -1,0 +1,62 @@
+# ArcSwapAMM: security review
+
+Source reviewed: the contract pasted from the ContractForge "AMM Swap" generator (USDC/EURC pair, Arc Mainnet). The paste ended before the closing `}`, so one was added. A copy is at `contracts/ArcSwapAMM.sol`.
+
+Verdict: **not ready for real funds.** It compiles and the swap math is the standard x*y=k formula, but liquidity providers can lose value, and the pool can be broken on purpose.
+
+## What was checked
+
+- Two independent source reviews (rule-based and behaviour-based), at the deepest level.
+- Proof-of-concept tests (Foundry, with mock tokens placed at the USDC and EURC addresses). The tests live outside the project in a temporary folder and were not added to the repo.
+- Token addresses: both contracts on Arc Mainnet were read onchain and return the symbols `USDC` and `EURC`.
+
+## Findings
+
+### High: liquidity deposits have no protection (confirmed by test)
+`addLiquidity` takes both amounts in full but mints shares from the smaller side only. The extra is kept by existing providers, with no refund and no minimum-shares input.
+- Pool 100 A / 100 B. A user deposits 100 A and 1,000 B and gets back only 100 A and 550 B. 450 B are lost.
+- An attacker swaps 100 A into a 100/100 pool just before a deposit. The victim deposits 100 A / 100 B, gets half the shares the attacker holds, and redeems 100 A and about 50 B. About 50 B are lost at once.
+Fix: pull only the amounts that match the current ratio, refund the rest, and take `minShares`, minimum amounts and a deadline from the caller.
+
+### High: the pool can be bricked at the start (confirmed by test)
+There is no permanent minimum liquidity. Someone deposits 1 wei of each token (1 share), then swaps a large amount of A in. Reserves become about 1,000,000 A to 1 wei of B. Later deposits revert and the price is stuck.
+Fix: lock a minimum amount of shares on the first deposit, and require a sensible first deposit.
+
+### Medium: swaps work on an empty pool (confirmed by test)
+With no liquidity, a swap takes the input and returns 0. The next liquidity provider keeps it.
+Fix: require shares and both reserves above zero, and `amountOut > 0`.
+
+### Low
+- No reentrancy guard on the four token-moving functions. No exploit with USDC or EURC as written, but it is cheap to add.
+- String revert messages instead of custom errors (gas and clarity only).
+- Rounding dust can leave reserves behind after all shares are burned. A later first deposit then resets the price and ignores that dust.
+
+## Risks that come from the design, not the code
+
+- **Freezing and pausing.** USDC and EURC are issuer-controlled tokens. If the issuer blocks or pauses the pool address, LP funds in the pool are stuck and the contract has no way to recover them.
+- **Wrong curve for a stablecoin pair.** x*y=k is made for volatile pairs. For USDC/EURC it gives much worse prices than a stable-swap curve, and the 30 bps fee applies regardless of how close the pair is to the peg.
+- **No owner and no upgrade path.** That is good for trust, but a bug cannot be fixed after deploy.
+- **Fixed token addresses.** They were checked above, but they cannot be changed.
+
+## Recommendation
+
+Do not deploy this version to mainnet. Fix the High and Medium items in the generator (`genSwap`), re-run the review, then test on Arc Testnet first, and get an independent third-party audit before putting real funds in.
+
+## Update: generator fixed
+
+The AMM generator (`genSwap` in `contractforge-deploy/app.js`) now produces a corrected pool. Re-reviewed at the deepest level; no High findings remain in the contract code.
+
+What changed in the generated contracts (single pair, factory pair, and order book):
+- Deposits are taken at the pool ratio, only the needed amounts are pulled, and callers set minimum amounts and a deadline.
+- Removing liquidity and swaps also take a minimum and a deadline.
+- 1,000 shares are locked on the first deposit, and tiny first deposits are rejected.
+- Swaps revert when the pool is empty or the output would be zero.
+- Reentrancy guard, safe token calls (also works with tokens that return nothing), and fee-on-transfer tokens are rejected.
+- Constructor checks: tokens must differ and must be contracts. The fee is validated when generating (whole bps below 10000).
+- Order book: fills round the price up (no free fills), state is updated before tokens move, and the fee/price rules are unchanged.
+
+Function signatures changed: `addLiquidity`, `removeLiquidity` and the swap functions take extra `min` and `deadline` arguments.
+
+Still true: USDC and EURC are issuer-controlled and can freeze the pool address; x*y=k is not a stablecoin curve; revert messages are strings. Use Arc Testnet first and get an independent audit before real funds.
+
+Tests: `tests/` compiles every generator, and `npm run test:swap` runs 18 Foundry tests (including fuzzing) on the generated swap contracts.

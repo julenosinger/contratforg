@@ -2,9 +2,11 @@
   "name": "contractforge-tests",
   "private": true,
   "type": "module",
-  "description": "Compiles the Solidity produced by every ContractForge generator. Run from this folder: npm install && npm test",
+  "description": "Checks the ContractForge generators. 'npm test' compiles every generator in every multichain mode, compares single-network output with tests/golden, and runs the multichain behaviour tests. 'npm run test:swap' and 'npm run test:portable' regenerate the contracts and run the Foundry tests (need Foundry). Run from this folder after 'npm install'.",
   "scripts": {
-    "test": "node compile-generators.mjs"
+    "test": "node compile-generators.mjs && node golden.mjs && node multichain.mjs",
+    "test:swap": "node dump-swap-sources.mjs && cd solidity && forge test",
+    "test:portable": "node dump-portable-sources.mjs && cd solidity && forge test"
   },
   "devDependencies": {
     "jsdom": "^26.0.0",
