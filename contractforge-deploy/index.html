@@ -30,13 +30,14 @@
     <nav class="nav" aria-label="Sections">
     <div class="nav-group">
       <h4>Start here</h4>
+      <div class="nav-item active" data-section="home"><span class="num">⌂</span> Home</div>
       <div class="nav-item" data-section="wizard"><span class="num">14</span> Contract Wizard</div>
       <div class="nav-item" data-section="nlai"><span class="num">15</span> AI → Solidity</div>
     </div>
 
     <div class="nav-group">
       <h4>Create</h4>
-      <div class="nav-item active" data-section="simple"><span class="num">01</span> Token / Escrow / NFT</div>
+      <div class="nav-item" data-section="simple"><span class="num">01</span> Token / Escrow / NFT</div>
       <div class="nav-item" data-section="swap"><span class="num">02</span> Swap / AMM</div>
       <div class="nav-item" data-section="treasury"><span class="num">03</span> Treasury</div>
       <div class="nav-item" data-section="vault"><span class="num">04</span> Vault (ERC-4626)</div>
@@ -80,49 +81,79 @@
   <main>
 
     <div class="sticky-top">
+      <!-- WALLET BAR -->
+      <div class="walletbar">
+        <div class="status" id="walletStatus">
+          <span class="dot"></span> Wallet not connected
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span class="badge" id="balanceBadge">— USDC</span>
+          <button class="btn btn-ghost" id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+          <button class="btn btn-ghost" onclick="connectWalletConnect()" style="font-size:11px;padding:9px 14px;">
+            <span style="color:#3B99FC;font-weight:700;">WC</span> WalletConnect
+          </button>
+        </div>
+      </div>
       <div class="net-banner testnet" id="netBanner" role="status" aria-live="polite"></div>
       <div class="cc-bar" id="currentContract" style="display:none;"></div>
-    </div>
 
-    <div class="page-head">
-      <div>
-        <div class="eyebrow">Stablecoin-native · multi-chain · no mock data</div>
-        <h1>Contract Foundry</h1>
-        <p>Build, audit, and deploy Solidity contracts — from simple tokens to vaults, treasuries, AMMs, multisend, and CCTP crosschain bridges. Features AI security auditing, ABI playground, deploy history, gas estimation, source verification, and shareable config URLs. Supports Arc Testnet, Robinhood Chain Testnet, and all major EVM testnets.</p>
-      </div>
-      <div class="head-meta">
-        ARC · ROBINHOOD · ETH SEPOLIA<br>
-        POLYGON AMOY · BASE/ARB/OP SEPOLIA<br>
-        <b id="headVersion">v3.0 — multichain</b>
+      <!-- NETWORK SELECTOR (opens from the banner) -->
+      <div class="net-panel" id="netPanel" role="region" aria-label="Select network">
+        <div class="net-panel-note">
+          Toggle between <b>Testnets</b> and <b class="gold">Mainnets</b> using the tabs below.
+          Mainnet deployments use real funds — always audit and test on testnet first.
+        </div>
+        <div class="netbar" id="netbar"></div>
       </div>
     </div>
 
-    <!-- WALLET BAR -->
-    <div class="walletbar">
-      <div class="status" id="walletStatus">
-        <span class="dot"></span> Wallet not connected
+    <!-- ============ 00 HOME ============ -->
+    <section class="section" id="sec-home">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Stablecoin-native · multi-chain · no mock data</div>
+          <h1>Contract Foundry</h1>
+          <p>Build, audit, and deploy Solidity contracts — from simple tokens to vaults, treasuries, AMMs, multisend, and CCTP crosschain bridges. Features AI security auditing, ABI playground, deploy history, gas estimation, source verification, and shareable config URLs. Supports Arc Testnet, Robinhood Chain Testnet, and all major EVM testnets.</p>
+          <div class="home-cta">
+            <button type="button" class="btn btn-primary" data-go="wizard">Start with the Wizard</button>
+            <button type="button" class="btn btn-ghost" data-go="nlai">Describe it with AI</button>
+            <button type="button" class="btn btn-ghost" data-go="simple">Browse contracts</button>
+          </div>
+        </div>
+        <div class="head-meta">
+          <b id="headVersion">v3.0 — multichain</b>
+        </div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <span class="badge" id="balanceBadge">— USDC</span>
-        <button class="btn btn-ghost" id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
-        <button class="btn btn-ghost" onclick="connectWalletConnect()" style="font-size:11px;padding:9px 14px;">
-          <span style="color:#3B99FC;font-weight:700;">WC</span> WalletConnect
-        </button>
-      </div>
-    </div>
 
-    <!-- NETWORK SELECTOR -->
-    <div class="section">
-      <div class="section-head"><span class="n">NETWORK</span><h2>Select network</h2><div class="rule"></div></div>
-      <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;margin-bottom:12px;">
-        Toggle between <b style="color:var(--paper);">Testnets</b> and <b style="color:#C9A24B);">Mainnets</b> using the tabs below.
-        Mainnet deployments use real funds — always audit and test on testnet first.
+      <div class="home-continue" id="homeContinue" style="display:none;"></div>
+
+      <div class="section-head"><h2>What do you want to build?</h2><div class="rule"></div></div>
+      <div class="home-grid">
+        <button type="button" class="home-card" data-go="simple"><span class="hc-num">01</span><b>Token, Escrow, NFT</b><span>ERC-20, ERC-721, escrow, vesting, subscriptions, DAO, smart wallet and staking.</span></button>
+        <button type="button" class="home-card" data-go="swap"><span class="hc-num">02</span><b>Swap / AMM</b><span>Constant-product pool or order book for a pair of tokens.</span></button>
+        <button type="button" class="home-card" data-go="treasury"><span class="hc-num">03</span><b>Treasury</b><span>Multisig with approvals and optional payment streaming.</span></button>
+        <button type="button" class="home-card" data-go="vault"><span class="hc-num">04</span><b>Vault (ERC-4626)</b><span>Deposit an asset and receive shares of a yield vault.</span></button>
+        <button type="button" class="home-card" data-go="multisend"><span class="hc-num">05</span><b>MultiSend</b><span>Pay many recipients in one transaction.</span></button>
+        <button type="button" class="home-card" data-go="crosschain"><span class="hc-num">06</span><b>Crosschain (CCTP)</b><span>Move USDC between chains with Circle CCTP.</span></button>
       </div>
-      <div class="netbar" id="netbar"></div>
-    </div>
+
+      <div class="section-head"><h2>How it works</h2><div class="rule"></div></div>
+      <ol class="home-steps">
+        <li><b>Choose</b><span>Pick a contract type, or let the Wizard or AI guide you.</span></li>
+        <li><b>Configure</b><span>Fill in the few main fields. Rare options sit under Advanced.</span></li>
+        <li><b>Review</b><span>Read the source, run the AI audit, check gas.</span></li>
+        <li><b>Publish</b><span>Compile in the browser and deploy with your wallet, then verify.</span></li>
+      </ol>
+
+      <div class="section-head"><h2>How should it deploy?</h2><div class="rule"></div></div>
+      <div class="home-grid home-modes" id="homeModes"></div>
+
+      <div class="section-head"><h2>Supported networks</h2><div class="rule"></div></div>
+      <div class="home-networks" id="homeNetworks"></div>
+    </section>
 
     <!-- ============ 01 SIMPLE CONTRACTS ============ -->
-    <section class="section" id="sec-simple">
+    <section class="section" id="sec-simple" style="display:none;">
       <div class="section-head"><span class="n">01</span><h2>Simple contracts</h2><div class="rule"></div></div>
       <div class="grid" id="simpleGrid"></div>
 

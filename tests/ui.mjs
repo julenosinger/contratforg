@@ -9,12 +9,13 @@ const app = loadApp(); const { w, ev } = app; const doc = w.document;
 const key = (el, k) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
 
 /* navigation: every section is still reachable */
-const SECTIONS = ['simple','swap','treasury','vault','multisend','crosschain','deploy','auditor','playground','history','gas','verify','share','wizard','nlai','analytics','tests'];
+const SECTIONS = ['home','simple','swap','treasury','vault','multisend','crosschain','deploy','auditor','playground','history','gas','verify','share','wizard','nlai','analytics','tests'];
 const items = [...doc.querySelectorAll('.nav-item')];
-eq(items.map((i) => i.dataset.section).sort(), [...SECTIONS].sort(), 'all 17 sections are in the menu');
+eq(items.map((i) => i.dataset.section).sort(), [...SECTIONS].sort(), 'all 17 sections plus Home are in the menu');
 eq([...doc.querySelectorAll('.nav-group h4')].map((h) => h.textContent), ['Start here', 'Create', 'Publish', 'Check & analyze'], 'menu groups');
 for (const s of SECTIONS) ok(!!doc.getElementById('sec-' + s), `section sec-${s} exists`);
-eq(doc.querySelector('.nav-item.active')?.dataset.section, 'simple', 'default section is still Token / Escrow / NFT');
+eq(doc.querySelector('.nav-item.active')?.dataset.section, 'home', 'Home is the landing page');
+eq([...doc.querySelectorAll('main section.section')].filter((x) => x.style.display !== 'none').map((x) => x.id), ['sec-home'], 'only Home is visible at start');
 
 const visible = () => [...doc.querySelectorAll('main section.section')].filter((s) => s.style.display === 'block').map((s) => s.id);
 for (const it of items) {
@@ -24,6 +25,64 @@ for (const it of items) {
   eq(it.getAttribute('aria-current'), 'page', `aria-current on ${it.dataset.section}`);
 }
 eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current item');
+
+/* top bar: wallet and network */
+{
+  const top = doc.querySelector('.sticky-top');
+  const kids = [...top.children].map((c) => c.id || c.className.split(' ')[0]);
+  eq(kids.slice(0, 3), ['walletbar', 'netBanner', 'currentContract'], 'wallet bar, network banner and contract bar share the top bar');
+  ok(!!top.querySelector('#connectBtn') && !!top.querySelector('#walletStatus') && !!top.querySelector('#balanceBadge'), 'connect wallet, status and balance are in the top bar');
+  ok(!doc.getElementById('sec-home').querySelector('.walletbar, #netbar'), 'Home no longer carries the wallet bar or the network selector');
+  const panel = doc.getElementById('netPanel'), change = doc.getElementById('netChangeBtn');
+  ok(!panel.classList.contains('open') && change.getAttribute('aria-expanded') === 'false', 'network panel starts closed');
+  change.click(); ok(panel.classList.contains('open') && doc.getElementById('netChangeBtn').getAttribute('aria-expanded') === 'true', 'Change network opens the panel');
+  ok(panel.querySelectorAll('.netbtn').length > 0, 'panel lists networks');
+  eq(top.contains(doc.getElementById('netbar')), true, 'network selector lives in the top bar');
+  const pick = [...panel.querySelectorAll('.netbtn')].find((b) => !b.classList.contains('active') && !/LIVE/.test(b.textContent));
+  const chosen = pick.textContent.trim();
+  pick.click(); await new Promise((r) => setTimeout(r, 0));
+  ok(!panel.classList.contains('open'), 'choosing a network closes the panel');
+  ok(doc.getElementById('netBanner').textContent.includes(chosen.split(' ')[0]), 'banner follows the chosen network', doc.getElementById('netBanner').textContent);
+  doc.getElementById('netChangeBtn').click(); ok(panel.classList.contains('open'), 'reopened');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); ok(!panel.classList.contains('open'), 'Escape closes the panel');
+  doc.getElementById('netChangeBtn').click(); doc.querySelector('main').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  ok(!panel.classList.contains('open'), 'clicking elsewhere closes the panel');
+  ev("activeNetwork = 'arc'; updateSideNet();");
+}
+
+/* home */
+{
+  const home = doc.getElementById('sec-home');
+  eq(home.querySelector('h1').textContent, 'Contract Foundry', 'Home has the title');
+  ok(/Build, audit, and deploy Solidity contracts/.test(home.textContent), 'Home keeps the introduction text');
+  ok(/16 NETWORKS/.test(home.querySelector('.head-meta').textContent), 'Home shows the network count');
+  eq(home.querySelectorAll('.home-grid:not(.home-modes) .home-card').length, 6, 'six contract families');
+  eq(home.querySelectorAll('#homeNetworks .home-net').length, 16, 'every network is listed');
+  ok(home.querySelectorAll('#homeNetworks .home-net.current').length === 1, 'the active network is highlighted');
+  for (const [go, sec] of [['wizard', 'sec-wizard'], ['nlai', 'sec-nlai'], ['simple', 'sec-simple'], ['swap', 'sec-swap'], ['crosschain', 'sec-crosschain']]) {
+    doc.querySelector('.nav-item[data-section="home"]').click();
+    home.querySelector(`[data-go="${go}"]`).click();
+    eq(visible(), [sec], `Home card ${go} opens ${sec}`);
+  }
+  doc.querySelector('.nav-item[data-section="swap"]').click();
+  doc.querySelector('.brand .mark').click();
+  eq(visible(), ['sec-home'], 'clicking the logo goes Home');
+  // continue card
+  ok(doc.getElementById('homeContinue').style.display === 'none', 'no continue card without a contract');
+  ev("renderSimpleForm('erc20')"); ev("genSimple('erc20')");
+  ok(doc.getElementById('homeContinue').style.display === 'flex' && /ArcDollar\.sol/.test(doc.getElementById('homeContinue').textContent), 'continue card shows the current contract');
+  doc.querySelector('#homeContinue [data-go="deploy"]').click();
+  eq(visible(), ['sec-deploy'], 'continue card opens Compile & Deploy');
+  // modes
+  doc.querySelector('.nav-item[data-section="home"]').click();
+  eq(home.querySelectorAll('#homeModes .home-card').length, 4, 'four deployment modes');
+  home.querySelector('#homeModes [data-mode="multi"]').click();
+  eq(ev('multichainMode'), 'multi', 'a mode card sets the multichain mode');
+  ok(home.querySelector('#homeModes [data-mode="multi"]').classList.contains('active'), 'and is highlighted');
+  home.querySelector('#homeModes [data-mode="single"]').click();
+  ev('ccDiscard()'); ev('renderNetBar()'); await new Promise((r) => setTimeout(r, 0));
+  doc.querySelector('.nav-item[data-section="home"]').click();
+}
 
 /* keyboard */
 ok(items.every((i) => i.getAttribute('tabindex') === '0' && i.getAttribute('role') === 'button'), 'menu items are focusable');

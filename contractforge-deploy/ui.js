@@ -17,7 +17,73 @@ function renderNetBanner(){
     + '<span class="nb-net">' + escapeHtml(net.label) + '</span>'
     + '<span class="nb-sep">·</span><span class="nb-chain">chain ' + escapeHtml(net.chainIdDec) + '</span>'
     + mode
+    + '<button type="button" class="nb-change" id="netChangeBtn" aria-expanded="' + (uiNetPanelOpen() ? 'true' : 'false') + '" aria-controls="netPanel" onclick="toggleNetPanel()">Change network</button>'
     + '<span class="nb-note">' + (main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.') + '</span>';
+  if(typeof renderHome === 'function') renderHome();
+}
+
+function uiNetPanelOpen(){ const p = document.getElementById('netPanel'); return !!(p && p.classList.contains('open')); }
+function toggleNetPanel(force){
+  const p = document.getElementById('netPanel');
+  if(!p) return;
+  const open = typeof force === 'boolean' ? force : !p.classList.contains('open');
+  p.classList.toggle('open', open);
+  const b = document.getElementById('netChangeBtn');
+  if(b) b.setAttribute('aria-expanded', String(open));
+  if(open && typeof renderNetBar === 'function') renderNetBar();
+}
+
+/* ---- Home page ---- */
+function renderHome(){
+  if(typeof NETWORKS === 'undefined') return;
+  const cont = document.getElementById('homeContinue');
+  if(cont){
+    const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
+    if(has){
+      cont.style.display = 'flex';
+      cont.innerHTML = '<div>Continue where you left off: <b>' + escapeHtml(pendingSource.name) + '.sol</b></div>'
+        + '<div class="hc-actions"><button type="button" class="btn btn-ghost" data-go="auditor">Audit</button>'
+        + '<button type="button" class="btn btn-primary" data-go="deploy">Publish</button></div>';
+    } else { cont.style.display = 'none'; cont.innerHTML = ''; }
+  }
+  const modes = document.getElementById('homeModes');
+  if(modes && typeof MC_MODES !== 'undefined'){
+    modes.innerHTML = Object.entries(MC_MODES).map(([k, m]) =>
+      '<button type="button" class="home-card' + (k === multichainMode ? ' active' : '') + '" data-mode="' + k + '" aria-pressed="' + (k === multichainMode) + '"><b>' + escapeHtml(m.label) + '</b><span>' + escapeHtml(m.desc) + '</span></button>').join('');
+  }
+  const nets = document.getElementById('homeNetworks');
+  if(nets){
+    nets.innerHTML = Object.entries(NETWORKS).map(([k, n]) =>
+      '<span class="home-net' + (k === activeNetwork ? ' current' : '') + (n.isMainnet ? ' main' : '') + '">' + escapeHtml(n.label) + (n.isMainnet ? ' <span class="md-live">LIVE</span>' : '') + '</span>').join('');
+  }
+}
+
+function initHome(){
+  document.addEventListener('click', (e) => {
+    const go = e.target.closest ? e.target.closest('[data-go]') : null;
+    if(go){
+      const item = document.querySelector('.nav-item[data-section="' + go.dataset.go + '"]');
+      if(item){ item.click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      return;
+    }
+    const mode = e.target.closest ? e.target.closest('[data-mode]') : null;
+    if(mode && typeof setMultichainMode === 'function'){ setMultichainMode(mode.dataset.mode); return; }
+    // network panel: close after choosing a network or clicking elsewhere
+    const panel = document.getElementById('netPanel');
+    if(panel && panel.classList.contains('open')){
+      if(e.target.closest('.netbtn')) setTimeout(() => toggleNetPanel(false), 0);
+      else if(!e.target.closest('#netPanel') && !e.target.closest('#netChangeBtn')) toggleNetPanel(false);
+    }
+  });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm')) toggleNetPanel(false); });
+  const mark = document.querySelector('.brand .mark');
+  if(mark){
+    mark.setAttribute('role', 'button'); mark.setAttribute('tabindex', '0'); mark.style.cursor = 'pointer';
+    const go = () => { const item = document.querySelector('.nav-item[data-section="home"]'); if(item) item.click(); };
+    mark.addEventListener('click', go);
+    mark.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(); } });
+  }
+  renderHome();
 }
 
 function renderHeaderMeta(){
@@ -68,8 +134,9 @@ function renderCurrentContract(){
   const el = document.getElementById('currentContract');
   if(!el) return;
   const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
-  if(!has){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  if(!has){ el.style.display = 'none'; el.innerHTML = ''; if(typeof renderHome === 'function') renderHome(); return; }
   uiSaveContract();
+  if(typeof renderHome === 'function') renderHome();
   const lines = pendingSource.code.split('\n').length;
   const nArgs = (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs.length : 0;
   const modeChip = (typeof multichainMode !== 'undefined' && multichainMode !== 'single' && typeof MC_MODES !== 'undefined')
@@ -413,6 +480,7 @@ function initSession(){
 
 if(typeof document !== 'undefined'){
   initAdvancedOptions();
+  initHome();
   initFieldValidation();
   initMobileMenu();
   initConsoleTools();
