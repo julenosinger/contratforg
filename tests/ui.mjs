@@ -61,7 +61,7 @@ ok(bar.style.display === 'none', 'bar hidden before anything is generated');
 ev("renderSimpleForm('erc20')"); ev("genSimple('erc20')");
 ok(bar.style.display === 'flex' && /ArcDollar\.sol/.test(bar.textContent), 'bar shows the generated contract', bar.textContent);
 ok(!/constructor argument/.test(bar.textContent), 'no constructor chip when there are none');
-eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Audit', 'Copy', 'Download', 'Publish'], 'bar actions');
+eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Audit', 'Copy', 'Download', 'Discard', 'Publish'], 'bar actions');
 doc.querySelector('.nav-item[data-section="swap"]').click();
 [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Publish').click();
 eq(visible(), ['sec-deploy'], 'Publish opens Compile & Deploy from any section');
@@ -168,6 +168,81 @@ ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value change
   nav.querySelector('.nav-item[data-section="gas"]').click();
   ok(!nav.classList.contains('open') && t.textContent === 'Menu', 'choosing a section closes the menu');
   eq(visible(), ['sec-gas'], 'and still opens the section');
+}
+
+/* console: links, steps, tools */
+{
+  const con = doc.getElementById('deployConsole');
+  ev("logConsole('ok','Explorer:', { href: 'https://example.org/a<b>', text: 'open' })");
+  let a = con.querySelector('.line:last-child a');
+  ok(a && a.getAttribute('rel') === 'noopener noreferrer' && a.target === '_blank' && a.textContent === 'open', 'console link is safe');
+  ev("logConsole('ok','x', { href: 'javascript:alert(1)', text: 'bad' })");
+  ok(!con.querySelector('.line:last-child a'), 'non-https links are ignored');
+  ev("logConsole('step','<img src=x onerror=1> loading')");
+  const last = con.querySelector('.line:last-child');
+  ok(last.classList.contains('step') && !last.querySelector('img'), 'step lines are plain text');
+  const before = con.querySelectorAll('.line').length;
+  let copiedLog = null; w.navigator.clipboard = { writeText: (t) => { copiedLog = t; return Promise.resolve(); } };
+  doc.getElementById('consoleCopy').click();
+  ok(copiedLog && copiedLog.split('\n').length === before && /loading/.test(copiedLog), 'Copy log copies every line');
+  doc.getElementById('consoleClear').click();
+  eq(con.querySelectorAll('.line').length, 0, 'Clear empties the activity log');
+  ev("uiResetDeployResults()"); ok(doc.getElementById('deployResult').style.display === 'none', 'no result card before a deployment');
+  ev("uiAddDeployResult({ name:'ArcEscrow', network:'arcMain', address:'0x" + '1'.repeat(40) + "', txHash:'0x1' })");
+  const card = doc.getElementById('deployResult');
+  ok(card.style.display === 'block' && /ArcEscrow/.test(card.textContent) && /Arc Mainnet/.test(card.textContent), 'result card shows the deployment');
+  ok(card.querySelector('a').href === 'https://explorer.arc.io/address/0x' + '1'.repeat(40), 'result card links to the explorer');
+  let addrCopied = null; w.navigator.clipboard = { writeText: (t) => { addrCopied = t; return Promise.resolve(); } };
+  card.querySelector('[data-copy]').click();
+  eq(addrCopied, '0x' + '1'.repeat(40), 'Copy address');
+  ev("uiResetDeployResults()");
+}
+
+/* saved session */
+{
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const a1 = loadApp(); const w1 = a1.w, d1 = w1.document;
+  a1.ev("setMultichainMode('portable')"); a1.ev("renderSimpleForm('escrow')"); await wait(0);
+  d1.getElementById('s_amount').value = '777'; d1.getElementById('s_amount').dispatchEvent(new w1.Event('input', { bubbles: true }));
+  d1.getElementById('swap_fee').value = '45'; d1.getElementById('swap_fee').dispatchEvent(new w1.Event('input', { bubbles: true }));
+  d1.getElementById('ver_apikey').value = 'SECRET123'; d1.getElementById('ver_apikey').dispatchEvent(new w1.Event('input', { bubbles: true }));
+  a1.ev("genSimple('escrow')");
+  await wait(320);
+  const stored = w1.localStorage.getItem('cf_session_v1');
+  ok(!!stored && !/SECRET123/.test(stored), 'session saved without secrets');
+  const saved = JSON.parse(stored);
+  ok(saved.contract?.name === 'ArcEscrow' && /contract ArcEscrow/.test(saved.contract.code), 'last contract saved');
+  eq(saved.forms['s:escrow:s_amount'], '777', 'simple form value saved per template');
+  eq(saved.forms.swap_fee, '45', 'section form value saved');
+
+  const a2 = loadApp({ storage: { cf_session_v1: stored } }); const d2 = a2.w.document;
+  eq(a2.ev('pendingSource.name'), 'ArcEscrow', 'contract restored after reload');
+  eq(a2.ev('pendingSource.code'), saved.contract.code, 'restored source is identical');
+  ok(d2.getElementById('currentContract').style.display === 'flex' && /ArcEscrow\.sol/.test(d2.getElementById('currentContract').textContent), 'bar shows the restored contract');
+  eq(d2.getElementById('pendingContractLabel').value.startsWith('ArcEscrow.sol'), true, 'deploy page label restored');
+  eq(a2.ev('pendingCtorArgs.length'), saved.contract.args.length, 'constructor arguments restored');
+  ok(/Restored your last contract/.test(d2.getElementById('deployConsole').textContent), 'console says it was restored');
+  eq(d2.getElementById('swap_fee').value, '45', 'section form value restored');
+  a2.ev("renderSimpleForm('escrow')"); await wait(0);
+  eq(d2.getElementById('s_amount').value, '777', 'simple form value restored on first render');
+  d2.getElementById('s_amount').value = '5';
+  a2.ev("renderSimpleForm('escrow')"); await wait(0);
+  eq(d2.getElementById('s_amount').value, '100', 're-rendering gives the defaults again (restore happens once)');
+  // discard
+  [...d2.querySelectorAll('#currentContract button')].find((b) => b.textContent === 'Discard').click();
+  eq(a2.ev('pendingSource.code'), '', 'Discard clears the buffer');
+  ok(d2.getElementById('currentContract').style.display === 'none', 'Discard hides the bar');
+  eq(JSON.parse(a2.w.localStorage.getItem('cf_session_v1')).contract, undefined, 'Discard removes the saved contract');
+  const a3 = loadApp({ storage: { cf_session_v1: a2.w.localStorage.getItem('cf_session_v1') } });
+  eq(a3.ev('pendingSource.code'), '', 'a discarded contract is not restored');
+  // corrupted storage is ignored
+  const a4 = loadApp({ storage: { cf_session_v1: '{not json' } });
+  eq(a4.ev('pendingSource.code'), '', 'corrupted storage is ignored');
+  ok(a4.pageErrors.length === 0, 'corrupted storage causes no page errors', a4.pageErrors.join('; '));
+  // reset
+  a2.ev('uiReload = () => { window.__reloaded = true; }');
+  d2.getElementById('resetSavedBtn').click();
+  ok(a2.w.localStorage.getItem('cf_session_v1') === null && a2.w.__reloaded === true, 'Reset saved data clears storage and reloads');
 }
 
 /* texts */

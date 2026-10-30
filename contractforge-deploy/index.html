@@ -72,6 +72,7 @@
     <div class="tier-widget">
       <div class="tier-label">Appearance</div>
       <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light mode</button>
+      <button class="theme-btn" id="resetSavedBtn" type="button" style="margin-top:8px;">Reset saved data</button>
     </div>
   </aside>
 
@@ -369,6 +370,12 @@
           <button class="btn btn-ghost" onclick="copySource()">Copy code</button>
         </div>
         <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
+        <div class="deploy-result" id="deployResult" style="display:none;" aria-live="polite"></div>
+        <div class="console-tools">
+          <span class="console-title">Activity</span>
+          <button type="button" class="btn btn-ghost" id="consoleCopy">Copy log</button>
+          <button type="button" class="btn btn-ghost" id="consoleClear">Clear</button>
+        </div>
         <div class="console" id="deployConsole">
           <div class="line"><span class="t">[boot]</span><span class="msg">Waiting for contract generation and wallet connection…</span></div>
         </div>

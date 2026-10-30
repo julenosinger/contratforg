@@ -69,6 +69,7 @@ function renderCurrentContract(){
   if(!el) return;
   const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
   if(!has){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  uiSaveContract();
   const lines = pendingSource.code.split('\n').length;
   const nArgs = (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs.length : 0;
   const modeChip = (typeof multichainMode !== 'undefined' && multichainMode !== 'single' && typeof MC_MODES !== 'undefined')
@@ -81,6 +82,7 @@ function renderCurrentContract(){
     + '<button type="button" class="btn btn-ghost" onclick="ccAudit()">Audit</button>'
     + '<button type="button" class="btn btn-ghost" onclick="copySource()">Copy</button>'
     + '<button type="button" class="btn btn-ghost" onclick="downloadSource()">Download</button>'
+    + '<button type="button" class="btn btn-ghost" onclick="ccDiscard()">Discard</button>'
     + '<button type="button" class="btn btn-primary" onclick="ccPublish()">Publish</button></div>';
 }
 function ccPublish(){ deployFromBuffer(); }
@@ -132,6 +134,7 @@ function uiCollapseSimpleForm(){
   const btn = form.querySelector('button[onclick^="genSimple("]');
   const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute('onclick'));
   if(m && UI_ADV_SIMPLE[m[1]]) uiCollapseAdvanced(form, UI_ADV_SIMPLE[m[1]]);
+  if(m) uiRestoreSimpleForm(m[1]);
 }
 
 function initAdvancedOptions(){
@@ -273,11 +276,149 @@ function initMobileMenu(){
   nav.addEventListener('click', (e) => { if(e.target.closest('.nav-item')) set(false); });
 }
 
+/* ---- Deploy results card ---- */
+let uiDeployResults = [];
+function uiResetDeployResults(){ uiDeployResults = []; renderDeployResult(); }
+function uiAddDeployResult(r){ uiDeployResults.push(r); renderDeployResult(); }
+function renderDeployResult(){
+  const box = document.getElementById('deployResult');
+  if(!box) return;
+  if(!uiDeployResults.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="dr-title">' + (uiDeployResults.length === 1 ? 'Deployed' : uiDeployResults.length + ' deployments') + '</div>'
+    + uiDeployResults.map((r, i) => {
+      const net = NETWORKS[r.network] || { label: r.network, explorer: '' };
+      const url = net.explorer ? net.explorer + '/address/' + r.address : '';
+      return '<div class="dr-row"><div class="dr-main"><b>' + escapeHtml(r.name) + '</b><span class="dr-net">' + escapeHtml(net.label) + '</span></div>'
+        + '<code class="dr-addr">' + escapeHtml(r.address) + '</code>'
+        + '<div class="dr-actions"><button type="button" class="btn btn-ghost" data-copy="' + i + '">Copy address</button>'
+        + (/^https:\/\//.test(url) ? '<a class="btn btn-ghost" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">View on explorer</a>' : '')
+        + '</div></div>';
+    }).join('');
+}
+
+function initConsoleTools(){
+  const box = document.getElementById('deployResult');
+  if(box) box.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-copy]');
+    if(!b) return;
+    const r = uiDeployResults[Number(b.dataset.copy)];
+    if(r && navigator.clipboard) navigator.clipboard.writeText(r.address).then(() => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy address'; }, 1500); });
+  });
+  const lines = () => [...document.querySelectorAll('#deployConsole .line')];
+  const copy = document.getElementById('consoleCopy'), clear = document.getElementById('consoleClear');
+  if(copy) copy.addEventListener('click', () => {
+    const text = lines().map(l => l.textContent).join('\n');
+    if(navigator.clipboard) navigator.clipboard.writeText(text).then(() => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy log'; }, 1500); });
+  });
+  if(clear) clear.addEventListener('click', () => { document.getElementById('deployConsole').innerHTML = ''; });
+}
+
+/* ---- Saved session: last contract + generator form values stay in this browser ---- */
+const UI_STORE = 'cf_session_v1';
+const UI_FORM_PREFIX = /^(swap_|tre_|vault_|ms_|cc_)/;
+let uiSaveTimer = null;
+const uiRestoredTemplates = {};
+
+function uiStoreRead(){ try{ const o = JSON.parse(localStorage.getItem(UI_STORE) || '{}'); return (o && typeof o === 'object') ? o : {}; }catch(_){ return {}; } }
+function uiStoreWrite(o){ try{ localStorage.setItem(UI_STORE, JSON.stringify(o)); }catch(_){ /* storage full or unavailable */ } }
+
+function uiSaveContract(){
+  if(typeof pendingSource === 'undefined' || !pendingSource || !pendingSource.code) return;
+  const o = uiStoreRead();
+  o.contract = { name: pendingSource.name, code: pendingSource.code, args: (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs : [], savedAt: Date.now() };
+  uiStoreWrite(o);
+}
+
+function uiCurrentSimpleTemplate(){
+  const form = document.getElementById('simpleForm');
+  const btn = form && form.querySelector('button[onclick^="genSimple("]');
+  const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute('onclick'));
+  return m ? m[1] : '';
+}
+
+function uiFormKey(el){
+  if(!el || !el.id || el.type === 'password' || /key|secret|pass/i.test(el.id)) return '';
+  if(UI_FORM_PREFIX.test(el.id) && !el.closest('#simpleForm')) return el.id;
+  if(el.closest('#simpleForm')){ const t = uiCurrentSimpleTemplate(); return t ? 's:' + t + ':' + el.id : ''; }
+  return '';
+}
+
+const uiPendingForms = {};
+function uiQueueFormSave(el){
+  const key = uiFormKey(el);
+  if(!key) return;
+  uiPendingForms[key] = el.value; // every changed field is kept; one write per burst
+  clearTimeout(uiSaveTimer);
+  uiSaveTimer = setTimeout(() => {
+    const o = uiStoreRead();
+    o.forms = Object.assign(o.forms || {}, uiPendingForms);
+    Object.keys(uiPendingForms).forEach(k => delete uiPendingForms[k]);
+    uiStoreWrite(o);
+  }, 250);
+}
+
+function uiSetFieldValue(el, v){
+  if(!el || typeof v !== 'string') return;
+  if(el.tagName === 'SELECT' && ![...el.options].some(op => op.value === v)) return;
+  el.value = v;
+}
+
+/* Called once per template per page load, right after its form is built. */
+function uiRestoreSimpleForm(tpl){
+  if(!tpl || uiRestoredTemplates[tpl]) return;
+  uiRestoredTemplates[tpl] = true;
+  const forms = uiStoreRead().forms || {};
+  const prefix = 's:' + tpl + ':';
+  Object.keys(forms).filter(k => k.startsWith(prefix)).forEach(k => uiSetFieldValue(document.getElementById('simpleForm').querySelector('#' + k.slice(prefix.length)), forms[k]));
+}
+
+function uiRestoreSession(){
+  const o = uiStoreRead();
+  Object.entries(o.forms || {}).filter(([k]) => !k.startsWith('s:')).forEach(([k, v]) => uiSetFieldValue(document.getElementById(k), v));
+  const c = o.contract;
+  if(c && typeof c.name === 'string' && typeof c.code === 'string' && c.code && typeof pendingSource !== 'undefined' && !pendingSource.code){
+    pendingSource = { name: c.name, code: c.code };
+    pendingCtorArgs = Array.isArray(c.args) ? c.args : [];
+    const label = document.getElementById('pendingContractLabel');
+    if(label) label.value = c.name + '.sol  (' + NETWORKS[activeNetwork].label + ')';
+    logConsole('step', 'Restored your last contract (' + c.name + '.sol) from this browser. Use Discard in the top bar to remove it.');
+  }
+}
+
+function ccDiscard(){
+  pendingSource = { name:'', code:'' };
+  pendingCtorArgs = [];
+  const o = uiStoreRead(); delete o.contract; uiStoreWrite(o);
+  const label = document.getElementById('pendingContractLabel');
+  if(label) label.value = '— none generated yet';
+  document.querySelectorAll('.codepanel').forEach(p => { p.style.display = 'none'; p.innerHTML = ''; });
+  renderCtorArgs();
+  if(typeof renderMultiDeployPanel === 'function') renderMultiDeployPanel();
+}
+
+function uiReload(){ location.reload(); }
+function uiResetSaved(){
+  try{ localStorage.removeItem(UI_STORE); }catch(_){ /* ignore */ }
+  uiReload();
+}
+
+function initSession(){
+  uiRestoreSession();
+  document.addEventListener('input', (e) => uiQueueFormSave(e.target));
+  document.addEventListener('change', (e) => uiQueueFormSave(e.target));
+  const reset = document.getElementById('resetSavedBtn');
+  if(reset) reset.addEventListener('click', uiResetSaved);
+}
+
 if(typeof document !== 'undefined'){
   initAdvancedOptions();
   initFieldValidation();
   initMobileMenu();
+  initConsoleTools();
+  initSession();
   renderCurrentContract();
+  if(typeof renderCtorArgs === 'function') renderCtorArgs();
   renderNetBanner();
   renderHeaderMeta();
   initUiAccessibility();

@@ -462,12 +462,19 @@ async function refreshBalance(){
 /* ======================================================================
    CONSOLE LOG
    ====================================================================== */
-function logConsole(type, msg){
+/* type: ok | err | warn (needs attention) | step (progress). link: optional { href, text } shown after the message. */
+function logConsole(type, msg, link){
   const c = document.getElementById('deployConsole');
   const line = document.createElement('div');
   line.className = 'line '+type;
   const time = new Date().toLocaleTimeString('en-US', {hour12:false});
   line.innerHTML = `<span class="t">[${time}]</span><span class="msg">${escapeHtml(msg)}</span>`;
+  if(link && /^https:\/\//.test(link.href)){
+    const a = document.createElement('a');
+    a.href = link.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.className = 'log-link';
+    a.textContent = link.text || link.href;
+    line.querySelector('.msg').append(' ', a);
+  }
   c.appendChild(line);
   c.scrollTop = c.scrollHeight;
 }
@@ -2166,7 +2173,8 @@ async function compileAndDeploy(){
   }
   if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
 
-  logConsole('warn','Starting compilation of '+pendingSource.name+'.sol…');
+  if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
+  logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
 
   try{
     const compiled = await compilePending();
@@ -2223,9 +2231,10 @@ async function compilePending(){
 /* Sends the deployment (constructor values already validated) on network netKey. */
 async function deployCompiled(compiled, ctorValues, netKey){
   const factory = new ethers.ContractFactory(compiled.abi, compiled.bytecode, signer);
-  logConsole('warn','Sending deploy transaction on '+NETWORKS[netKey].label+'… confirm in your wallet.');
+  logConsole('step','Sending deploy transaction on '+NETWORKS[netKey].label+'… confirm in your wallet.');
   const contract = await factory.deploy(...ctorValues);
-  logConsole('warn','Tx sent: '+contract.deployTransaction.hash);
+  const txNet = NETWORKS[netKey];
+  logConsole('step','Tx sent: '+contract.deployTransaction.hash, txNet.explorer ? { href: txNet.explorer+'/tx/'+contract.deployTransaction.hash, text:'view tx' } : null);
   await contract.deployed();
   logConsole('ok','Contract deployed at: '+contract.address);
   // Save to deploy history
@@ -2238,8 +2247,9 @@ async function deployCompiled(compiled, ctorValues, netKey){
   });
   const net=NETWORKS[netKey];
   if(net.explorer){
-    logConsole('ok','Explorer: '+net.explorer+'/address/'+contract.address);
+    logConsole('ok','Explorer:', { href: net.explorer+'/address/'+contract.address, text: net.explorer+'/address/'+contract.address });
   }
+  if(typeof uiAddDeployResult === 'function') uiAddDeployResult({ name: compiled.name, network: netKey, address: contract.address, txHash: contract.deployTransaction.hash });
   await refreshBalance();
   return contract;
 }
@@ -2320,7 +2330,7 @@ function loadSolcMainThread(version, url){
 
 async function ensureSolcLoaded(version){
   if(solcLoaded && solcLoaded.version===version) return;
-  logConsole('warn','Loading solc-js v'+version+'… (first time may take ~10-20s)');
+  logConsole('step','Loading solc-js v'+version+'… (first time may take ~10-20s)');
   const url = await resolveSolcUrl(version);
 
   let mode = 'worker';
@@ -3157,7 +3167,7 @@ async function connectWalletConnect(){
       logConsole('ok','WalletConnect connected: '+account);
     }catch(e){ logConsole('err','WalletConnect: '+(e.message||e)); }
   } else {
-    logConsole('warn','Loading WalletConnect provider…');
+    logConsole('step','Loading WalletConnect provider…');
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js';
     script.onload = ()=>{ logConsole('ok','WalletConnect loaded — click the button again.'); };
@@ -3736,7 +3746,7 @@ async function loadAnalytics(){
   if(!addr){ alert('Enter a contract address.'); return; }
   if(!provider){ alert('Connect your wallet first.'); return; }
 
-  logConsole('warn','Loading analytics for '+addr.slice(0,10)+'…');
+  logConsole('step','Loading analytics for '+addr.slice(0,10)+'…');
   try{
     const latest=await provider.getBlockNumber();
     const lookback=parseInt(document.getElementById('an_blocks')?.value||'10000');

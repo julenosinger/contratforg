@@ -145,6 +145,7 @@ async function runMulti(mode, setup) {
   ok(new Set(deployed.map((d) => d.bytecode)).size === 1, 'same bytecode on every network');
   eq(results.map((r) => r[1] !== 'failed'), [true, true, true], 'all deployments succeeded');
   eq(app.ev('activeNetwork'), 'arc', 'original network restored');
+  eq(app.w.document.querySelectorAll('#deployResult .dr-row').length, 3, 'result card lists every deployment');
   ok(app.w.document.getElementById('deployConfirm') === null, 'confirmation dialog closed');
 }
 
@@ -216,6 +217,13 @@ async function runMulti(mode, setup) {
   w.__noAuto = false;
   await ev('compileAndDeploy()');
   eq(deployed.length, 1, 'confirmed mainnet deploy goes through');
+  const lines = [...w.document.querySelectorAll('#deployConsole .line')];
+  ok(lines.some((l) => l.classList.contains('step') && /Sending deploy transaction/.test(l.textContent)), 'progress lines are steps');
+  ok(lines.some((l) => l.classList.contains('step') && l.querySelector('a')?.href.startsWith('https://explorer.arc.io/tx/')), 'tx hash links to the explorer');
+  ok(lines.some((l) => l.classList.contains('ok') && l.querySelector('a')?.href.startsWith('https://explorer.arc.io/address/')), 'address links to the explorer');
+  ok(!lines.some((l) => l.classList.contains('warn') && /Sending|Starting|Tx sent/.test(l.textContent)), 'progress is no longer shown as a warning');
+  const card = w.document.getElementById('deployResult');
+  ok(card.style.display === 'block' && /ArcEscrow/.test(card.textContent) && card.querySelectorAll('.dr-row').length === 1, 'result card after a deployment');
 }
 
 { // single mode: contracts without constructor arguments deploy exactly as before

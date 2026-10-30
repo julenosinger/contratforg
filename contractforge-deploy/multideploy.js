@@ -219,7 +219,8 @@ async function multiDeploy(){
   const original = activeNetwork;
   const results = [];
   try{
-    logConsole('warn','Multi-deploy: compiling '+pendingSource.name+'.sol once…');
+    if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
+    logConsole('step','Multi-deploy: compiling '+pendingSource.name+'.sol once…');
     const main = await compilePending();
     const mainInputs = (main.abi.find(x => x.type === 'constructor') || { inputs: [] }).inputs;
     let bridge = null, bridgeInputs = [];
@@ -234,7 +235,7 @@ async function multiDeploy(){
       const net = NETWORKS[key];
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
-        logConsole('warn','— '+net.label+' —');
+        logConsole('step','— '+net.label+' —');
         if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }

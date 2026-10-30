@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../contractforge-deploy');
 
-export function loadApp({ alerts } = {}) {
+export function loadApp({ alerts, storage } = {}) {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<script[^>]*src=[^>]*><\/script>/g, '');
   const files = ['app.js', 'multichain.js', 'multideploy.js', 'ui.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8'));
   const pageErrors = [];
@@ -14,6 +14,7 @@ export function loadApp({ alerts } = {}) {
   vc.on('jsdomError', (e) => pageErrors.push(e.detail?.message || e.message));
   const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc, url: 'http://localhost/' });
   const w = dom.window;
+  for (const [k, v] of Object.entries(storage || {})) w.localStorage.setItem(k, v);
   w.alert = (m) => { if (alerts) alerts.push(String(m)); };
   w.confirm = () => true;
   w.HTMLElement.prototype.scrollIntoView = () => {};
