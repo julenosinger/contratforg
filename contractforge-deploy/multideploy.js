@@ -171,7 +171,7 @@ function renderMultiDeployPanel(){
     html += '<div class="md-table-wrap"><table class="md-table"><thead><tr><th>Network</th>'
       + pendingCtorArgs.map(a => '<th>'+escapeHtml(a.param.replace(/_$/, ''))+'</th>').join('')+'</tr></thead><tbody>'
       + sel.map(k => '<tr><td>'+escapeHtml(NETWORKS[k].label)+'</td>'
-        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
+        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" data-type="'+escapeHtml(a.type)+'" value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
         + '</tr>').join('')
       + '</tbody></table></div>';
   }
@@ -179,6 +179,10 @@ function renderMultiDeployPanel(){
     + '<div class="hint">Compiles once, then for each network: switches your wallet, fills that network\'s addresses, and deploys. Each network asks for your confirmation in the wallet.</div>';
   box.style.display = 'block';
   box.innerHTML = html;
+}
+
+function mdSummary(key){
+  return pendingCtorArgs.map((a, i) => { const el = document.getElementById('md_'+key+'_'+i); return { label: a.param.replace(/_$/, ''), value: el ? el.value : '' }; });
 }
 
 function mdRowValues(key, abiInputs){
@@ -231,7 +235,7 @@ async function multiDeploy(){
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
         logConsole('warn','— '+net.label+' —');
-        if(net.isMainnet && !mainnetDeployConfirm()){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
+        if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }
         const values = mdRowValues(key, mainInputs);

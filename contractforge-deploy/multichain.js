@@ -204,6 +204,11 @@ function collectCtorValues(abiInputs){
   });
 }
 
+/* Label/value pairs of the constructor panel, for the confirmation summary. */
+function ctorSummary(){
+  return pendingCtorArgs.map((a, i) => { const el = document.getElementById('ctor_arg_'+i); return { label: a.param.replace(/_$/, ''), value: el ? el.value : '' }; });
+}
+
 /* ---------------- UI: constructor arguments panel ---------------- */
 function renderCtorArgs(){
   if(typeof renderCurrentContract === 'function') renderCurrentContract();
@@ -221,7 +226,7 @@ function renderCtorArgs(){
       const missing = !val;
       const hintTxt = ({usdc:'USDC on this network', eurc:'EURC on this network', tokenMessenger:'Circle CCTP V2 TokenMessenger', messageTransmitter:'Circle CCTP V2 MessageTransmitter', entryPoint:'ERC-4337 EntryPoint v0.6 (check it exists on this chain)', nativeScaled:'amount in the native token\'s smallest unit', static:''})[a.hint] || '';
       return '<div class="field"><label>'+escapeHtml(a.param.replace(/_$/,''))+' <span class="mc-type">'+escapeHtml(a.type)+'</span></label>'
-        + '<input id="ctor_arg_'+i+'" value="'+escapeHtml(val)+'" placeholder="'+(a.type==='address'?'0x…':'')+'" />'
+        + '<input id="ctor_arg_'+i+'" data-type="'+escapeHtml(a.type)+'" value="'+escapeHtml(val)+'" placeholder="'+(a.type==='address'?'0x…':'')+'" />'
         + '<div class="hint'+(missing?' mc-missing':'')+'">'+(missing?'No default for this network. Enter a value. ':'')+escapeHtml(hintTxt)+(a.note?' '+escapeHtml(a.note):'')+'</div></div>';
     }).join('');
 }

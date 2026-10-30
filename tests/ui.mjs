@@ -95,6 +95,81 @@ for (const [sec, ids] of Object.entries({ 'sec-swap': ['swap_fee', 'swap_multi']
 ev("renderSimpleForm('erc20')"); await new Promise((r) => setTimeout(r, 0)); doc.getElementById('s_decimals').value = '6'; ev("genSimple('erc20')");
 ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value changed inside Advanced options is used');
 
+/* mainnet confirmation dialog */
+{
+  ev("setMultichainMode('portable')"); ev("renderSimpleForm('escrow')"); ev("activeNetwork='arcMain'"); ev("updateSideNet()");
+  ev("account = '0x" + 'a'.repeat(40) + "'"); ev("genSimple('escrow')");
+  const dlg = () => doc.getElementById('deployConfirm');
+  const wait = () => new Promise((r) => setTimeout(r, 0));
+  let result; const p1 = ev('mainnetDeployConfirm({ args: ctorSummary() })').then((v) => { result = v; });
+  ok(!!dlg(), 'dialog opens on mainnet');
+  ok(/Arc Mainnet/.test(dlg().textContent) && /ArcEscrow\.sol/.test(dlg().textContent) && /5042/.test(dlg().textContent), 'dialog summarises network and contract');
+  ok(/token/.test(dlg().querySelector('.dc-args')?.textContent || ''), 'dialog lists constructor arguments');
+  const input = () => doc.getElementById('dcInput'), okBtn = () => doc.getElementById('dcConfirm');
+  ok(okBtn().disabled, 'confirm is disabled until the name is typed');
+  input().value = 'Arc'; input().dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(okBtn().disabled, 'wrong text keeps it disabled');
+  input().value = 'arc mainnet'; input().dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(!okBtn().disabled, 'typing the network name (any case) enables it');
+  okBtn().click(); await p1;
+  eq(result, true, 'confirming resolves true'); ok(dlg() === null, 'dialog removed');
+  let r2; const p2 = ev('mainnetDeployConfirm({})').then((v) => { r2 = v; }); doc.getElementById('dcCancel').click(); await p2;
+  eq(r2, false, 'Cancel resolves false');
+  let r3; const p3 = ev('mainnetDeployConfirm({})').then((v) => { r3 = v; });
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await p3;
+  eq(r3, false, 'Escape resolves false'); ok(dlg() === null, 'dialog removed after Escape');
+  let r4; const p4 = ev('mainnetDeployConfirm({})').then((v) => { r4 = v; });
+  input().value = 'Arc Mainnet'; input().dispatchEvent(new w.Event('input', { bubbles: true }));
+  input().dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await p4;
+  eq(r4, true, 'Enter in the field confirms once the name matches');
+  ev("activeNetwork='arc'; updateSideNet()");
+  eq(await ev('mainnetDeployConfirm({})'), true, 'testnet needs no confirmation');
+  ok(dlg() === null, 'no dialog on testnet');
+  ev("setMultichainMode('single')"); void wait;
+}
+
+/* field validation */
+{
+  const fire = (el, v) => { el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  const err = (el) => el.closest('.field')?.querySelector('.field-error')?.textContent || '';
+  ev("renderSimpleForm('nft')"); // unknown template id is ignored
+  ev("renderSimpleForm('erc721')"); await new Promise((r) => setTimeout(r, 0));
+  const roy = doc.getElementById('s_royalty');
+  fire(roy, '-5'); ok(roy.classList.contains('invalid') && /basis points/.test(err(roy)), 'royalty: negative flagged', err(roy));
+  fire(roy, '20000'); ok(roy.classList.contains('invalid'), 'royalty above range flagged');
+  fire(roy, '500'); ok(!roy.classList.contains('invalid') && err(roy) === '' && !roy.hasAttribute('aria-invalid'), 'royalty: fixed value clears the message');
+  fire(doc.getElementById('swap_fee'), '10000'); ok(doc.getElementById('swap_fee').classList.contains('invalid'), 'swap fee 10000 flagged');
+  fire(doc.getElementById('swap_fee'), '30'); ok(!doc.getElementById('swap_fee').classList.contains('invalid'), 'swap fee 30 accepted');
+  ev("renderSimpleForm('escrow')"); await new Promise((r) => setTimeout(r, 0));
+  const buyer = doc.getElementById('s_buyer');
+  fire(buyer, '0x123'); ok(buyer.classList.contains('invalid') && /valid address/.test(err(buyer)), 'short address flagged');
+  fire(buyer, '0x' + '0'.repeat(40)); ok(/zero address/i.test(err(buyer)), 'zero address flagged');
+  fire(buyer, '0x' + '1'.repeat(40)); ok(!buyer.classList.contains('invalid'), 'valid address accepted');
+  fire(buyer, ''); ok(!buyer.classList.contains('invalid'), 'empty is not an error');
+  const sg = doc.getElementById('tre_signers');
+  fire(sg, '0x' + '1'.repeat(40) + '\nnot-an-address'); ok(sg.classList.contains('invalid'), 'bad signer line flagged');
+  fire(sg, '0x' + '1'.repeat(40) + '\n0x' + '2'.repeat(40)); ok(!sg.classList.contains('invalid'), 'good signer list accepted');
+  // constructor panel
+  ev("setMultichainMode('portable')"); ev("renderSimpleForm('smartwallet')"); ev("activeNetwork='arc'"); ev("genSimple('smartwallet')");
+  const a0 = doc.getElementById('ctor_arg_0');
+  fire(a0, 'nope'); ok(a0.classList.contains('invalid'), 'constructor address flagged');
+  const a1 = doc.getElementById('ctor_arg_1');
+  fire(a1, '1.5'); ok(a1.classList.contains('invalid') && /whole number/.test(err(a1)), 'constructor number flagged');
+  fire(a1, '1000'); ok(!a1.classList.contains('invalid'), 'constructor number accepted');
+  ev("setMultichainMode('single')");
+}
+
+/* mobile menu */
+{
+  const t = doc.getElementById('navToggle'), nav = doc.getElementById('mainNav');
+  ok(!!t && !!nav, 'menu button exists');
+  eq(t.getAttribute('aria-expanded'), 'false', 'menu starts closed');
+  t.click(); ok(nav.classList.contains('open') && t.getAttribute('aria-expanded') === 'true' && t.textContent === 'Close', 'button opens the menu');
+  nav.querySelector('.nav-item[data-section="gas"]').click();
+  ok(!nav.classList.contains('open') && t.textContent === 'Menu', 'choosing a section closes the menu');
+  eq(visible(), ['sec-gas'], 'and still opens the section');
+}
+
 /* texts */
 ok(!/All features free|Tier gates/.test(doc.querySelector('.spine').textContent), 'stale tier text removed');
 ok(/multichain/.test(doc.getElementById('headVersion').textContent), 'version text updated');

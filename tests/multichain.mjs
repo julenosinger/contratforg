@@ -120,6 +120,15 @@ async function runMulti(mode, setup) {
   w.__chain = (id) => { chain = id; };
   ev("refreshBalance = async () => {}; account = '" + addrFor('acct') + "'; signer = {}; provider = {};");
   ev(`setMultichainMode('${mode}')`);
+  // mainnet deployments open a summary the user must confirm by typing the network name
+  w.setInterval(() => {
+    const input = w.document.getElementById('dcInput');
+    if (!input || input.dataset.done || w.__noAuto) return;
+    input.dataset.done = '1';
+    input.value = w.document.querySelector('.dc-type b').textContent;
+    input.dispatchEvent(new w.Event('input', { bubbles: true }));
+    w.document.getElementById('dcConfirm').click();
+  }, 5);
   setup(app, () => fillParties(app, 'arc'));
   return { app, deployed, run: async () => { const r = await ev('multiDeploy()'); if (process.env.DEBUG_MC) console.log([...w.document.querySelectorAll('#deployConsole .line')].map((l) => l.textContent).join('\n')); return r; } };
 }
@@ -136,6 +145,7 @@ async function runMulti(mode, setup) {
   ok(new Set(deployed.map((d) => d.bytecode)).size === 1, 'same bytecode on every network');
   eq(results.map((r) => r[1] !== 'failed'), [true, true, true], 'all deployments succeeded');
   eq(app.ev('activeNetwork'), 'arc', 'original network restored');
+  ok(app.w.document.getElementById('deployConfirm') === null, 'confirmation dialog closed');
 }
 
 { // a network without a default blocks only that network
@@ -189,6 +199,23 @@ async function runMulti(mode, setup) {
   w.document.getElementById('ctor_arg_0').value = addrFor('custom');
   await ev('compileAndDeploy()');
   eq(deployed[1]?.args, [addrFor('custom')], 'edited value is deployed');
+}
+
+{ // mainnet: cancelling the summary sends nothing; confirming deploys
+  const { app, deployed } = await runMulti('portable', ({ ev }, fill) => { ev("renderSimpleForm('escrow')"); fill(); ev("activeNetwork='arcMain'"); ev("genSimple('escrow')"); });
+  const { w, ev } = app;
+  w.__noAuto = true;
+  const run = ev('compileAndDeploy()');
+  await new Promise((r) => setTimeout(r, 20));
+  ok(!!w.document.getElementById('deployConfirm'), 'single deploy on mainnet opens the summary');
+  ok(/token/.test(w.document.querySelector('#deployConfirm .dc-args').textContent), 'summary lists the constructor arguments');
+  w.document.getElementById('dcCancel').click();
+  await run;
+  eq(deployed.length, 0, 'cancelled mainnet deploy sends nothing');
+  ok([...w.document.querySelectorAll('#deployConsole .line')].some((l) => /cancelled/.test(l.textContent)), 'console says it was cancelled');
+  w.__noAuto = false;
+  await ev('compileAndDeploy()');
+  eq(deployed.length, 1, 'confirmed mainnet deploy goes through');
 }
 
 { // single mode: contracts without constructor arguments deploy exactly as before

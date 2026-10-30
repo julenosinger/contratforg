@@ -286,10 +286,13 @@ function updateSideNet(){
 }
 
 /* ─── Mainnet deploy confirmation ─────────────────────────────── */
-function mainnetDeployConfirm(){
+/* Resolves true when the deployment may go ahead. Testnets need no extra step;
+   on a mainnet the user reviews a summary and types the network name (falls back to confirm() without the UI). */
+function mainnetDeployConfirm(details){
   const net = NETWORKS[activeNetwork];
-  if(!net.isMainnet) return true;
-  return confirm(`⚠ MAINNET DEPLOY on ${net.label}\n\nYou are about to deploy a smart contract using REAL ${net.gasSymbol}.\nThis action cannot be undone.\n\nHave you:\n✓ Audited the contract source?\n✓ Tested on a testnet?\n✓ Reviewed all constructor parameters?\n\nProceed with deployment?`);
+  if(!net.isMainnet) return Promise.resolve(true);
+  if(typeof uiConfirmMainnet === 'function') return uiConfirmMainnet(net, details || {});
+  return Promise.resolve(confirm(`⚠ MAINNET DEPLOY on ${net.label}\n\nYou are about to deploy a smart contract using REAL ${net.gasSymbol}.\nThis action cannot be undone.\n\nHave you:\n✓ Audited the contract source?\n✓ Tested on a testnet?\n✓ Reviewed all constructor parameters?\n\nProceed with deployment?`));
 }
 
 /* ---------------- Sidebar navigation ---------------- */
@@ -2161,7 +2164,7 @@ async function compileAndDeploy(){
     logConsole('err','Mainnet deploy blocked: the contract contains the placeholder address 0x…dEaD. Replace it with a real address (signers, buyer, CCTP or token addresses) and generate again.');
     return;
   }
-  if(!mainnetDeployConfirm()){ logConsole('warn','Mainnet deployment cancelled.'); return; }
+  if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
 
   logConsole('warn','Starting compilation of '+pendingSource.name+'.sol…');
 

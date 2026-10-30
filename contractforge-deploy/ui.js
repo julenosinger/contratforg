@@ -143,8 +143,140 @@ function initAdvancedOptions(){
   }
 }
 
+/* ---- Mainnet deployment summary (replaces the browser confirm box) ---- */
+function uiConfirmMainnet(net, details){
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const src = (typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code) ? pendingSource : null;
+    const wallet = (typeof account !== 'undefined' && account) ? account : '';
+    const rows = [
+      ['Network', escapeHtml(net.label) + ' <span class="dc-dim">(chain ' + escapeHtml(net.chainIdDec) + ')</span>'],
+      ['Wallet', wallet ? '<code>' + escapeHtml(wallet.slice(0, 8) + '…' + wallet.slice(-6)) + '</code>' : '<span class="dc-dim">not connected</span>'],
+      ['Contract', src ? escapeHtml(src.name) + '.sol <span class="dc-dim">(' + src.code.split('\n').length + ' lines)</span>' : '<span class="dc-dim">none</span>'],
+      ['Gas paid in', 'real ' + escapeHtml(net.gasSymbol)]
+    ];
+    const args = (details && details.args) || [];
+    const argHtml = args.length
+      ? '<div class="dc-args"><div class="dc-sub">Constructor arguments</div>' + args.map(a => '<div class="dc-arg"><span>' + escapeHtml(a.label) + '</span><code>' + escapeHtml(a.value || '(empty)') + '</code></div>').join('') + '</div>'
+      : '';
+    const root = document.createElement('div');
+    root.className = 'dc-backdrop'; root.id = 'deployConfirm';
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'dcTitle');
+    root.innerHTML = '<div class="dc-box">'
+      + '<div class="dc-head"><span class="dc-tag">MAINNET</span><h3 id="dcTitle">Confirm deployment</h3></div>'
+      + '<p class="dc-warn">This uses real funds and cannot be undone.</p>'
+      + '<div class="dc-rows">' + rows.map(r => '<div class="dc-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('') + '</div>'
+      + argHtml
+      + '<ul class="dc-check"><li>The source was reviewed or audited</li><li>It was tested on a testnet first</li><li>Every address above is correct for this network</li></ul>'
+      + '<label class="dc-type" for="dcInput">Type <b>' + escapeHtml(net.label) + '</b> to confirm</label>'
+      + '<input id="dcInput" autocomplete="off" spellcheck="false" />'
+      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="dcCancel">Cancel</button>'
+      + '<button type="button" class="btn btn-primary" id="dcConfirm" disabled>Deploy to ' + escapeHtml(net.label) + '</button></div>'
+      + '</div>';
+    document.body.appendChild(root);
+    const input = root.querySelector('#dcInput'), ok = root.querySelector('#dcConfirm'), cancel = root.querySelector('#dcCancel');
+    const finish = (v) => { document.removeEventListener('keydown', onKey, true); root.remove(); if(prev && prev.focus) prev.focus(); resolve(v); };
+    const matches = () => input.value.trim().toLowerCase() === String(net.label).toLowerCase();
+    const onKey = (e) => {
+      if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+      else if(e.key === 'Enter' && e.target === input && matches()){ e.preventDefault(); finish(true); }
+      else if(e.key === 'Tab'){ // keep focus inside the dialog
+        const f = [input, cancel, ok].filter(x => !x.disabled);
+        const i = f.indexOf(document.activeElement);
+        if(e.shiftKey && i <= 0){ e.preventDefault(); f[f.length - 1].focus(); }
+        else if(!e.shiftKey && i === f.length - 1){ e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    input.addEventListener('input', () => { ok.disabled = !matches(); });
+    ok.addEventListener('click', () => { if(matches()) finish(true); });
+    cancel.addEventListener('click', () => finish(false));
+    input.focus();
+  });
+}
+
+/* ---- Field validation while typing (advice only: it never blocks generating) ---- */
+const UI_RANGES = { // id -> [min, max, label]
+  swap_fee: [0, 9999, 'Fee in basis points, 0 to 9999'],
+  vault_perf: [0, 9999, 'Fee in basis points, 0 to 9999'],
+  ms_fee: [0, 10000, 'Fee in basis points, 0 to 10000'],
+  s_exitfee: [0, 9999, 'Fee in basis points, 0 to 9999'],
+  s_royalty: [0, 10000, 'Royalty in basis points, 0 to 10000'],
+  s_quorum: [0, 100, 'Percentage, 0 to 100'],
+  tre_threshold: [1, 1000, 'At least 1 approval']
+};
+const UI_ADDR = /^0x[0-9a-fA-F]{40}$/;
+
+function uiFieldProblem(el){
+  const v = (el.value || '').trim();
+  if(el.id === 'tre_signers'){
+    const bad = v.split('\n').map(l => l.trim()).filter(Boolean).find(l => !UI_ADDR.test(l));
+    return bad ? 'Not an address: ' + bad.slice(0, 18) + (bad.length > 18 ? '…' : '') : '';
+  }
+  if(!v) return '';
+  const type = el.dataset ? el.dataset.type : '';
+  const isAddrField = type === 'address' || (el.tagName === 'INPUT' && (el.getAttribute('placeholder') || '').indexOf('0x') === 0 && !/^cc_|^ver_|^an_|^pg_/.test(el.id));
+  if(isAddrField){
+    if(!UI_ADDR.test(v)) return 'Enter a valid address: 0x followed by 40 hex characters.';
+    if(/^0x0{40}$/.test(v)) return 'The zero address is not allowed.';
+    if(/[a-f]/.test(v.slice(2)) && /[A-F]/.test(v.slice(2)) && typeof ethers !== 'undefined' && ethers.utils && ethers.utils.getAddress){
+      try{ ethers.utils.getAddress(v); }catch(_){ return 'Checksum does not match. Check the capitalisation.'; }
+    }
+    return '';
+  }
+  if(/^u?int/.test(type) && !/^\d+$/.test(v)) return 'Enter a whole number.';
+  if(UI_RANGES[el.id]){
+    const [min, max, label] = UI_RANGES[el.id];
+    if(!/^\d+$/.test(v) || Number(v) < min || Number(v) > max) return label + '.';
+    return '';
+  }
+  if(el.type === 'number' && v !== '' && Number(v) < 0) return 'Cannot be negative.';
+  return '';
+}
+
+function uiValidateField(el){
+  if(!el || !el.matches || !el.matches('input, textarea')) return;
+  if(el.closest('#deployConfirm')) return;
+  const problem = uiFieldProblem(el);
+  const host = el.closest('.field') || el.parentElement;
+  let msg = host ? host.querySelector(':scope > .field-error') : null;
+  if(problem){
+    el.classList.add('invalid'); el.setAttribute('aria-invalid', 'true');
+    if(!msg && host){ msg = document.createElement('div'); msg.className = 'field-error'; msg.setAttribute('role', 'alert'); host.appendChild(msg); }
+    if(msg) msg.textContent = problem;
+    el.title = problem;
+  } else {
+    el.classList.remove('invalid'); el.removeAttribute('aria-invalid');
+    if(msg) msg.remove();
+    if(el.title && el.classList.contains('md-missing') === false) el.removeAttribute('title');
+  }
+}
+
+function initFieldValidation(){
+  document.addEventListener('input', (e) => uiValidateField(e.target));
+  document.addEventListener('focusout', (e) => uiValidateField(e.target));
+}
+
+/* ---- Small screens: the menu collapses behind a button ---- */
+function initMobileMenu(){
+  const brand = document.querySelector('.brand');
+  const nav = document.querySelector('.nav');
+  if(!brand || !nav || document.getElementById('navToggle')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'navToggle'; btn.className = 'nav-toggle';
+  btn.setAttribute('aria-controls', 'mainNav'); btn.setAttribute('aria-expanded', 'false');
+  btn.textContent = 'Menu';
+  nav.id = 'mainNav';
+  brand.appendChild(btn);
+  const set = (open) => { nav.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? 'Close' : 'Menu'; };
+  btn.addEventListener('click', () => set(!nav.classList.contains('open')));
+  nav.addEventListener('click', (e) => { if(e.target.closest('.nav-item')) set(false); });
+}
+
 if(typeof document !== 'undefined'){
   initAdvancedOptions();
+  initFieldValidation();
+  initMobileMenu();
   renderCurrentContract();
   renderNetBanner();
   renderHeaderMeta();
