@@ -732,3 +732,17 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .light .home-card{background:#FBF9F2;border-color:#D8D2C2;}
 .light .home-card b,.light .home-continue b,.light .home-steps li b{color:#10201a;}
 .light .home-continue{background:rgba(255,246,222,.8);border-color:#E0CFA0;}
+
+
+/* ---- Home: recent deployments ---- */
+.home-viewall{margin-left:auto;padding:5px 12px;font-size:11px;}
+.home-recent{margin-bottom:38px;border:1px solid #24322D;border-radius:var(--radius);}
+.home-recent-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #1D2924;}
+.home-recent-row:last-child{border-bottom:none;}
+.hr-main{display:flex;flex-direction:column;min-width:170px;flex:1;}
+.hr-main b{color:var(--paper);font-size:13.5px;font-weight:600;}
+.hr-main span{font-family:var(--mono);font-size:10.5px;color:#7E8C86;}
+.home-recent-row code{font-family:var(--mono);font-size:11px;color:#C9D3CE;}
+.hr-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.hr-actions .btn{padding:6px 10px;font-size:11px;text-decoration:none;}
+.light .hr-main b,.light .home-recent-row code{color:#10201a;}

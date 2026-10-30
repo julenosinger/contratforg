@@ -46,6 +46,23 @@ function renderHome(){
         + '<button type="button" class="btn btn-primary" data-go="deploy">Publish</button></div>';
     } else { cont.style.display = 'none'; cont.innerHTML = ''; }
   }
+  const recentBox = document.getElementById('homeRecentBox'), recent = document.getElementById('homeRecent');
+  if(recentBox && recent && typeof loadDeployHistory === 'function'){
+    const rows = [];
+    loadDeployHistory().forEach((e, i) => { if(e && isAddr(e.address) && rows.length < 5) rows.push([e, i]); });
+    if(!rows.length){ recentBox.style.display = 'none'; recent.innerHTML = ''; }
+    else {
+      recentBox.style.display = 'block';
+      recent.innerHTML = rows.map(([e, i]) => {
+        const net = NETWORKS[e.network] || { label: String(e.network || 'unknown'), explorer: '' };
+        const url = net.explorer ? net.explorer + '/address/' + e.address : '';
+        return '<div class="home-recent-row"><div class="hr-main"><b>' + escapeHtml(e.name || 'Contract') + '</b><span>' + escapeHtml(net.label) + (net.isMainnet ? ' <span class="md-live">LIVE</span>' : '') + ' · ' + escapeHtml(typeof timeAgo === 'function' ? timeAgo(e.timestamp) : '') + '</span></div>'
+          + '<code title="' + escapeHtml(e.address) + '">' + escapeHtml(e.address.slice(0, 10) + '…' + e.address.slice(-6)) + '</code>'
+          + '<div class="hr-actions"><button type="button" class="btn btn-ghost" onclick="loadHistoryIntoPlayground(' + i + ')">Open in Playground</button>'
+          + (/^https:\/\//.test(url) ? '<a class="btn btn-ghost" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Explorer</a>' : '') + '</div></div>';
+      }).join('');
+    }
+  }
   const modes = document.getElementById('homeModes');
   if(modes && typeof MC_MODES !== 'undefined'){
     modes.innerHTML = Object.entries(MC_MODES).map(([k, m]) =>

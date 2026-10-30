@@ -2721,6 +2721,7 @@ function addToDeployHistory(entry){
 }
 
 function renderHistory(){
+  if(typeof renderHome === 'function') renderHome();
   const hist = loadDeployHistory();
   const container = document.getElementById('historyList');
   if(!container) return;
@@ -2730,8 +2731,8 @@ function renderHistory(){
   }
   container.innerHTML = '';
   hist.forEach((entry,i)=>{
-    const net = NETWORKS[entry.network];
     if(!entry || !isAddr(entry.address)) return; // ignore corrupted history entries
+    const net = NETWORKS[entry.network];
     const explorerUrl = net?.explorer ? net.explorer+'/address/'+entry.address : '';
     const ago = timeAgo(entry.timestamp);
     const row = document.createElement('div');

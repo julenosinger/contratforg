@@ -84,6 +84,47 @@ eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current i
   doc.querySelector('.nav-item[data-section="home"]').click();
 }
 
+/* recent deployments on Home */
+{
+  const addr = (c) => '0x' + String(c).repeat(40);
+  const history = [
+    { name: 'ArcEscrow', address: addr(1), network: 'arcMain', timestamp: Date.now() - 60000 },
+    { name: 'Broken', address: 'nope', network: 'arc', timestamp: 1 },
+    null,
+    { name: '<b>Evil</b>', address: addr(2), network: 'ethereum', timestamp: Date.now() - 7200000, abi: [] },
+    { name: 'C3', address: addr(3), network: 'unknownnet', timestamp: Date.now() },
+    { name: 'C4', address: addr(4), network: 'arc', timestamp: Date.now() },
+    { name: 'C5', address: addr(5), network: 'arc', timestamp: Date.now() },
+    { name: 'C6', address: addr(6), network: 'arc', timestamp: Date.now() },
+    { name: 'C7', address: addr(7), network: 'arc', timestamp: Date.now() }
+  ];
+  const a = loadApp({ storage: { contractforge_deploy_history: JSON.stringify(history) } }); const d = a.w.document;
+  const rows = () => [...d.querySelectorAll('#homeRecent .home-recent-row')];
+  ok(d.getElementById('homeRecentBox').style.display === 'block', 'recent box shown when there is history');
+  eq(rows().length, 5, 'at most five recent deployments');
+  eq(rows().map((r) => r.querySelector('b').textContent).slice(0, 3), ['ArcEscrow', '<b>Evil</b>', 'C3'], 'newest first, broken entries skipped');
+  ok(!d.querySelector('#homeRecent b b'), 'names are shown as text');
+  ok(/LIVE/.test(rows()[0].textContent) && /Arc Mainnet/.test(rows()[0].textContent), 'mainnet deployments are marked');
+  ok(rows()[0].querySelector('a').href === 'https://explorer.arc.io/address/' + addr(1), 'explorer link');
+  ok(!rows()[2].querySelector('a'), 'unknown network has no explorer link');
+  // Open in Playground uses the original history index
+  rows()[1].querySelector('button').click();
+  eq([...d.querySelectorAll('main section.section')].filter((x) => x.style.display === 'block').map((x) => x.id), ['sec-playground'], 'Open in Playground navigates');
+  eq(d.getElementById('pg_address').value, addr(2), 'and loads the right contract');
+  d.querySelector('.nav-item[data-section="home"]').click();
+  d.querySelector('#homeRecentBox [data-go="history"]').click();
+  eq([...d.querySelectorAll('main section.section')].filter((x) => x.style.display === 'block').map((x) => x.id), ['sec-history'], 'View all opens Deploy History');
+  // a new deployment shows up
+  a.ev("addToDeployHistory({ name:'Fresh', address:'" + addr(8) + "', network:'arc', abi:[] })");
+  eq(rows()[0].querySelector('b').textContent, 'Fresh', 'new deployment appears on Home');
+  a.ev("deleteHistoryEntry(0)");
+  ok(rows()[0].querySelector('b').textContent !== 'Fresh', 'deleting updates Home');
+  const empty = loadApp();
+  ok(empty.w.document.getElementById('homeRecentBox').style.display === 'none', 'hidden without history');
+  const bad = loadApp({ storage: { contractforge_deploy_history: '{oops' } });
+  ok(bad.w.document.getElementById('homeRecentBox').style.display === 'none' && bad.pageErrors.length === 0, 'corrupted history is ignored', bad.pageErrors.join('; '));
+}
+
 /* keyboard */
 ok(items.every((i) => i.getAttribute('tabindex') === '0' && i.getAttribute('role') === 'button'), 'menu items are focusable');
 key(items[0], 'Enter');
