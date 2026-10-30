@@ -1,0 +1,13 @@
+{
+  "name": "contractforge-tests",
+  "private": true,
+  "type": "module",
+  "description": "Compiles the Solidity produced by every ContractForge generator. Run from this folder: npm install && npm test",
+  "scripts": {
+    "test": "node compile-generators.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0",
+    "solc": "0.8.24"
+  }
+}
