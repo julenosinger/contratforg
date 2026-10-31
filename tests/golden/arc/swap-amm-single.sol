@@ -12,8 +12,10 @@ interface IERC20 {
 /// @dev Constant-product (x*y=k) pool. 30 bps fee stays in the reserves for liquidity providers.
 ///      Safe-by-default: slippage limits and deadlines on every call, minimum liquidity locked on the
 ///      first deposit, deposits taken at the pool ratio (no donated excess), reentrancy guard, and
-///      fee-on-transfer tokens are rejected. Tokens sent to the pool directly (not through these
-///      functions) are not tracked and cannot be recovered.
+///      fee-on-transfer tokens are rejected (on the way in and on the way out). Liquidity shares are a
+///      standard ERC-20 token, so they can be transferred and shown by wallets. Tokens sent to the pool
+///      directly (not through these functions) are not tracked and cannot be recovered. Not for rebasing
+///      tokens, and a pool is only as safe as the two tokens in it.
 contract ArcSwapAMM {
     IERC20 public immutable tokenA;
     IERC20 public immutable tokenB;
@@ -23,11 +25,17 @@ contract ArcSwapAMM {
     uint256 public constant MINIMUM_LIQUIDITY = 1000;
     uint256 public totalShares;
     mapping(address => uint256) public shares;
+    mapping(address => mapping(address => uint256)) public allowance;
+    string public constant name = "ContractForge LP";
+    string public constant symbol = "CF-LP";
+    uint8 public constant decimals = 18;
     uint256 private _locked = 1;
 
     event LiquidityAdded(address indexed provider, uint256 amountA, uint256 amountB, uint256 sharesMinted);
     event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB, uint256 sharesBurned);
     event Swap(address indexed user, address tokenIn, uint256 amountIn, uint256 amountOut);
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 
     modifier nonReentrant() {
         require(_locked == 1, "reentrant call");
@@ -84,6 +92,7 @@ contract ArcSwapAMM {
             mintedShares -= MINIMUM_LIQUIDITY;
             totalShares = MINIMUM_LIQUIDITY;      // locked forever, keeps the pool from ever being empty
             shares[address(0)] = MINIMUM_LIQUIDITY;
+            emit Transfer(address(0), address(0), MINIMUM_LIQUIDITY);
         } else {
             uint256 s0 = (amountA * totalShares) / reserveA;
             uint256 s1 = (amountB * totalShares) / reserveB;
@@ -96,6 +105,7 @@ contract ArcSwapAMM {
         totalShares += mintedShares;
         shares[msg.sender] += mintedShares;
 
+        emit Transfer(address(0), msg.sender, mintedShares);
         emit LiquidityAdded(msg.sender, amountA, amountB, mintedShares);
         _pull(tokenA, amountA);
         _pull(tokenB, amountB);
@@ -119,6 +129,7 @@ contract ArcSwapAMM {
         reserveA -= amountA;
         reserveB -= amountB;
 
+        emit Transfer(msg.sender, address(0), shareAmount);
         emit LiquidityRemoved(msg.sender, amountA, amountB, shareAmount);
         _push(tokenA, msg.sender, amountA);
         _push(tokenB, msg.sender, amountB);
@@ -158,6 +169,41 @@ contract ArcSwapAMM {
         _push(tokenA, msg.sender, amountOut);
     }
 
+    /* ---- Liquidity shares as a standard ERC-20 token ---- */
+
+    function totalSupply() external view returns (uint256) { return totalShares; }
+
+    function balanceOf(address account) external view returns (uint256) { return shares[account]; }
+
+    function approve(address spender, uint256 value) external returns (bool) {
+        allowance[msg.sender][spender] = value;
+        emit Approval(msg.sender, spender, value);
+        return true;
+    }
+
+    function transfer(address to, uint256 value) external returns (bool) {
+        _transferShares(msg.sender, to, value);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 value) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed != type(uint256).max) {
+            require(allowed >= value, "insufficient allowance");
+            allowance[from][msg.sender] = allowed - value;
+        }
+        _transferShares(from, to, value);
+        return true;
+    }
+
+    function _transferShares(address from, address to, uint256 value) private {
+        require(to != address(0), "invalid recipient");
+        require(shares[from] >= value, "insufficient shares");
+        shares[from] -= value;
+        shares[to] += value;
+        emit Transfer(from, to, value);
+    }
+
     /// @notice Expected output for an input amount at the current reserves (0 if the pool is empty).
     function getAmountOut(uint256 amountIn, bool aToB) external view returns (uint256) {
         return aToB ? _quote(amountIn, reserveA, reserveB) : _quote(amountIn, reserveB, reserveA);
@@ -176,8 +222,18 @@ contract ArcSwapAMM {
         require(token.balanceOf(address(this)) - balBefore == amount, "unsupported token (fee on transfer)");
     }
 
+    /// @dev Pay out exactly the amount: the recipient must receive it all and the pool must lose no more than it.
+    ///      Reverts for tokens that tax or surcharge outgoing transfers.
     function _push(IERC20 token, address to, uint256 amount) private {
+        uint256 toBefore = token.balanceOf(to);
+        uint256 poolBefore = token.balanceOf(address(this));
         _call(address(token), abi.encodeCall(IERC20.transfer, (to, amount)));
+        uint256 toAfter = token.balanceOf(to);
+        uint256 poolAfter = token.balanceOf(address(this));
+        require(
+            toAfter >= toBefore && toAfter - toBefore == amount && poolBefore >= poolAfter && poolBefore - poolAfter == amount,
+            "unsupported token (fee on transfer)"
+        );
     }
 
     /// @dev Works with tokens that return nothing (e.g. USDT) as well as tokens that return a bool.
