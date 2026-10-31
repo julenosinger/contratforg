@@ -84,6 +84,41 @@ eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current i
   doc.querySelector('.nav-item[data-section="home"]').click();
 }
 
+/* switching to a mainnet uses an in-app dialog */
+{
+  w.confirm = () => { throw new Error('the browser confirm box must not be used'); };
+  const wait = () => new Promise((r) => setTimeout(r, 0));
+  ev("netFilter = 'mainnet'; activeNetwork = 'arc'; renderNetBar(); updateSideNet();");
+  const chip = () => [...doc.querySelectorAll('#netbar .netbtn')].find((b) => /Ethereum/.test(b.textContent));
+  chip().click(); await wait();
+  const dlg = () => doc.getElementById('switchConfirm');
+  ok(!!dlg() && /Switch to Ethereum\?/.test(dlg().textContent) && /real ETH/.test(dlg().textContent), 'switching to a mainnet opens the in-app dialog', dlg()?.textContent);
+  eq(doc.activeElement?.id, 'scCancel', 'the safe button has focus');
+  eq(ev('activeNetwork'), 'arc', 'nothing changes while the dialog is open');
+  doc.getElementById('scCancel').click(); await wait();
+  ok(dlg() === null && ev('activeNetwork') === 'arc', 'Cancel keeps the current network');
+  chip().click(); await wait();
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await wait();
+  ok(dlg() === null && ev('activeNetwork') === 'arc', 'Escape keeps the current network');
+  chip().click(); await wait();
+  doc.getElementById('scOk').click(); await wait();
+  eq(ev('activeNetwork'), 'ethereum', 'confirming switches the network');
+  ok(doc.getElementById('netBanner').classList.contains('mainnet'), 'banner turns to mainnet');
+  // testnets switch directly
+  ev("netFilter = 'testnet'; renderNetBar();");
+  [...doc.querySelectorAll('#netbar .netbtn')].find((b) => /Arc Testnet/.test(b.textContent)).click(); await wait();
+  ok(dlg() === null && ev('activeNetwork') === 'arc', 'testnets need no dialog');
+  // wizard network step
+  ev("wizardState.step = 2; renderWizardStep();");
+  const wz = [...doc.querySelectorAll('#wz-netbar .netbtn')].find((b) => /Base$|Base\s/.test(b.textContent.trim()) && /LIVE/.test(b.textContent));
+  wz.click(); await wait();
+  ok(!!dlg(), 'the wizard also uses the in-app dialog');
+  doc.getElementById('scCancel').click(); await wait();
+  eq(ev('activeNetwork'), 'arc', 'wizard: Cancel keeps the network');
+  ev("netFilter = 'testnet'; renderNetBar(); updateSideNet(); wizardState.step = 0; renderWizardStep();");
+  w.confirm = () => true;
+}
+
 /* recent deployments on Home */
 {
   const addr = (c) => '0x' + String(c).repeat(40);
@@ -137,6 +172,7 @@ let clicked = false; field.closest('.field')?.addEventListener('click', () => { 
 key(field, 'Enter');
 ok(!clicked, 'Enter inside a field is not hijacked');
 // dynamically created buttons become focusable and respond to the keyboard
+ev('renderNetBar()'); await new Promise((r) => setTimeout(r, 0)); // new buttons are made focusable right after they render
 const net = doc.querySelector('#netbar .netbtn');
 ok(!!net && net.getAttribute('tabindex') === '0', 'network buttons are focusable');
 const before = ev('activeNetwork');

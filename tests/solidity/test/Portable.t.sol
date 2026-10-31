@@ -76,7 +76,7 @@ contract ScalingTest is P {
     function testVaultDeposit() public {
         VaultSrc.ArcYieldVault v = new VaultSrc.ArcYieldVault(address(t6));
         t6.mint(address(this), 1000e6); t6.approve(address(v), type(uint).max);
-        require(v.deposit(100e6, address(this)) == 100e6, "shares");
+        require(v.deposit(100e6, address(this)) == 100e6 * 1e12, "shares use 1e12 virtual shares per asset unit");
     }
     function testStakingStake() public {
         StakingSrc.ArcStaking s = new StakingSrc.ArcStaking(address(t6));

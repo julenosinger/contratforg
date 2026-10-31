@@ -92,7 +92,7 @@ function initHome(){
       else if(!e.target.closest('#netPanel') && !e.target.closest('#netChangeBtn')) toggleNetPanel(false);
     }
   });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm')) toggleNetPanel(false); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm') && !document.getElementById('switchConfirm')) toggleNetPanel(false); });
   const mark = document.querySelector('.brand .mark');
   if(mark){
     mark.setAttribute('role', 'button'); mark.setAttribute('tabindex', '0'); mark.style.cursor = 'pointer';
@@ -282,6 +282,37 @@ function uiConfirmMainnet(net, details){
   });
 }
 
+/* ---- Switching to a mainnet: in-app dialog instead of the browser's confirm box ---- */
+function uiConfirmSwitch(label, gasSymbol){
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const root = document.createElement('div');
+    root.className = 'dc-backdrop'; root.id = 'switchConfirm';
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'scTitle');
+    root.innerHTML = '<div class="dc-box dc-small">'
+      + '<div class="dc-head"><span class="dc-tag">MAINNET</span><h3 id="scTitle">Switch to ' + escapeHtml(label) + '?</h3></div>'
+      + '<p class="dc-warn">This network uses real funds.</p>'
+      + '<p class="dc-text">Any contract you deploy will spend real ' + escapeHtml(gasSymbol) + ' and cannot be undone. Keep testing on a testnet first.</p>'
+      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="scCancel">Stay on testnet</button>'
+      + '<button type="button" class="btn btn-primary" id="scOk">Switch to ' + escapeHtml(label) + '</button></div></div>';
+    document.body.appendChild(root);
+    const ok = root.querySelector('#scOk'), cancel = root.querySelector('#scCancel');
+    const finish = (v) => { document.removeEventListener('keydown', onKey, true); root.remove(); if(prev && prev.focus) prev.focus(); resolve(v); };
+    const onKey = (e) => {
+      if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+      else if(e.key === 'Tab'){
+        const f = [cancel, ok], i = f.indexOf(document.activeElement);
+        if(e.shiftKey && i <= 0){ e.preventDefault(); f[1].focus(); }
+        else if(!e.shiftKey && i === 1){ e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    ok.addEventListener('click', () => finish(true));
+    cancel.addEventListener('click', () => finish(false));
+    cancel.focus(); // the safe choice is the default
+  });
+}
+
 /* ---- Field validation while typing (advice only: it never blocks generating) ---- */
 const UI_RANGES = { // id -> [min, max, label]
   swap_fee: [0, 9999, 'Fee in basis points, 0 to 9999'],
@@ -305,7 +336,7 @@ function uiFieldProblem(el){
   const isAddrField = type === 'address' || (el.tagName === 'INPUT' && (el.getAttribute('placeholder') || '').indexOf('0x') === 0 && !/^cc_|^ver_|^an_|^pg_/.test(el.id));
   if(isAddrField){
     if(!UI_ADDR.test(v)) return 'Enter a valid address: 0x followed by 40 hex characters.';
-    if(/^0x0{40}$/.test(v)) return 'The zero address is not allowed.';
+    if(/^0x0{40}$/.test(v)) return el.dataset && el.dataset.allowzero ? '' : 'The zero address is not allowed.';
     if(/[a-f]/.test(v.slice(2)) && /[A-F]/.test(v.slice(2)) && typeof ethers !== 'undefined' && ethers.utils && ethers.utils.getAddress){
       try{ ethers.utils.getAddress(v); }catch(_){ return 'Checksum does not match. Check the capitalisation.'; }
     }

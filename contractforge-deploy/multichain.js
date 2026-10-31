@@ -58,6 +58,7 @@ function hintValue(arg, netKey){
     case 'tokenMessenger': return cctpV2(netKey)?.tokenMessenger || '';
     case 'messageTransmitter': return cctpV2(netKey)?.messageTransmitter || '';
     case 'entryPoint': return ERC4337_ENTRYPOINT_V06;
+    case 'gasAlias': return (n.gasSymbol === 'USDC' && n.usdc) ? n.usdc : ZERO_ADDRESS; // ERC-20 address of the same money as the gas token, or none
     case 'nativeScaled': return scaleUnits(arg.units, n.gasDecimals || 18);
     default: return arg.value || '';
   }
@@ -101,7 +102,7 @@ function portabilize(code, specs){
         checks.push(sp.param);
       }
       if(!args.some(a => a.param === sp.param)){
-        args.push({ param: sp.param, type:'address', hint: sp.hint || 'static', value: sp.argValue !== undefined ? sp.argValue : sp.value, userSet: !!sp.userSet, genNetwork: activeNetwork, optional: !!sp.optional });
+        args.push({ param: sp.param, type:'address', allowZero: !!sp.allowZero, hint: sp.hint || 'static', value: sp.argValue !== undefined ? sp.argValue : sp.value, userSet: !!sp.userSet, genNetwork: activeNetwork, optional: !!sp.optional });
       }
     } else if(sp.kind === 'scaled'){
       const re = new RegExp('^([ \\t]*)uint256(\\s+public)\\s+' + sp.name + '\\s*=\\s*' + escRe(sp.expr) + '\\s*\\*\\s*10\\*\\*6;[^\\n]*', 'm');
@@ -166,11 +167,14 @@ function syncCtorArgsFromSource(){
   pendingCtorArgs = parsed.map(p => known.get(p.param) || { param:p.param, type:p.type, hint:'static', value:'', userSet:false, genNetwork:activeNetwork });
 }
 
-function coerceCtorValue(type, raw, label){
+function coerceCtorValue(type, raw, label, opts){
   const v = String(raw == null ? '' : raw).trim();
   if(type === 'address'){
     if(!/^0x[0-9a-fA-F]{40}$/.test(v)) throw new Error(label + ': enter a valid address (0x + 40 hex characters).');
-    if(v.toLowerCase() === ZERO_ADDRESS) throw new Error(label + ': the zero address is not allowed.');
+    if(v.toLowerCase() === ZERO_ADDRESS){
+      if(opts && opts.allowZero) return v;
+      throw new Error(label + ': the zero address is not allowed.');
+    }
     if(/[a-f]/.test(v.slice(2)) && /[A-F]/.test(v.slice(2)) && typeof ethers !== 'undefined' && ethers.utils && ethers.utils.getAddress){
       try{ return ethers.utils.getAddress(v); }catch(_){ throw new Error(label + ': address checksum is wrong.'); }
     }
@@ -200,7 +204,7 @@ function collectCtorValues(abiInputs){
   return abiInputs.map((inp, i) => {
     const el = document.getElementById('ctor_arg_'+i);
     const raw = el ? el.value : '';
-    return coerceCtorValue(inp.type, raw, inp.name || ('argument '+(i+1)));
+    return coerceCtorValue(inp.type, raw, inp.name || ('argument '+(i+1)), { allowZero: !!rows[i].allowZero });
   });
 }
 
@@ -226,7 +230,7 @@ function renderCtorArgs(){
       const missing = !val;
       const hintTxt = ({usdc:'USDC on this network', eurc:'EURC on this network', tokenMessenger:'Circle CCTP V2 TokenMessenger', messageTransmitter:'Circle CCTP V2 MessageTransmitter', entryPoint:'ERC-4337 EntryPoint v0.6 (check it exists on this chain)', nativeScaled:'amount in the native token\'s smallest unit', static:''})[a.hint] || '';
       return '<div class="field"><label>'+escapeHtml(a.param.replace(/_$/,''))+' <span class="mc-type">'+escapeHtml(a.type)+'</span></label>'
-        + '<input id="ctor_arg_'+i+'" data-type="'+escapeHtml(a.type)+'" value="'+escapeHtml(val)+'" placeholder="'+(a.type==='address'?'0x…':'')+'" />'
+        + '<input id="ctor_arg_'+i+'" data-type="'+escapeHtml(a.type)+'"'+(a.allowZero?' data-allowzero="1"':'')+' value="'+escapeHtml(val)+'" placeholder="'+(a.type==='address'?'0x…':'')+'" />'
         + '<div class="hint'+(missing?' mc-missing':'')+'">'+(missing?'No default for this network. Enter a value. ':'')+escapeHtml(hintTxt)+(a.note?' '+escapeHtml(a.note):'')+'</div></div>';
     }).join('');
 }

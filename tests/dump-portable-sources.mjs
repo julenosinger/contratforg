@@ -26,6 +26,7 @@ for (const [id, file] of [['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', '
   ev(`genSimple('${id}')`); save(file);
 }
 fillAddresses(app, 'arcMain'); clearTokens(); ev('genVault()'); save('Vault');
+fillAddresses(app, 'arcMain'); set('tre_streaming', 'yes'); ev('genTreasury()'); save('Treasury');
 set('swap_kind', 'amm'); set('swap_multi', 'single'); ev('genSwap()'); save('Amm');
 set('swap_kind', 'orderbook'); ev('genSwap()'); save('Book', [/^contract ArcSwapAMM \{/m, 'contract Orderbook {']);
 ev('genCrosschain()'); save('Bridge');

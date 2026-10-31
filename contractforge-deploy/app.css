@@ -746,3 +746,7 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .hr-actions{display:flex;gap:6px;flex-wrap:wrap;}
 .hr-actions .btn{padding:6px 10px;font-size:11px;text-decoration:none;}
 .light .hr-main b,.light .home-recent-row code{color:#10201a;}
+
+.dc-small{max-width:440px;}
+.dc-text{margin:0 0 16px;color:#A9B6B0;font-size:13px;line-height:1.55;}
+.light .dc-text{color:#4A5550;}

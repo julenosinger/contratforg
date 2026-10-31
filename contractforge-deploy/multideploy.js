@@ -171,7 +171,7 @@ function renderMultiDeployPanel(){
     html += '<div class="md-table-wrap"><table class="md-table"><thead><tr><th>Network</th>'
       + pendingCtorArgs.map(a => '<th>'+escapeHtml(a.param.replace(/_$/, ''))+'</th>').join('')+'</tr></thead><tbody>'
       + sel.map(k => '<tr><td>'+escapeHtml(NETWORKS[k].label)+'</td>'
-        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" data-type="'+escapeHtml(a.type)+'" value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
+        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" data-type="'+escapeHtml(a.type)+'"'+(a.allowZero?' data-allowzero="1"':'')+' value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
         + '</tr>').join('')
       + '</tbody></table></div>';
   }
@@ -188,7 +188,7 @@ function mdSummary(key){
 function mdRowValues(key, abiInputs){
   return abiInputs.map((inp, i) => {
     const el = document.getElementById('md_'+key+'_'+i);
-    return coerceCtorValue(inp.type, el ? el.value : '', (inp.name || ('argument '+(i+1)))+' on '+NETWORKS[key].label);
+    return coerceCtorValue(inp.type, el ? el.value : '', (inp.name || ('argument '+(i+1)))+' on '+NETWORKS[key].label, { allowZero: !!(pendingCtorArgs[i] && pendingCtorArgs[i].allowZero) });
   });
 }
 

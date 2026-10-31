@@ -10,16 +10,21 @@ interface IERC20Votes {
 }
 
 /// @title ArcDAO — On-chain DAO Governance with timelock
-/// @notice Token-weighted voting. Quorum: 4%, Voting period: 45818 blocks, Timelock: 172800s
+/// @notice Token-weighted voting. Quorum: 4% (of 'for' votes), Voting period: 45818 blocks, Timelock: 172800s, then 14 days to execute.
+/// @dev The token must keep voting checkpoints (ERC20Votes style) and holders must delegate (even to themselves).
+///      Proposing needs voting power held in the previous block, so borrowed tokens cannot open proposals.
+///      The admin (deployer) can cancel any proposal that has not been executed: treat it as a guardian key.
 contract ArcDAO {
     IERC20Votes public token = IERC20Votes(0x2916570661279426764209465153711134050312);
     uint256 public constant QUORUM_NUMERATOR   = 4;
     uint256 public constant VOTING_PERIOD      = 45818;
     uint256 public constant PROPOSAL_THRESHOLD = 1000 * 10**18;
     uint256 public timelockDelay = 172800;
+    /// @notice A queued proposal can only be executed within this window after its timelock ends.
+    uint256 public constant GRACE_PERIOD = 14 days;
     address public admin;
 
-    enum ProposalState { Pending, Active, Defeated, Succeeded, Queued, Executed, Cancelled }
+    enum ProposalState { Pending, Active, Defeated, Succeeded, Queued, Executed, Cancelled, Expired }
 
     struct Proposal {
         address proposer;
@@ -51,7 +56,7 @@ contract ArcDAO {
     constructor() { admin = msg.sender; }
 
     function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (uint256 id) {
-        require(token.balanceOf(msg.sender) >= PROPOSAL_THRESHOLD, "below threshold");
+        require(token.getPastVotes(msg.sender, block.number - 1) >= PROPOSAL_THRESHOLD, "below threshold");
         require(targets.length == values.length && values.length == calldatas.length, "length mismatch");
         id = _proposals.length;
         _proposals.push();
@@ -114,6 +119,7 @@ contract ArcDAO {
         if (p.forVotes * 100 < supply * QUORUM_NUMERATOR || p.forVotes <= p.againstVotes)
             return ProposalState.Defeated;
         if (p.eta == 0) return ProposalState.Succeeded;
+        if (block.timestamp > p.eta + GRACE_PERIOD) return ProposalState.Expired;
         return ProposalState.Queued;
     }
 
