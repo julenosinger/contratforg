@@ -2555,11 +2555,35 @@ async function resolveSolcUrl(version){
   return `https://binaries.soliditylang.org/emscripten-wasm32/solc-emscripten-wasm32-v${version}+commit.${commit}.js`;
 }
 
-function loadSolcMainThread(version, url){
+/* Where the compiler can be downloaded from: the official host first, then a CDN mirror of the same build. */
+async function resolveSolcUrls(version){
+  const primary = await resolveSolcUrl(version);
+  return [primary, `https://cdn.jsdelivr.net/npm/solc@${version}/soljson.js`];
+}
+
+function solcHost(u){ try{ return new URL(u).host; }catch(_){ return String(u); } }
+
+async function loadSolcMainThread(version, urls){
+  const list = Array.isArray(urls) ? urls : [urls];
+  const failures = [];
+  for(const url of list){
+    try{
+      await loadSolcScript(version, url);
+      return url;
+    }catch(e){
+      failures.push(solcHost(url));
+      const stale = document.querySelector('script[data-solc="1"]'); if(stale) stale.remove();
+    }
+  }
+  throw new Error('Could not download the compiler from '+failures.join(' or ')+'. Check your connection, VPN, or an ad-blocker/privacy extension that blocks these hosts, then try again.');
+}
+
+function loadSolcScript(version, url){
   return new Promise((resolve,reject)=>{
     window.Module = undefined;
     const script=document.createElement('script');
     script.src=url;
+    script.setAttribute('data-solc','1');
     script.onload=()=>{
       const finish=()=>{
         try{
@@ -2580,17 +2604,17 @@ function loadSolcMainThread(version, url){
 async function ensureSolcLoaded(version){
   if(solcLoaded && solcLoaded.version===version) return;
   logConsole('step','Loading solc-js v'+version+'… (first time may take ~10-20s)');
-  const url = await resolveSolcUrl(version);
+  const urls = await resolveSolcUrls(version);
 
   let mode = 'worker';
   try{
     if(typeof Worker === 'undefined') throw new Error('Web Workers unavailable');
     startSolcWorker();
-    await solcCall({ type:'load', url });
+    await solcCall({ type:'load', urls });
   }catch(e){
     if(solcWorker){ solcWorker.terminate(); solcWorker = null; }
-    logConsole('warn','Background compiler unavailable ('+(e.message||e)+'). Using the main thread.');
-    await loadSolcMainThread(version, url);
+    logConsole('warn','Background compiler unavailable ('+(e.message||e)+'). Trying the main thread.');
+    await loadSolcMainThread(version, urls);
     mode = 'main';
   }
   solcLoaded = { version, mode };
