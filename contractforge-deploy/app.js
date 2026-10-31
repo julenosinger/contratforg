@@ -344,6 +344,7 @@ function setWalletConnected(addr){
       ${isMain?'⚠ '+net.label+' MAINNET':net?.label||''}
     </span>`;
   document.getElementById('connectBtn').textContent = 'Connected';
+  if(typeof pgRebindWallet === 'function'){ pgRebindWallet(); pgRenderContext(); }
 }
 
 function registerWalletEvents(){
@@ -2768,209 +2769,7 @@ function buildAuditMarkdown(r){
   return lines.join('\n');
 }
 
-/* ======================================================================
-   09 — ABI PLAYGROUND
-   ====================================================================== */
-let playgroundContract = null;
-let playgroundABI = null;
-let eventSubscriptions = [];
-let pgFilter = 'all';
-
-function onAbiSrcChange(){
-  const src = document.getElementById('pg_abisrc').value;
-  document.getElementById('pg_customAbiField').style.display = src==='custom'?'block':'none';
-}
-
-function filterFns(filter, el){
-  pgFilter = filter;
-  document.querySelectorAll('#pg_filter .pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
-  renderPlaygroundFunctions(playgroundABI);
-}
-
-function logPG(type, msg){
-  const c = document.getElementById('pg_log');
-  const line = document.createElement('div');
-  line.className = 'line '+(type||'');
-  const t = new Date().toLocaleTimeString('en-US',{hour12:false});
-  line.innerHTML = `<span class="t">[${t}]</span><span class="msg">${escapeHtml(msg)}</span>`;
-  c.appendChild(line); c.scrollTop = c.scrollHeight;
-}
-
-function loadPlayground(){
-  const addrVal = document.getElementById('pg_address').value.trim();
-  if(!addrVal){ alert('Enter the deployed contract address.'); return; }
-  if(!signer){ alert('Connect your wallet first.'); return; }
-
-  const src = document.getElementById('pg_abisrc').value;
-  let abi;
-  if(src==='last'){
-    if(!window.__lastCompiledABI || !window.__lastCompiledABI.length){
-      alert('No compiled ABI available. Generate and compile a contract first (section 07).');
-      return;
-    }
-    abi = window.__lastCompiledABI;
-  } else if(src==='custom'){
-    try{ abi = JSON.parse(document.getElementById('pg_customAbi').value); }
-    catch(e){ alert('Invalid ABI JSON: '+e.message); return; }
-  } else if(src==='history'){
-    const hist = loadDeployHistory();
-    const match = hist.find(h=>h.address.toLowerCase()===addrVal.toLowerCase());
-    if(!match || !match.abi){ alert('No ABI found for this address in deploy history.'); return; }
-    abi = match.abi;
-  }
-
-  try{
-    playgroundABI = abi;
-    playgroundContract = new ethers.Contract(addrVal, abi, signer);
-    renderPlaygroundFunctions(abi);
-    logPG('ok', 'Loaded '+abi.length+' ABI items for '+addrVal.slice(0,10)+'…');
-  }catch(e){
-    logPG('err','Failed to load: '+e.message);
-  }
-}
-
-function renderPlaygroundFunctions(abi){
-  const container = document.getElementById('pg_functions');
-  container.innerHTML = '';
-  if(!abi) return;
-
-  abi.forEach((item,idx)=>{
-    if(item.type === 'constructor' || item.type === 'fallback' || item.type === 'receive') return;
-    const isRead  = item.type==='function' && (item.stateMutability==='view'||item.stateMutability==='pure');
-    const isWrite = item.type==='function' && !isRead;
-    const isEvent = item.type==='event';
-
-    if(pgFilter==='read'  && !isRead)  return;
-    if(pgFilter==='write' && !isWrite) return;
-    if(pgFilter==='event' && !isEvent) return;
-
-    const card = document.createElement('div');
-    card.className = 'fn-card fn-type-'+(isRead?'read':isEvent?'event':'write');
-    card.dataset.idx = idx;
-
-    const inputs = item.inputs||[];
-    const needsValue = item.stateMutability==='payable';
-
-    let inputsHtml = inputs.map((inp,i)=>`
-      <div class="fn-row">
-        <label>${escapeHtml(inp.name||'arg'+i)} <span style="color:#5C6B65">(${escapeHtml(inp.type)})</span></label>
-        <input id="pg_arg_${idx}_${i}" placeholder="${escapeHtml(inp.type)}" />
-      </div>`).join('');
-
-    if(needsValue) inputsHtml += `
-      <div class="fn-row">
-        <label>value (ETH)</label>
-        <input id="pg_val_${idx}" placeholder="0.0" type="number" step="any" />
-      </div>`;
-
-    const outputs = item.outputs||[];
-    const outStr = outputs.length ? '→ '+outputs.map(o=>o.type+(o.name?' '+o.name:'')).join(', ') : '';
-
-    card.innerHTML = `
-      <h4>${escapeHtml(item.name||item.type)} <span style="font-size:10px;color:#5C6B65;font-weight:400;">${outStr}</span>
-        <span style="float:right;font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid;
-          ${isRead?'color:#64B5F6;border-color:#1A2A4A;':isEvent?'color:var(--gold);border-color:#2A2208;':'color:var(--signal);border-color:#2A1408;'}">
-          ${isRead?'read':isEvent?'event':'write'}</span>
-      </h4>
-      <div class="fn-inputs">${inputsHtml}</div>
-      ${isEvent?'':`<div class="btnrow" style="margin-top:10px;">
-        <button class="btn btn-primary" style="padding:9px 16px;font-size:11px;" onclick="callFunction(${idx})">
-          ${isRead?'Call':'Send tx'}
-        </button>
-        ${isRead?`<button class="btn btn-ghost" style="padding:9px 16px;font-size:11px;" onclick="watchRead(${idx})">Watch</button>`:''}
-      </div>`}
-      <div class="fn-result" id="pg_result_${idx}"></div>`;
-
-    container.appendChild(card);
-  });
-
-  if(!container.children.length){
-    container.innerHTML = '<p style="color:#5C6B65;font-family:var(--mono);font-size:12px;">No functions match the selected filter.</p>';
-  }
-}
-
-async function callFunction(idx){
-  if(!playgroundContract || !playgroundABI){ logPG('err','Load a contract first.'); return; }
-  const item = playgroundABI[idx];
-  const inputs = item.inputs||[];
-  const result = document.getElementById('pg_result_'+idx);
-  result.className = 'fn-result';
-  result.textContent = 'calling…';
-
-  try{
-    const args = inputs.map((_,i)=>{
-      const raw = document.getElementById('pg_arg_'+idx+'_'+i)?.value||'';
-      return raw;
-    });
-    const isRead = item.stateMutability==='view'||item.stateMutability==='pure';
-    const valEl = document.getElementById('pg_val_'+idx);
-    const opts = (item.stateMutability==='payable' && valEl)
-      ? {value: ethers.utils.parseEther(valEl.value||'0')}
-      : {};
-
-    let res;
-    if(isRead){
-      res = await playgroundContract[item.name](...args);
-    } else {
-      const tx = await playgroundContract[item.name](...args, opts);
-      result.textContent = 'tx sent: '+tx.hash;
-      logPG('warn','Tx sent: '+tx.hash);
-      const receipt = await tx.wait();
-      res = 'Confirmed in block '+receipt.blockNumber;
-      logPG('ok','Tx confirmed: block '+receipt.blockNumber);
-    }
-    result.textContent = formatResult(res);
-    logPG('ok', item.name+'() → '+formatResult(res).slice(0,120));
-  }catch(e){
-    result.className = 'fn-result err';
-    result.textContent = e.reason || e.message || String(e);
-    logPG('err', item.name+'() error: '+(e.reason||e.message||'').slice(0,120));
-  }
-}
-
-async function watchRead(idx){
-  if(!playgroundContract){ logPG('err','Load a contract first.'); return; }
-  const item = playgroundABI[idx];
-  const inputs = item.inputs||[];
-  const result = document.getElementById('pg_result_'+idx);
-  const args = inputs.map((_,i)=> document.getElementById('pg_arg_'+idx+'_'+i)?.value||'');
-  logPG('ok','Watching '+item.name+'() every 5s…');
-  const poll = setInterval(async()=>{
-    try{
-      const res = await playgroundContract[item.name](...args);
-      result.textContent = formatResult(res);
-    }catch(e){ clearInterval(poll); logPG('err','Watch error: '+e.message); }
-  }, 5000);
-}
-
-function subscribeEvents(){
-  if(!playgroundContract){ logPG('err','Load a contract first.'); return; }
-  // unsubscribe previous
-  eventSubscriptions.forEach(unsub=>{ try{ unsub(); }catch(_){} });
-  eventSubscriptions = [];
-  const events = playgroundABI.filter(i=>i.type==='event');
-  if(!events.length){ logPG('warn','No events in this ABI.'); return; }
-  events.forEach(ev=>{
-    const listener = (...args)=>{
-      const vals = args.slice(0,ev.inputs.length).map((a,i)=>
-        (ev.inputs[i]?.name||'arg'+i)+': '+formatResult(a)).join(', ');
-      logPG('ok','EVENT '+ev.name+' — '+vals);
-    };
-    playgroundContract.on(ev.name, listener);
-    const unsub = ()=> playgroundContract.off(ev.name, listener);
-    eventSubscriptions.push(unsub);
-  });
-  logPG('ok','Subscribed to '+events.length+' event(s): '+events.map(e=>e.name).join(', '));
-}
-
-function formatResult(val){
-  if(val === null || val === undefined) return 'null';
-  if(ethers.BigNumber && ethers.BigNumber.isBigNumber(val)) return val.toString();
-  if(Array.isArray(val)) return '['+val.map(formatResult).join(', ')+']';
-  if(typeof val === 'object') return JSON.stringify(val, (k,v)=> typeof v==='bigint'?v.toString():v, 2);
-  return String(val);
-}
+/* 09 — ABI PLAYGROUND lives in playground.js */
 
 /* ======================================================================
    10 — DEPLOY HISTORY
@@ -2995,6 +2794,7 @@ function addToDeployHistory(entry){
 
 function renderHistory(){
   if(typeof renderHome === 'function') renderHome();
+  if(typeof pgRefreshDeployments === 'function') pgRefreshDeployments();
   const hist = loadDeployHistory();
   const container = document.getElementById('historyList');
   if(!container) return;
@@ -3028,19 +2828,12 @@ function loadHistoryIntoPlayground(i){
   const hist = loadDeployHistory();
   const entry = hist[i];
   if(!entry){ return; }
-  document.getElementById('pg_address').value = entry.address;
-  document.getElementById('pg_abisrc').value = 'history';
   // Navigate to playground
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector('[data-section="playground"]')?.classList.add('active');
   document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
   document.getElementById('sec-playground').style.display='block';
-  if(entry.abi){
-    playgroundABI = entry.abi;
-    if(signer) playgroundContract = new ethers.Contract(entry.address, entry.abi, signer);
-    renderPlaygroundFunctions(entry.abi);
-    logPG('ok','Loaded from history: '+entry.name+' @ '+entry.address.slice(0,10)+'…');
-  }
+  pgOpenEntry(entry);
 }
 
 function deleteHistoryEntry(i){

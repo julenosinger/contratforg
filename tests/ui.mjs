@@ -9,9 +9,9 @@ const app = loadApp(); const { w, ev } = app; const doc = w.document;
 const key = (el, k) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
 
 /* navigation: every section is still reachable */
-const SECTIONS = ['home','simple','swap','treasury','vault','multisend','crosschain','deploy','auditor','playground','history','gas','verify','share','wizard','nlai','analytics','tests'];
+const SECTIONS = ['home','simple','swap','treasury','vault','multisend','crosschain','deploy','auditor','playground','history','gas','verify','share','wizard','nlai','analytics','tests','lab'];
 const items = [...doc.querySelectorAll('.nav-item')];
-eq(items.map((i) => i.dataset.section).sort(), [...SECTIONS].sort(), 'all 17 sections plus Home are in the menu');
+eq(items.map((i) => i.dataset.section).sort(), [...SECTIONS].sort(), 'all 18 sections plus Home are in the menu');
 eq([...doc.querySelectorAll('.nav-group h4')].map((h) => h.textContent), ['Start here', 'Create', 'Publish', 'Check & analyze'], 'menu groups');
 for (const s of SECTIONS) ok(!!doc.getElementById('sec-' + s), `section sec-${s} exists`);
 eq(doc.querySelector('.nav-item.active')?.dataset.section, 'home', 'Home is the landing page');
@@ -197,7 +197,7 @@ ok(bar.style.display === 'none', 'bar hidden before anything is generated');
 ev("renderSimpleForm('erc20')"); ev("genSimple('erc20')");
 ok(bar.style.display === 'flex' && /ArcDollar\.sol/.test(bar.textContent), 'bar shows the generated contract', bar.textContent);
 ok(!/constructor argument/.test(bar.textContent), 'no constructor chip when there are none');
-eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Audit', 'Copy', 'Download', 'Discard', 'Publish'], 'bar actions');
+eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Test', 'Audit', 'Copy', 'Download', 'Discard', 'Publish'], 'bar actions');
 doc.querySelector('.nav-item[data-section="swap"]').click();
 [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Publish').click();
 eq(visible(), ['sec-deploy'], 'Publish opens Compile & Deploy from any section');

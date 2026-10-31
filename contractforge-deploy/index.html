@@ -55,6 +55,7 @@
 
     <div class="nav-group">
       <h4>Check &amp; analyze</h4>
+      <div class="nav-item" data-section="lab"><span class="num">18</span> Test Lab</div>
       <div class="nav-item" data-section="auditor"><span class="num">08</span> AI Auditor</div>
       <div class="nav-item" data-section="playground"><span class="num">09</span> ABI Playground</div>
       <div class="nav-item" data-section="gas"><span class="num">11</span> Gas Estimator</div>
@@ -146,7 +147,7 @@
       <ol class="home-steps">
         <li><b>Choose</b><span>Pick a contract type, or let the Wizard or AI guide you.</span></li>
         <li><b>Configure</b><span>Fill in the few main fields. Rare options sit under Advanced.</span></li>
-        <li><b>Review</b><span>Read the source, run the AI audit, check gas.</span></li>
+        <li><b>Review</b><span>Read the source, try it in the Test Lab, run the AI audit, check gas.</span></li>
         <li><b>Publish</b><span>Compile in the browser and deploy with your wallet, then verify.</span></li>
       </ol>
 
@@ -461,9 +462,13 @@
       <div class="section-head"><span class="n">09</span><h2>ABI Playground</h2><div class="rule"></div></div>
       <div class="form-panel">
         <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Interact with any deployed contract. Load the ABI from the last compiled contract or paste a custom one, enter the contract address, and call any function directly from your connected wallet.
+          Talk to a contract you have published. Pick it from your deployments, or paste an address and ABI. Reading works without a wallet; sending needs your wallet on the same network. Each transaction is dry-run first, so a failure shows its reason before any gas is spent.
         </p>
         <div class="field-grid" style="margin-bottom:14px;">
+          <div class="field full">
+            <label>Your deployed contracts</label>
+            <select id="pg_deployments" onchange="pgSelectDeployment()"><option value="">No deployments yet (section 07)</option></select>
+          </div>
           <div class="field">
             <label>Contract address</label>
             <input id="pg_address" placeholder="0x..." />
@@ -481,19 +486,96 @@
             <textarea id="pg_customAbi" style="height:100px;font-size:11px;" placeholder='[{"type":"function","name":"transfer",...}]'></textarea>
           </div>
         </div>
-        <div class="pill-row" id="pg_filter">
-          <div class="pill active" data-filter="all" onclick="filterFns('all',this)">All</div>
-          <div class="pill" data-filter="read" onclick="filterFns('read',this)">Read</div>
-          <div class="pill" data-filter="write" onclick="filterFns('write',this)">Write</div>
-          <div class="pill" data-filter="event" onclick="filterFns('event',this)">Events</div>
-        </div>
-        <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-primary" onclick="loadPlayground()">Load ABI</button>
+        <div class="btnrow" style="margin-bottom:14px;">
+          <button class="btn btn-primary" onclick="loadPlayground()">Load contract</button>
           <button class="btn btn-ghost" onclick="subscribeEvents()">Subscribe to Events</button>
         </div>
+        <div id="pg_context" class="pg-context" style="display:none;" role="status"></div>
+        <div class="pg-toolbar">
+          <div class="pill-row" id="pg_filter">
+            <div class="pill active" data-filter="all" onclick="filterFns('all',this)">All</div>
+            <div class="pill" data-filter="read" onclick="filterFns('read',this)">Read</div>
+            <div class="pill" data-filter="write" onclick="filterFns('write',this)">Write</div>
+            <div class="pill" data-filter="event" onclick="filterFns('event',this)">Events</div>
+          </div>
+          <input id="pg_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
+        </div>
         <div id="pg_functions"></div>
+        <div id="pg_calls" class="pg-calls" style="display:none;"></div>
         <div class="console" id="pg_log" style="margin-top:14px;">
-          <div class="line"><span class="t">[boot]</span><span class="msg">Load an ABI to start interacting with a contract.</span></div>
+          <div class="line"><span class="t">[boot]</span><span class="msg">Pick a contract above to start interacting with it.</span></div>
+        </div>
+      </div>
+    </section>
+
+        <!-- ============ 18 TEST LAB ============ -->
+    <section class="section" id="sec-lab" style="display:none;">
+      <div class="section-head"><span class="n">18</span><h2>Test Lab</h2><div class="rule"></div></div>
+      <div class="form-panel">
+        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
+          Try the contract you just generated before you publish it. It runs on a private simulated chain inside this page: no wallet, no network, no real funds. Five test accounts hold test USDC and EURC, you can move time forward (for vesting, timelocks and streams), and every call shows its events and the reason when it fails.
+        </p>
+        <div class="lab-bar">
+          <span id="labStatus" class="lab-status" role="status">Not started</span>
+          <div class="btnrow" style="margin:0;">
+            <button class="btn btn-primary" onclick="labLoadContract()">Load current contract</button>
+            <button class="btn btn-ghost" onclick="labSmoke()">Quick check</button>
+          </div>
+        </div>
+        <div id="labContract" class="lab-note" style="margin-bottom:12px;"></div>
+        <div id="labArgs" style="display:none;margin-bottom:14px;"></div>
+        <div class="lab-card" style="margin-bottom:14px;">
+          <h4>Acting as</h4>
+          <div class="lab-actrow"><select id="lab_acting" onchange="labSelectAccount()" aria-label="Acting account"></select><code id="lab_acting_addr" class="lab-addr"></code></div>
+          <div id="lab_balances" class="lab-balances"><span class="lab-note">Balances appear once the contract is loaded.</span></div>
+        </div>
+        <div class="lab-grid">
+          <div class="lab-card">
+            <h4>Time</h4>
+            <div id="lab_time" class="lab-time">Not started</div>
+            <div class="btnrow" style="margin:8px 0;flex-wrap:wrap;">
+              <button class="btn btn-ghost lab-mini" onclick="labAdvance(3600)">+1 hour</button>
+              <button class="btn btn-ghost lab-mini" onclick="labAdvance(86400)">+1 day</button>
+              <button class="btn btn-ghost lab-mini" onclick="labAdvance(604800)">+7 days</button>
+              <button class="btn btn-ghost lab-mini" onclick="labAdvance(2592000)">+30 days</button>
+            </div>
+            <div class="lab-inline">
+              <input id="lab_time_n" type="number" min="1" value="1" aria-label="Amount of time" />
+              <select id="lab_time_unit" aria-label="Unit"><option value="60">minutes</option><option value="3600">hours</option><option value="86400" selected>days</option></select>
+              <button class="btn btn-ghost lab-mini" onclick="labAdvanceCustom()">Move time</button>
+            </div>
+            <div class="lab-inline" style="margin-top:6px;">
+              <input id="lab_mine_n" type="number" min="1" value="10" aria-label="Blocks" />
+              <button class="btn btn-ghost lab-mini" onclick="labMine()">Mine blocks</button>
+            </div>
+          </div>
+          <div class="lab-card">
+            <h4>Test tokens</h4>
+            <div class="lab-inline">
+              <select id="lab_token" aria-label="Token"><option value="usdc">USDC</option><option value="eurc">EURC</option></select>
+              <input id="lab_token_amt" value="1000" aria-label="Amount" />
+              <button class="btn btn-ghost lab-mini" onclick="labMint()">Mint to acting account</button>
+            </div>
+            <div class="lab-inline" style="margin-top:10px;">
+              <button class="btn btn-ghost lab-mini" onclick="labApprove()">Approve the contract to spend it</button>
+              <label class="lab-check"><input type="checkbox" id="lab_approve_all" /> for all test accounts</label>
+            </div>
+            <p class="lab-note" style="margin-top:8px;">Contracts that hard-code the real USDC or EURC address work unchanged: the test tokens are placed at those addresses.</p>
+          </div>
+        </div>
+        <div class="pg-toolbar">
+          <div class="pill-row" id="lab_filter">
+            <div class="pill active" data-filter="all" onclick="labFilter('all',this)">All</div>
+            <div class="pill" data-filter="read" onclick="labFilter('read',this)">Read</div>
+            <div class="pill" data-filter="write" onclick="labFilter('write',this)">Write</div>
+            <div class="pill" data-filter="event" onclick="labFilter('event',this)">Events</div>
+          </div>
+          <input id="lab_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
+        </div>
+        <div id="lab_functions"></div>
+        <div id="lab_txs" class="pg-calls" style="display:none;"></div>
+        <div class="console" id="lab_log" style="margin-top:14px;">
+          <div class="line"><span class="t">[boot]</span><span class="msg">Press "Load current contract" to start.</span></div>
         </div>
       </div>
     </section>
@@ -844,6 +926,8 @@
 <script src="app.js"></script>
 <script src="multichain.js"></script>
 <script src="multideploy.js"></script>
+<script src="playground.js"></script>
+<script src="lab.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

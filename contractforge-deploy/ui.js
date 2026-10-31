@@ -92,7 +92,7 @@ function initHome(){
       else if(!e.target.closest('#netPanel') && !e.target.closest('#netChangeBtn')) toggleNetPanel(false);
     }
   });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm') && !document.getElementById('switchConfirm')) toggleNetPanel(false); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm') && !document.getElementById('switchConfirm') && !document.getElementById('actionConfirm')) toggleNetPanel(false); });
   const mark = document.querySelector('.brand .mark');
   if(mark){
     mark.setAttribute('role', 'button'); mark.setAttribute('tabindex', '0'); mark.style.cursor = 'pointer';
@@ -151,6 +151,7 @@ function renderCurrentContract(){
   const el = document.getElementById('currentContract');
   if(!el) return;
   const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
+  if(typeof labRenderHeader === 'function') labRenderHeader();
   if(!has){ el.style.display = 'none'; el.innerHTML = ''; if(typeof renderHome === 'function') renderHome(); return; }
   uiSaveContract();
   if(typeof renderHome === 'function') renderHome();
@@ -163,6 +164,7 @@ function renderCurrentContract(){
     + '<span>' + lines + ' lines</span>' + modeChip
     + (nArgs ? '<span class="cc-chip warn">' + nArgs + ' constructor argument' + (nArgs === 1 ? '' : 's') + ' to review</span>' : '')
     + '</div><div class="cc-actions">'
+    + '<button type="button" class="btn btn-ghost" onclick="ccTest()">Test</button>'
     + '<button type="button" class="btn btn-ghost" onclick="ccAudit()">Audit</button>'
     + '<button type="button" class="btn btn-ghost" onclick="copySource()">Copy</button>'
     + '<button type="button" class="btn btn-ghost" onclick="downloadSource()">Download</button>'
@@ -170,6 +172,11 @@ function renderCurrentContract(){
     + '<button type="button" class="btn btn-primary" onclick="ccPublish()">Publish</button></div>';
 }
 function ccPublish(){ deployFromBuffer(); }
+function ccTest(){
+  const item = document.querySelector('.nav-item[data-section="lab"]');
+  if(item) item.click();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
 function ccAudit(){
   const item = document.querySelector('.nav-item[data-section="auditor"]');
   if(item) item.click();
@@ -283,6 +290,39 @@ function uiConfirmMainnet(net, details){
 }
 
 /* ---- Switching to a mainnet: in-app dialog instead of the browser's confirm box ---- */
+/* A confirmation for a single action: opts = { tag, title, warn, rows:[[label,value]...], confirmLabel, cancelLabel }.
+   Cancel is the default focus, Esc cancels, Tab stays inside. Resolves true or false. */
+function uiConfirmAction(opts){
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const root = document.createElement('div');
+    root.className = 'dc-backdrop'; root.id = 'actionConfirm';
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'acTitle');
+    const rows = (opts.rows || []).map(r => '<div class="dc-row"><span>' + escapeHtml(r[0]) + '</span><b><code>' + escapeHtml(String(r[1])) + '</code></b></div>').join('');
+    root.innerHTML = '<div class="dc-box dc-small">'
+      + '<div class="dc-head">' + (opts.tag ? '<span class="dc-tag">' + escapeHtml(opts.tag) + '</span>' : '') + '<h3 id="acTitle">' + escapeHtml(opts.title || 'Confirm') + '</h3></div>'
+      + (opts.warn ? '<p class="dc-warn">' + escapeHtml(opts.warn) + '</p>' : '')
+      + '<div class="dc-rows">' + rows + '</div>'
+      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="acCancel">' + escapeHtml(opts.cancelLabel || 'Cancel') + '</button>'
+      + '<button type="button" class="btn btn-primary" id="acOk">' + escapeHtml(opts.confirmLabel || 'Confirm') + '</button></div></div>';
+    document.body.appendChild(root);
+    const ok = root.querySelector('#acOk'), cancel = root.querySelector('#acCancel');
+    const finish = (v) => { document.removeEventListener('keydown', onKey, true); root.remove(); if(prev && prev.focus) prev.focus(); resolve(v); };
+    const onKey = (e) => {
+      if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+      else if(e.key === 'Tab'){
+        const f = [cancel, ok], i = f.indexOf(document.activeElement);
+        if(e.shiftKey && i <= 0){ e.preventDefault(); f[1].focus(); }
+        else if(!e.shiftKey && i === 1){ e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    ok.addEventListener('click', () => finish(true));
+    cancel.addEventListener('click', () => finish(false));
+    cancel.focus();
+  });
+}
+
 function uiConfirmSwitch(label, gasSymbol){
   return new Promise((resolve) => {
     const prev = document.activeElement;

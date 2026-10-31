@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../contractforge-deploy');
 
-export function loadApp({ alerts, storage } = {}) {
+export function loadApp({ alerts, storage, realEthers } = {}) {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(/<script[^>]*src=[^>]*><\/script>/g, '');
-  const files = ['app.js', 'multichain.js', 'multideploy.js', 'ui.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8'));
+  const order = ['app.js', 'multichain.js', 'multideploy.js', 'playground.js', 'lab.js', 'ui.js'].filter((f) => fs.existsSync(path.join(root, f)));
+  const files = order.map((f) => fs.readFileSync(path.join(root, f), 'utf8'));
   const pageErrors = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => pageErrors.push(e.detail?.message || e.message));
@@ -19,7 +20,12 @@ export function loadApp({ alerts, storage } = {}) {
   w.confirm = () => true;
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.scrollTo = () => {};
-  w.ethers = { utils: {}, providers: {}, Contract: class {}, ContractFactory: class {} };
+  if (realEthers) {
+    w.fetch = (url, init = {}) => { const { method, headers, body } = init; return fetch(url, { method, headers, body }); }; w.Headers = Headers; w.Request = Request; w.Response = Response; // jsdom has no fetch; a real browser does
+    w.eval(fs.readFileSync(path.resolve(root, '../tests/node_modules/ethers/dist/ethers.umd.min.js'), 'utf8'));
+  } else {
+    w.ethers = { utils: {}, providers: {}, Contract: class {}, ContractFactory: class {} };
+  }
   for (const src of files) { // separate classic scripts, in page order: top-level let/const stay global like in a browser
     const el = w.document.createElement('script');
     el.textContent = src;
