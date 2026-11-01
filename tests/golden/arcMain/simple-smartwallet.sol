@@ -146,7 +146,7 @@ contract ArcSmartWallet {
         uint256 n = targets.length;
         if (n != values.length || n != datas.length) revert LengthMismatch();
         if (msg.sender != owner) {
-            uint256 total;
+            uint256 total = 0;
             for (uint256 i = 0; i < n; ++i) {
                 _checkSession(msg.sender, targets[i], datas[i]);
                 total += values[i];
