@@ -66,7 +66,7 @@ contract ArcSwapAMM {
 
         // Round the price up so a fill can never be free or underpay the maker.
         uint256 amountB = (amountAToFill * o.priceB1e6 + 1e6 - 1) / 1e6;
-        uint256 fee = (amountB * FEE_BPS) / 10000;
+        uint256 fee = FEE_BPS == 0 ? 0 : (amountB * FEE_BPS + 9999) / 10000;   // rounds up: splitting a fill cannot avoid the fee
         uint256 net = amountB - fee;
         address maker = o.maker;
 

@@ -52,6 +52,7 @@ contract ArcDollar {
     }
 
     function mint(address to, uint256 amount) external onlyOwner {
+        require(to != address(0), "mint to zero address");
         require(cap == 0 || totalSupply + amount <= cap, "exceeds cap");
         totalSupply += amount;
         balanceOf[to] += amount;

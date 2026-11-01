@@ -10,8 +10,10 @@ pragma solidity 0.8.24;
 ///  - guardian: can only start a recovery to a new owner (after a delay), never move funds.
 ///  - session keys: temporary keys the owner approves for a short time. A session key
 ///      * can only call the addresses on its own allowlist, and never this wallet itself;
-///      * can never call token transfer / approval / permit functions (see _isBlockedSelector),
-///        so it cannot move or approve tokens, whatever the allowlist says;
+///      * cannot call the well-known token transfer / approval / permit / multicall / vault-withdraw functions
+///        (see _isBlockedSelector). This is a list of known function selectors, not a guarantee: a contract with an
+///        unusual way to move tokens can still do it, so NEVER allowlist token contracts or contracts that can move
+///        this wallet's assets;
 ///      * can spend native currency only within the daily limit below, summed over execute AND executeBatch.
 ///    Anything an allowlisted contract does for its callers is within reach of the key, so only allowlist
 ///    contracts you trust.
@@ -56,7 +58,7 @@ contract ArcSmartWallet {
 
     /// @notice Native-currency limit for session keys, per 24 hours (smallest unit of the native token).
     uint256 public constant DAILY_LIMIT = 100000000000000000000;
-    /// @notice The longest a session key may stay valid. Never more than 30 days.
+    /// @notice The longest a session key may stay valid, fixed when this wallet is generated (never more than 30 days).
     uint256 public constant MAX_SESSION_DURATION = 24 hours;
     uint256 public constant MAX_SESSION_TARGETS = 16;
 
@@ -93,6 +95,7 @@ contract ArcSmartWallet {
     event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed cancelledCandidate);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -226,9 +229,10 @@ contract ArcSmartWallet {
         }
     }
 
-    /// @dev Token functions a session key may never call, on any contract: ERC-20 transfer, transferFrom, approve,
-    ///      increaseAllowance and permit; ERC-721/1155 approvals and transfers. This is a blocklist of well-known
-    ///      selectors, so the allowlist of targets stays the main protection.
+    /// @dev Functions a session key may never call, on any contract: ERC-20 transfer, transferFrom, approve,
+    ///      increase/decreaseAllowance and permit; ERC-721/1155 approvals and transfers; ERC-777 and ERC-1363 transfer
+    ///      and approval entry points; generic multicall dispatchers; ERC-4626 withdraw and redeem. This is a blocklist
+    ///      of well-known selectors, so the allowlist of targets stays the main protection.
     function _isBlockedSelector(bytes4 s) private pure returns (bool) {
         return s == 0xa9059cbb      // transfer(address,uint256)
             || s == 0x23b872dd      // transferFrom(address,address,uint256)
@@ -239,7 +243,22 @@ contract ArcSmartWallet {
             || s == 0x42842e0e      // safeTransferFrom(address,address,uint256)
             || s == 0xb88d4fde      // safeTransferFrom(address,address,uint256,bytes)
             || s == 0xf242432a      // safeTransferFrom(address,address,uint256,uint256,bytes)
-            || s == 0x2eb2c2d6;     // safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)
+            || s == 0x2eb2c2d6      // safeBatchTransferFrom(address,address,uint256[],uint256[],bytes)
+            || s == 0xa457c2d7      // decreaseAllowance(address,uint256)
+            || s == 0x9bd9bbc6      // ERC-777 send(address,uint256,bytes)
+            || s == 0x62ad1b83      // ERC-777 operatorSend(address,address,uint256,bytes,bytes)
+            || s == 0x959b8c3f      // ERC-777 authorizeOperator(address)
+            || s == 0x1296ee62      // ERC-1363 transferAndCall(address,uint256)
+            || s == 0x4000aea0      // ERC-1363 transferAndCall(address,uint256,bytes)
+            || s == 0xd8fbe994      // ERC-1363 transferFromAndCall(address,address,uint256)
+            || s == 0xc1d34b89      // ERC-1363 transferFromAndCall(address,address,uint256,bytes)
+            || s == 0x3177029f      // ERC-1363 approveAndCall(address,uint256)
+            || s == 0xcae9ca51      // ERC-1363 approveAndCall(address,uint256,bytes)
+            || s == 0xac9650d8      // multicall(bytes[])
+            || s == 0x5ae401dc      // multicall(uint256,bytes[])
+            || s == 0x1f0464d1      // multicall(bytes32,bytes[])
+            || s == 0xb460af94      // ERC-4626 withdraw(uint256,address,address)
+            || s == 0xba087652;     // ERC-4626 redeem(uint256,address,address)
     }
 
     function _selector(bytes calldata data) private pure returns (bytes4) {
@@ -347,13 +366,24 @@ contract ArcSmartWallet {
     }
 
     function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(pendingOwner);
         pendingOwner = address(0);
     }
 
     // ------------------------------------------------- signatures (ERC-1271)
 
-    /// @notice Lets other contracts ask whether the owner signed a hash. Only the owner's ECDSA signature counts
-    ///         (not session keys). The caller is responsible for the hash being specific to its own purpose.
+    bytes32 private constant _DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant _WALLET_TYPEHASH = keccak256("SmartWalletMessage(bytes32 hash)");
+
+    /// @notice The digest the owner must actually sign for isValidSignature(hash, ...). It mixes in this wallet's
+    ///         address and the chain id, so a signature made for one wallet (or chain) is worthless on another.
+    function replaySafeHash(bytes32 hash) public view returns (bytes32) {
+        bytes32 domain = keccak256(abi.encode(_DOMAIN_TYPEHASH, keccak256("ContractForge Smart Wallet"), keccak256("1"), block.chainid, address(this)));
+        return keccak256(abi.encodePacked("\x19\x01", domain, keccak256(abi.encode(_WALLET_TYPEHASH, hash))));
+    }
+
+    /// @notice Lets other contracts ask whether the owner signed a hash (ERC-1271). Only the owner's ECDSA signature
+    ///         counts (not session keys). The owner signs replaySafeHash(hash), not the raw hash.
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
         if (signature.length != 65) return 0xffffffff;
         bytes32 r = bytes32(signature[0:32]);
@@ -362,7 +392,7 @@ contract ArcSmartWallet {
         // reject the mirrored (malleable) form of a signature and unknown recovery ids
         if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) return 0xffffffff;
         if (v != 27 && v != 28) return 0xffffffff;
-        address signer = ecrecover(hash, v, r, s);
+        address signer = ecrecover(replaySafeHash(hash), v, r, s);
         return (signer != address(0) && signer == owner) ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
     }
 

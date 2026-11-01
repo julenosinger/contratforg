@@ -17,6 +17,9 @@ contract ArcMultiSend {
     event BatchSent(address indexed sender, address token, uint256 totalAmount, uint256 recipients);
 
     /// @notice Sends `amounts[i]` of `token` to `recipients[i]`. Requires prior approve to this contract.
+    ///         The tokens go straight from you to each recipient: this contract never holds them. If any single
+    ///         transfer fails (for example a recipient blocked by the token) the whole batch reverts.
+    ///         Tokens that charge a fee on transfer deliver less than listed; use plain tokens such as USDC.
     function multiSendToken(address token, address[] calldata recipients, uint256[] calldata amounts) external {
         require(recipients.length == amounts.length, "length mismatch");
         require(recipients.length <= MAX_RECIPIENTS, "too many recipients");
@@ -25,15 +28,17 @@ contract ArcMultiSend {
         for (uint256 i = 0; i < amounts.length; i++) total += amounts[i];
 
         uint256 fee = (FEE_BPS > 0) ? (total * FEE_BPS) / 10000 : 0;
-        uint256 totalWithFee = total + fee;
-
-        require(IERC20(token).transferFrom(msg.sender, address(this), totalWithFee), "transferFrom failed");
-
-        for (uint256 i = 0; i < recipients.length; i++) {
-            require(IERC20(token).transfer(recipients[i], amounts[i]), "transfer failed");
-        }
-        if (fee > 0) require(IERC20(token).transfer(feeRecipient, fee), "fee transfer failed");
 
         emit BatchSent(msg.sender, token, total, recipients.length);
+        for (uint256 i = 0; i < recipients.length; i++) {
+            _pay(token, recipients[i], amounts[i]);
+        }
+        if (fee > 0) _pay(token, feeRecipient, fee);
+    }
+
+    /// @dev Pulls from the caller to `to`; works with tokens that return nothing (e.g. USDT) as well as bool tokens.
+    function _pay(address token, address to, uint256 amount) private {
+        (bool ok, bytes memory ret) = token.call(abi.encodeCall(IERC20.transferFrom, (msg.sender, to, amount)));
+        require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "transferFrom failed");
     }
 }

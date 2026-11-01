@@ -25,16 +25,16 @@ contract ArcEscrow {
     event Refunded(address to, uint256 amount);
     event Disputed(address by);
 
-    constructor() {
-        deadline = block.timestamp + 14 days;
-    }
+    constructor() {}
 
+    /// @notice The buyer deposits the payment. The 14-day refund timeout starts now.
     function fund() external {
         require(msg.sender == buyer, "only buyer");
         require(!funded, "already funded");
-        require(token.transferFrom(buyer, address(this), amount), "transferFrom failed");
         funded = true;
+        deadline = block.timestamp + 14 days;
         emit Funded(amount);
+        require(token.transferFrom(buyer, address(this), amount), "transferFrom failed");
     }
 
     /// @notice Buyer confirms receipt — releases funds to the seller

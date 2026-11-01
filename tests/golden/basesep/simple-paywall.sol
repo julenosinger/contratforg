@@ -26,14 +26,28 @@ contract ArcSubscription {
         return accessUntil[user] >= block.timestamp;
     }
 
-    /// @notice Pays for one period and extends access (cumulative if already active)
+    /// @notice Pays for one period at the current price and extends access (cumulative if already active).
+    ///         Prefer subscribeAtMost: it protects you if the price is raised just before your transaction.
     function subscribe() external {
-        require(token.transferFrom(msg.sender, beneficiary, pricePerPeriod), "payment failed");
+        _subscribe(pricePerPeriod);
+    }
+
+    /// @notice Same as subscribe(), but reverts if the price is higher than maxPrice.
+    function subscribeAtMost(uint256 maxPrice) external {
+        require(pricePerPeriod <= maxPrice, "price too high");
+        _subscribe(pricePerPeriod);
+    }
+
+    function _subscribe(uint256 price) private {
         uint256 base = accessUntil[msg.sender] > block.timestamp ? accessUntil[msg.sender] : block.timestamp;
         accessUntil[msg.sender] = base + periodDuration;
         emit Subscribed(msg.sender, accessUntil[msg.sender]);
+        require(token.transferFrom(msg.sender, beneficiary, price), "payment failed");
     }
 
     function setPrice(uint256 newPrice) external onlyOwner { pricePerPeriod = newPrice; }
-    function setBeneficiary(address newBeneficiary) external onlyOwner { beneficiary = newBeneficiary; }
+    function setBeneficiary(address newBeneficiary) external onlyOwner {
+        require(newBeneficiary != address(0), "zero beneficiary");
+        beneficiary = newBeneficiary;
+    }
 }

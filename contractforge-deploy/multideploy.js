@@ -36,6 +36,8 @@ interface IMessageTransmitterV2 {
 /// @dev Burns USDC here and mints it to \`recipient\` on the destination chain. The mint on the destination
 ///      is completed by anyone calling receiveMessage on that chain's MessageTransmitter with Circle's
 ///      attestation (the recipient or any relayer can do it). This contract keeps no balance and has no owner.
+///      WARNING: the USDC is burned here for good. If the recipient is blocked by USDC on the destination chain
+///      the mint cannot complete and the burn cannot be undone, so check the recipient address before bridging.
 ///      Domains: Ethereum 0, Avalanche 1, OP 2, Arbitrum 3, Base 6, Polygon 7, Arc 26.
 ///      minFinalityThreshold: 1000 = Fast Transfer (a fee up to maxFee applies), 2000 = Standard (maxFee can be 0).
 contract ${name} {

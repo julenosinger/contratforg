@@ -34,6 +34,7 @@ fillAddresses(app, 'arcMain'); set('tre_streaming', 'yes'); ev('genTreasury()');
 set('swap_kind', 'amm'); set('swap_multi', 'single'); ev('genSwap()'); save('Amm');
 set('swap_kind', 'orderbook'); ev('genSwap()'); save('Book', [/^contract ArcSwapAMM \{/m, 'contract Orderbook {']);
 ev('genCrosschain()'); save('Bridge');
+ev('genMultisend()'); save('Multisend');
 
 /* Smart wallet in single-network mode (limit in whole native units, scaled by the network's decimals),
    plus a variant whose guardian is the zero address (the constructor must refuse it). */

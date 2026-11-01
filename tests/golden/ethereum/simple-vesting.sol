@@ -24,17 +24,20 @@ contract ArcVesting {
 
     constructor() {
         funder = msg.sender;
-        start = block.timestamp;
     }
 
+    /// @notice The deployer deposits the tokens. Vesting (and the cliff) start now, not at deployment.
     function fund() external {
+        require(msg.sender == funder, "only funder");
         require(!funded, "already funded");
-        require(token.transferFrom(msg.sender, address(this), totalAmount), "transferFrom failed");
         funded = true;
+        start = block.timestamp;
         emit Funded(totalAmount);
+        require(token.transferFrom(funder, address(this), totalAmount), "transferFrom failed");
     }
 
     function vestedAmount() public view returns (uint256) {
+        if (!funded) return 0;
         if (block.timestamp < start + cliffDuration) return 0;
         if (block.timestamp >= start + totalDuration) return totalAmount;
         return (totalAmount * (block.timestamp - start)) / totalDuration;

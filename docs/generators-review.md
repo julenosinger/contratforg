@@ -31,3 +31,21 @@ Still true: the admin can cancel any proposal (a guardian key), only "for" votes
 
 ## Tests
 `tests/solidity/test/Hardening.t.sol` (Foundry, with fuzzing) covers each fix. Run `npm run test:portable` in `tests/`.
+
+## Second pass: the remaining generators
+
+| Contract | Found | Fix |
+| --- | --- | --- |
+| Staking | An underfunded reward pool erased earned rewards when a position changed, and a reward-payment failure could block withdrawing principal; small exits avoided the fee | Rewards accrue into a per-user balance and are paid as the pool allows; `unstake` never pays rewards; fees round up and are collected with `claimFees()`; fee-on-transfer and no-return tokens handled |
+| Smart wallet | An owner signature (ERC-1271) was valid on every wallet of that owner; session keys could reach token transfers through other entry points (ERC-777 `send`, ERC-1363, `multicall`, vault `withdraw`) of an allowlisted contract | The owner signs `replaySafeHash(hash)`, which binds the wallet address and chain id; those entry points are blocked too, and the documentation now says plainly that this is a list of known selectors: never allowlist token contracts; cancelling an ownership transfer emits an event |
+| NFT | Not a complete ERC-721 (no safe transfers, no operator approvals, no ERC-165, transfers to the zero address, self-approvals) | Full ERC-721 + metadata + ERC-2981 interface ids; reverts for unknown tokens, the zero address and self-approvals |
+| Escrow | The refund timeout started at deployment, so a late deposit could be refunded at once | The timeout starts when the buyer funds |
+| Vesting | Anyone could fund; vesting started at deployment | Only the deployer funds, and vesting starts at funding |
+| Subscription | The owner could raise the price just before a payment | `subscribeAtMost(maxPrice)`; the beneficiary cannot be the zero address |
+| MultiSend | The contract held the tokens during the batch | Tokens go straight from the sender to each recipient |
+| Order book | Tiny partial fills avoided the protocol fee | The fee rounds up |
+| ERC-20 | The owner could mint to the zero address | Refused |
+| CCTP bridge | USDC burned for a recipient blocked on the destination chain cannot be recovered | Documented in the contract |
+
+Known limits (by design): token addresses and parties are the values you enter, so check them before deploying; the order-book and
+multisend contracts assume plain tokens such as USDC; the bridge only burns, the mint on the other chain is completed with Circle's attestation.

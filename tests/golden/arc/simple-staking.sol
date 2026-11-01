@@ -11,21 +11,29 @@ interface IERC20 {
 
 /// @title ArcStaking — Staking Rewards
 /// @notice 12% APY · 30-day lock · 100 bps early-exit penalty
+/// @dev Rewards are paid in the reward token from a pool the owner funds (rewardPool). Reward units are the
+///      reward token's smallest unit, so use a reward token with the same decimals as the staking token.
+///      Earned rewards are always recorded for the staker. If the pool runs short a claim pays what is
+///      available and the rest stays claimable, and withdrawing principal never depends on a reward payment.
 contract ArcStaking {
     IERC20 public stakingToken = IERC20(0x2916570661279426764209465153711134050312);
     IERC20 public rewardToken  = IERC20(0x1465286169178818223818121258874261063564);
-    address public owner;
+    address public immutable owner;
 
     uint256 public constant APY_BPS      = 12 * 100;
     uint256 public constant LOCK_PERIOD  = 30 days;
     uint256 public constant EXIT_FEE_BPS = 100;
     uint256 public totalStaked;
     uint256 public rewardPool;
+    /// @notice Early-exit fees collected for the owner (claimed with claimFees).
+    uint256 public accruedFees;
+    uint256 private _locked = 1;
 
     struct Position {
         uint256 amount;
         uint256 stakedAt;
-        uint256 lastClaim;
+        uint256 lastUpdate;
+        uint256 accrued;   // rewards earned up to lastUpdate and not paid yet
     }
 
     mapping(address => Position) public positions;
@@ -34,60 +42,97 @@ contract ArcStaking {
     event Unstaked(address indexed user, uint256 amount, uint256 fee);
     event RewardClaimed(address indexed user, uint256 reward);
     event RewardPoolFunded(uint256 amount);
+    event FeesClaimed(address indexed to, uint256 amount);
 
     modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
 
+    modifier nonReentrant() {
+        require(_locked == 1, "reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
+
     constructor() { owner = msg.sender; }
 
-    function stake(uint256 amount) external {
+    function stake(uint256 amount) external nonReentrant {
         require(amount > 0, "zero amount");
-        if (positions[msg.sender].amount > 0) _claim(msg.sender);
-        require(stakingToken.transferFrom(msg.sender, address(this), amount), "transfer failed");
-        positions[msg.sender].amount   += amount;
-        positions[msg.sender].stakedAt  = block.timestamp;
-        positions[msg.sender].lastClaim = block.timestamp;
-        totalStaked += amount;
-        emit Staked(msg.sender, amount);
+        _accrue(msg.sender);
+        uint256 received = _pull(stakingToken, amount);
+        Position storage pos = positions[msg.sender];
+        pos.amount   += received;
+        pos.stakedAt  = block.timestamp;
+        totalStaked  += received;
+        emit Staked(msg.sender, received);
     }
 
-    function unstake(uint256 amount) external {
+    /// @notice Withdraw principal. Rewards earned so far stay recorded and can be claimed separately.
+    function unstake(uint256 amount) external nonReentrant {
         Position storage pos = positions[msg.sender];
-        require(pos.amount >= amount, "insufficient stake");
-        _claim(msg.sender);
+        require(amount > 0 && pos.amount >= amount, "insufficient stake");
+        _accrue(msg.sender);
         uint256 fee = 0;
         if (block.timestamp < pos.stakedAt + LOCK_PERIOD)
-            fee = (amount * EXIT_FEE_BPS) / 10000;
+            fee = (amount * EXIT_FEE_BPS + 9999) / 10000;   // rounds up, so splitting an exit cannot avoid the fee
+        if (fee > amount) fee = amount;
         pos.amount -= amount;
         totalStaked -= amount;
-        require(stakingToken.transfer(msg.sender, amount - fee), "transfer failed");
-        if (fee > 0) require(stakingToken.transfer(owner, fee), "fee transfer failed");
+        accruedFees += fee;
         emit Unstaked(msg.sender, amount - fee, fee);
+        _callToken(address(stakingToken), abi.encodeCall(IERC20.transfer, (msg.sender, amount - fee)));
     }
 
-    function claim() external {
-        require(positions[msg.sender].amount > 0, "nothing staked");
-        _claim(msg.sender);
+    /// @notice Pay out the rewards earned so far (as much as the reward pool can cover).
+    function claim() external nonReentrant returns (uint256 paid) {
+        _accrue(msg.sender);
+        Position storage pos = positions[msg.sender];
+        paid = pos.accrued < rewardPool ? pos.accrued : rewardPool;
+        require(paid > 0, "nothing to claim");
+        pos.accrued -= paid;
+        rewardPool  -= paid;
+        emit RewardClaimed(msg.sender, paid);
+        _callToken(address(rewardToken), abi.encodeCall(IERC20.transfer, (msg.sender, paid)));
     }
 
     function pendingReward(address user) public view returns (uint256) {
         Position storage pos = positions[user];
-        if (pos.amount == 0) return 0;
-        uint256 elapsed = block.timestamp - pos.lastClaim;
-        return (pos.amount * APY_BPS * elapsed) / (10000 * 365 days);
+        uint256 live = pos.amount == 0 ? 0 : (pos.amount * APY_BPS * (block.timestamp - pos.lastUpdate)) / (10000 * 365 days);
+        return pos.accrued + live;
     }
 
-    function _claim(address user) internal {
-        uint256 reward = pendingReward(user);
-        if (reward == 0 || rewardPool < reward) return;
-        positions[user].lastClaim = block.timestamp;
-        rewardPool -= reward;
-        require(rewardToken.transfer(user, reward), "reward transfer failed");
-        emit RewardClaimed(user, reward);
+    function fundRewardPool(uint256 amount) external onlyOwner nonReentrant {
+        uint256 received = _pull(rewardToken, amount);
+        rewardPool += received;
+        emit RewardPoolFunded(received);
     }
 
-    function fundRewardPool(uint256 amount) external onlyOwner {
-        require(rewardToken.transferFrom(msg.sender, address(this), amount), "transfer failed");
-        rewardPool += amount;
-        emit RewardPoolFunded(amount);
+    /// @notice Sends the collected early-exit fees to the owner. Anyone may call it.
+    function claimFees() external nonReentrant returns (uint256 amount) {
+        amount = accruedFees;
+        require(amount > 0, "no fees");
+        accruedFees = 0;
+        emit FeesClaimed(owner, amount);
+        _callToken(address(stakingToken), abi.encodeCall(IERC20.transfer, (owner, amount)));
+    }
+
+    function _accrue(address user) internal {
+        Position storage pos = positions[user];
+        if (pos.amount > 0) {
+            pos.accrued += (pos.amount * APY_BPS * (block.timestamp - pos.lastUpdate)) / (10000 * 365 days);
+        }
+        pos.lastUpdate = block.timestamp;
+    }
+
+    /// @dev Pulls tokens from the caller and returns what actually arrived (so fee-on-transfer tokens are credited correctly).
+    function _pull(IERC20 token, uint256 amount) private returns (uint256 received) {
+        uint256 balBefore = token.balanceOf(address(this));
+        _callToken(address(token), abi.encodeCall(IERC20.transferFrom, (msg.sender, address(this), amount)));
+        received = token.balanceOf(address(this)) - balBefore;
+    }
+
+    /// @dev Works with tokens that return nothing (e.g. USDT) as well as tokens that return a bool.
+    function _callToken(address token, bytes memory data) private {
+        (bool ok, bytes memory ret) = token.call(data);
+        require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "token transfer failed");
     }
 }

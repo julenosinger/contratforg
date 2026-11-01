@@ -21,6 +21,7 @@ interface Vm {
 
 /// What the tests need from the generated wallet (same for the single and the portable build).
 interface IW {
+    function replaySafeHash(bytes32 hash) external view returns (bytes32);
     error NotOwner();
     error NotAuthorised();
     error Reentrancy();
@@ -339,6 +340,28 @@ abstract contract WalletBase {
         w.executeBatch(t, v, d);
     }
 
+    function testSessionKeyCannotUseOtherKnownTokenEntryPoints() public {
+        _addKey(KEY, address(tok), 24);
+        bytes4[16] memory sels = [
+            bytes4(0xa457c2d7), 0x9bd9bbc6, 0x62ad1b83, 0x959b8c3f,       // decreaseAllowance, ERC-777 send / operatorSend / authorizeOperator
+            0x1296ee62, 0x4000aea0, 0xd8fbe994, 0xc1d34b89,               // ERC-1363 transferAndCall, transferFromAndCall
+            0x3177029f, 0xcae9ca51,                                       // ERC-1363 approveAndCall
+            0xac9650d8, 0x5ae401dc, 0x1f0464d1,                           // multicall dispatchers
+            0xb460af94, 0xba087652,                                       // ERC-4626 withdraw / redeem
+            0x2eb2c2d6                                                    // ERC-1155 safeBatchTransferFrom
+        ];
+        for (uint256 i; i < sels.length; ++i) {
+            bytes memory data = abi.encodePacked(sels[i], new bytes(160));
+            vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.ForbiddenCall.selector, sels[i]));
+            w.execute(address(tok), 0, data);
+            address[] memory t = _targets(address(tok)); uint256[] memory v = new uint256[](1); bytes[] memory d = new bytes[](1);
+            d[0] = data;
+            vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.ForbiddenCall.selector, sels[i]));
+            w.executeBatch(t, v, d);
+        }
+        vm.prank(OWNER); w.execute(address(tok), 0, abi.encodeCall(Tok.harmless, ()));   // the owner is not restricted
+    }
+
     function testOwnerCanStillMoveTokens() public {
         tok.mint(address(w), 100);
         vm.prank(OWNER); w.execute(address(tok), 0, abi.encodeCall(Tok.transfer, (STRANGER, 40)));
@@ -574,14 +597,24 @@ abstract contract WalletBase {
 
     function testErc1271OwnerSignature() public {
         bytes32 h = keccak256("hello");
-        require(w.isValidSignature(h, _sig(OWNER_PK, h)) == 0x1626ba7e, "owner signature accepted");
-        require(w.isValidSignature(keccak256("other"), _sig(OWNER_PK, h)) == 0xffffffff, "wrong hash");
-        require(w.isValidSignature(h, _sig(OTHER_PK, h)) == 0xffffffff, "wrong signer");
+        require(w.isValidSignature(h, _sig(OWNER_PK, w.replaySafeHash(h))) == 0x1626ba7e, "owner signature accepted");
+        require(w.isValidSignature(keccak256("other"), _sig(OWNER_PK, w.replaySafeHash(h))) == 0xffffffff, "wrong hash");
+        require(w.isValidSignature(h, _sig(OTHER_PK, w.replaySafeHash(h))) == 0xffffffff, "wrong signer");
+        require(w.isValidSignature(h, _sig(OWNER_PK, h)) == 0xffffffff, "a signature over the raw hash is not enough");
+    }
+
+    function testErc1271SignatureForOneWalletFailsOnAnother() public {
+        IW other = IW(_deploy(OWNER));                      // a second wallet with the same owner
+        bytes32 h = keccak256("approve this");
+        bytes memory sigForW = _sig(OWNER_PK, w.replaySafeHash(h));
+        require(w.isValidSignature(h, sigForW) == 0x1626ba7e, "valid on the wallet it was made for");
+        require(other.isValidSignature(h, sigForW) == 0xffffffff, "worthless on another wallet of the same owner");
+        require(w.replaySafeHash(h) != other.replaySafeHash(h), "digests are wallet specific");
     }
 
     function testErc1271RejectsMalleableAndMalformed() public {
         bytes32 h = keccak256("hello");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PK, h);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PK, w.replaySafeHash(h));
         uint256 n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
         bytes memory mirrored = abi.encodePacked(r, bytes32(n - uint256(s)), v == 27 ? uint8(28) : uint8(27));
         require(w.isValidSignature(h, mirrored) == 0xffffffff, "the mirrored form of a signature is refused");
@@ -603,8 +636,8 @@ abstract contract WalletBase {
         bytes32 h = keccak256("hello");
         vm.prank(OWNER); w.transferOwnership(vm.addr(OTHER_PK));
         vm.prank(vm.addr(OTHER_PK)); w.acceptOwnership();
-        require(w.isValidSignature(h, _sig(OTHER_PK, h)) == 0x1626ba7e, "new owner signs");
-        require(w.isValidSignature(h, _sig(OWNER_PK, h)) == 0xffffffff, "old owner no longer");
+        require(w.isValidSignature(h, _sig(OTHER_PK, w.replaySafeHash(h))) == 0x1626ba7e, "new owner signs");
+        require(w.isValidSignature(h, _sig(OWNER_PK, w.replaySafeHash(h))) == 0xffffffff, "old owner no longer");
     }
 
     // ------------------------------------------------------------- receiving
