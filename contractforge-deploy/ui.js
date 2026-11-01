@@ -4,11 +4,18 @@
    ====================================================================== */
 
 /* Always-visible banner so the user knows which network (and what kind of funds) they are on. */
+/* The smart wallet's daily limit is typed in whole units of the network's gas token. */
+function uiRefreshWalletUnit(){
+  const el = document.getElementById('s_limit_unit');
+  if(el && typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) el.textContent = NETWORKS[activeNetwork].gasSymbol + ', the network\'s gas token';
+}
+
 function renderNetBanner(){
   const el = document.getElementById('netBanner');
   if(!el || typeof NETWORKS === 'undefined') return;
   const net = NETWORKS[activeNetwork];
   if(!net) return;
+  uiRefreshWalletUnit();
   const main = !!net.isMainnet;
   el.className = 'net-banner ' + (main ? 'mainnet' : 'testnet');
   const mode = (typeof multichainMode !== 'undefined' && multichainMode !== 'single' && typeof MC_MODES !== 'undefined')
@@ -226,6 +233,7 @@ function uiCollapseSimpleForm(){
   const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute('onclick'));
   if(m && UI_ADV_SIMPLE[m[1]]) uiCollapseAdvanced(form, UI_ADV_SIMPLE[m[1]]);
   if(m) uiRestoreSimpleForm(m[1]);
+  uiRefreshWalletUnit();
 }
 
 function initAdvancedOptions(){
