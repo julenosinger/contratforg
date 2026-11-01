@@ -214,7 +214,7 @@ const sticky = doc.querySelector('.sticky-top');
 ok(sticky.contains(banner) && sticky.contains(bar), 'banner and bar share the sticky header');
 
 /* advanced options keep ids and values */
-for (const [tpl, ids] of Object.entries({ erc20: ['s_decimals', 's_cap', 's_burn'], erc721: ['s_royalty', 's_baseuri'], escrow: ['s_token', 's_timeout'], vesting: ['s_token', 's_cliff'], paywall: ['s_token'], dao: ['s_quorum', 's_voting', 's_delay', 's_threshold'], smartwallet: ['s_session'], staking: ['s_token', 's_reward', 's_exitfee'] })) {
+for (const [tpl, ids] of Object.entries({ erc20: ['s_decimals', 's_cap', 's_burn'], erc721: ['s_royalty', 's_baseuri'], escrow: ['s_token', 's_timeout'], vesting: ['s_token', 's_cliff'], paywall: ['s_token'], dao: ['s_quorum', 's_voting', 's_delay', 's_threshold'], smartwallet: ['s_session', 's_rdelay'], staking: ['s_token', 's_reward', 's_exitfee'] })) {
   ev(`renderSimpleForm('${tpl}')`);
   await new Promise((r) => setTimeout(r, 0)); // the form is reorganised right after it renders
   const d = doc.querySelector('#simpleForm details.adv');

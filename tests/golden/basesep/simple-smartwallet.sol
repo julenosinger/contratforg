@@ -39,6 +39,16 @@ contract ArcSmartWallet {
     error DailyLimitExceeded(uint256 requested, uint256 available);
     error NotAContract(address target);
     error CallFailed();
+    error InvalidGuardian();
+    error InvalidOwner();
+    error InvalidLimit();
+    error InvalidDelay();
+    error NotGuardian();
+    error NotPendingOwner();
+    error RecoveryAlreadyPending();
+    error NoRecoveryPending();
+    error RecoveryNotReady(uint256 activationTime);
+    error GuardianMismatch();
 
     // ------------------------------------------------------------------ state
     address public owner;
@@ -62,16 +72,27 @@ contract ArcSmartWallet {
     uint256 private _lastRefill;
     uint256 private _status = 1;                            // reentrancy guard
 
+    // ownership (two steps) and recovery
     address public pendingOwner;
+    uint256 public constant MIN_RECOVERY_DELAY = 1 days;
+    uint256 public constant MAX_RECOVERY_DELAY = 30 days;
+    /// @notice How long a recovery must wait before it can be executed (the owner can change it, 1 to 30 days).
+    uint256 public recoveryDelay = 2 days;
+    address public recoveryCandidate;                       // the new owner a recovery would install
+    address public recoveryStartedBy;                       // the guardian that started it
     uint256 public recoveryActivationTime;
-    uint256 public constant RECOVERY_DELAY = 2 days;
 
     event Received(address indexed from, uint256 value);
     event Executed(address indexed target, uint256 value, bytes4 selector);
     event SessionKeyAdded(address indexed key, uint256 expiry, address[] targets);
     event SessionKeyRevoked(address indexed key);
-    event RecoveryInitiated(address indexed newOwner, uint256 activationTime);
-    event RecoveryExecuted(address indexed newOwner);
+    event RecoveryInitiated(address indexed guardian, address indexed newOwner, uint256 activationTime);
+    event RecoveryCancelled(address indexed cancelledBy, address indexed newOwner);
+    event RecoveryExecuted(address indexed previousOwner, address indexed newOwner);
+    event RecoveryDelayUpdated(uint256 newDelay);
+    event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -86,9 +107,13 @@ contract ArcSmartWallet {
     }
 
     constructor() {
+        if (guardian == address(0) || guardian == msg.sender) revert InvalidGuardian();
+        if (DAILY_LIMIT > type(uint128).max) revert InvalidLimit();
+        if (recoveryDelay < MIN_RECOVERY_DELAY || recoveryDelay > MAX_RECOVERY_DELAY) revert InvalidDelay();
         owner = msg.sender;
         _spendAvailable = DAILY_LIMIT;
         _lastRefill = block.timestamp;
+        emit OwnershipTransferred(address(0), msg.sender);
     }
 
     receive() external payable {
@@ -139,7 +164,7 @@ contract ArcSmartWallet {
     /// @notice Approve a session key for validForHours (at most MAX_SESSION_DURATION) and a list of contracts it may call.
     ///         Adding a key again replaces its allowlist and expiry.
     function addSessionKey(address key, uint256 validForHours, address[] calldata targets) external onlyOwner {
-        if (key == address(0) || key == owner || key == guardian || key == pendingOwner || key == address(this)) {
+        if (key == address(0) || key == owner || key == guardian || key == pendingOwner || key == recoveryCandidate || key == address(this)) {
             revert InvalidSessionKey();
         }
         if (validForHours == 0 || validForHours > MAX_SESSION_DURATION / 1 hours) {
@@ -236,22 +261,132 @@ contract ArcSmartWallet {
 
     // --------------------------------------------------------------- recovery
 
+    /// @notice The guardian proposes a new owner. It takes effect only after recoveryDelay, and the owner
+    ///         (or the guardian) can cancel it until then.
     function initiateRecovery(address newOwner) external {
-        require(msg.sender == guardian, "only guardian");
-        pendingOwner = newOwner;
-        recoveryActivationTime = block.timestamp + RECOVERY_DELAY;
-        emit RecoveryInitiated(newOwner, recoveryActivationTime);
+        if (msg.sender != guardian) revert NotGuardian();
+        if (recoveryCandidate != address(0)) revert RecoveryAlreadyPending();
+        if (newOwner == address(0) || newOwner == owner || newOwner == guardian || newOwner == address(this)) {
+            revert InvalidOwner();
+        }
+        recoveryCandidate = newOwner;
+        recoveryStartedBy = msg.sender;
+        recoveryActivationTime = block.timestamp + recoveryDelay;
+        emit RecoveryInitiated(msg.sender, newOwner, recoveryActivationTime);
     }
 
+    /// @notice The owner or the guardian cancels a pending recovery.
+    function cancelRecovery() external {
+        if (msg.sender != owner && msg.sender != guardian) revert NotAuthorised();
+        if (recoveryCandidate == address(0)) revert NoRecoveryPending();
+        _cancelRecovery(msg.sender);
+    }
+
+    /// @notice Anyone can finish a recovery once the delay has passed, if it was not cancelled and the
+    ///         guardian is still the one that started it.
     function executeRecovery() external {
-        require(pendingOwner != address(0), "no recovery pending");
-        require(block.timestamp >= recoveryActivationTime, "delay not passed");
-        owner = pendingOwner;
+        address candidate = recoveryCandidate;
+        if (candidate == address(0)) revert NoRecoveryPending();
+        if (block.timestamp < recoveryActivationTime) revert RecoveryNotReady(recoveryActivationTime);
+        if (guardian != recoveryStartedBy) revert GuardianMismatch();
+        address previous = owner;
+        owner = candidate;
         pendingOwner = address(0);
-        emit RecoveryExecuted(owner);
+        sessionGeneration += 1;                             // session keys of the old owner stop working
+        recoveryCandidate = address(0);
+        recoveryStartedBy = address(0);
+        recoveryActivationTime = 0;
+        emit RecoveryExecuted(previous, candidate);
+        emit OwnershipTransferred(previous, candidate);
     }
 
+    /// @notice Change how long a new recovery has to wait (1 to 30 days). Does not affect one already started.
+    function setRecoveryDelay(uint256 newDelay) external onlyOwner {
+        if (newDelay < MIN_RECOVERY_DELAY || newDelay > MAX_RECOVERY_DELAY) revert InvalidDelay();
+        recoveryDelay = newDelay;
+        emit RecoveryDelayUpdated(newDelay);
+    }
+
+    /// @notice Replace the guardian. Any recovery the old guardian started is cancelled.
     function setGuardian(address newGuardian) external onlyOwner {
+        if (newGuardian == address(0) || newGuardian == owner || newGuardian == address(this)) revert InvalidGuardian();
+        if (recoveryCandidate != address(0)) _cancelRecovery(msg.sender);
+        emit GuardianUpdated(guardian, newGuardian);
         guardian = newGuardian;
+    }
+
+    function _cancelRecovery(address by) private {
+        address candidate = recoveryCandidate;
+        recoveryCandidate = address(0);
+        recoveryStartedBy = address(0);
+        recoveryActivationTime = 0;
+        emit RecoveryCancelled(by, candidate);
+    }
+
+    // -------------------------------------------------------------- ownership
+
+    /// @notice Step 1: the owner names the next owner. Nothing changes until that address accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0) || newOwner == owner || newOwner == guardian || newOwner == address(this)) {
+            revert InvalidOwner();
+        }
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Step 2: the named address accepts. Session keys of the old owner stop working and a pending recovery is cancelled.
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        if (msg.sender == guardian) revert InvalidOwner();
+        address previous = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        sessionGeneration += 1;
+        if (recoveryCandidate != address(0)) _cancelRecovery(msg.sender);
+        emit OwnershipTransferred(previous, msg.sender);
+    }
+
+    function cancelOwnershipTransfer() external onlyOwner {
+        pendingOwner = address(0);
+    }
+
+    // ------------------------------------------------- signatures (ERC-1271)
+
+    /// @notice Lets other contracts ask whether the owner signed a hash. Only the owner's ECDSA signature counts
+    ///         (not session keys). The caller is responsible for the hash being specific to its own purpose.
+    function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
+        if (signature.length != 65) return 0xffffffff;
+        bytes32 r = bytes32(signature[0:32]);
+        bytes32 s = bytes32(signature[32:64]);
+        uint8 v = uint8(signature[64]);
+        // reject the mirrored (malleable) form of a signature and unknown recovery ids
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) return 0xffffffff;
+        if (v != 27 && v != 28) return 0xffffffff;
+        address signer = ecrecover(hash, v, r, s);
+        return (signer != address(0) && signer == owner) ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
+    }
+
+    // ---------------------------------------- receiving NFTs (ERC-721 / 1155)
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return 0x150b7a02;
+    }
+
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+        return 0xf23a6e61;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
+        return 0xbc197c81;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == 0x01ffc9a7      // ERC-165
+            || interfaceId == 0x150b7a02      // ERC-721 receiver
+            || interfaceId == 0x4e2312e0;     // ERC-1155 receiver
     }
 }

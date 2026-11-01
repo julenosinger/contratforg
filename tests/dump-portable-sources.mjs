@@ -15,6 +15,9 @@ const clearTokens = () => { for (const id of ['s_token', 's_reward', 'swap_token
 const save = (file, rename) => {
   let { code } = JSON.parse(ev('JSON.stringify(pendingSource)'));
   if (rename) code = code.replace(rename[0], rename[1]);
+  // forge runs offline with the solc that is installed (0.8.28), so an exact `pragma solidity 0.8.24` is relaxed here.
+  // The exact 0.8.24 build is checked by compile-generators.mjs with the real 0.8.24 compiler.
+  code = code.replace(/^pragma solidity 0\.8\.24;/m, 'pragma solidity ^0.8.24;');
   fs.writeFileSync(path.join(out, file + '.sol'), code);
   console.log(file, JSON.stringify(JSON.parse(ev('JSON.stringify(pendingCtorArgs.map(a => a.param))'))));
 };
