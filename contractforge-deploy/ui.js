@@ -198,7 +198,7 @@ const UI_ADV_SIMPLE = {
   vesting:     ['s_token', 's_cliff'],
   paywall:     ['s_token'],
   dao:         ['s_quorum', 's_voting', 's_delay', 's_threshold'],
-  smartwallet: ['s_entrypoint', 's_session'],
+  smartwallet: ['s_session'],
   staking:     ['s_token', 's_reward', 's_exitfee']
 };
 

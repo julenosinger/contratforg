@@ -32,13 +32,12 @@ function cctpV2(netKey){
   return { domain: CCTP_DOMAINS[netKey], tokenMessenger: a.tokenMessenger, messageTransmitter: a.messageTransmitter };
 }
 
-const ERC4337_ENTRYPOINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 /* ---------------- Constructor arguments ---------------- */
 /* pendingCtorArgs: [{ param, type, hint, value, userSet, units, label, note }]
    hint decides the value per network: usdc | eurc | tokenMessenger | messageTransmitter |
-   entryPoint | nativeScaled (units × 10^native decimals) | static (same value everywhere) */
+   nativeScaled (units × 10^native decimals) | static (same value everywhere) */
 let pendingCtorArgs = [];
 
 /* '1000' or '0.5' -> smallest units as a decimal string */
@@ -57,7 +56,6 @@ function hintValue(arg, netKey){
     case 'eurc': return n.eurc || '';
     case 'tokenMessenger': return cctpV2(netKey)?.tokenMessenger || '';
     case 'messageTransmitter': return cctpV2(netKey)?.messageTransmitter || '';
-    case 'entryPoint': return ERC4337_ENTRYPOINT_V06;
     case 'gasAlias': return (n.gasSymbol === 'USDC' && n.usdc) ? n.usdc : ZERO_ADDRESS; // ERC-20 address of the same money as the gas token, or none
     case 'nativeScaled': return scaleUnits(arg.units, n.gasDecimals || 18);
     default: return arg.value || '';
@@ -228,7 +226,7 @@ function renderCtorArgs(){
     + rows.map((a,i)=>{
       const val = ctorArgValue(a, activeNetwork);
       const missing = !val;
-      const hintTxt = ({usdc:'USDC on this network', eurc:'EURC on this network', tokenMessenger:'Circle CCTP V2 TokenMessenger', messageTransmitter:'Circle CCTP V2 MessageTransmitter', entryPoint:'ERC-4337 EntryPoint v0.6 (check it exists on this chain)', nativeScaled:'amount in the native token\'s smallest unit', static:''})[a.hint] || '';
+      const hintTxt = ({usdc:'USDC on this network', eurc:'EURC on this network', tokenMessenger:'Circle CCTP V2 TokenMessenger', messageTransmitter:'Circle CCTP V2 MessageTransmitter', nativeScaled:'amount in the native token\'s smallest unit', static:''})[a.hint] || '';
       return '<div class="field"><label>'+escapeHtml(a.param.replace(/_$/,''))+' <span class="mc-type">'+escapeHtml(a.type)+'</span></label>'
         + '<input id="ctor_arg_'+i+'" data-type="'+escapeHtml(a.type)+'"'+(a.allowZero?' data-allowzero="1"':'')+' value="'+escapeHtml(val)+'" placeholder="'+(a.type==='address'?'0x…':'')+'" />'
         + '<div class="hint'+(missing?' mc-missing':'')+'">'+(missing?'No default for this network. Enter a value. ':'')+escapeHtml(hintTxt)+(a.note?' '+escapeHtml(a.note):'')+'</div></div>';

@@ -214,7 +214,7 @@ const sticky = doc.querySelector('.sticky-top');
 ok(sticky.contains(banner) && sticky.contains(bar), 'banner and bar share the sticky header');
 
 /* advanced options keep ids and values */
-for (const [tpl, ids] of Object.entries({ erc20: ['s_decimals', 's_cap', 's_burn'], erc721: ['s_royalty', 's_baseuri'], escrow: ['s_token', 's_timeout'], vesting: ['s_token', 's_cliff'], paywall: ['s_token'], dao: ['s_quorum', 's_voting', 's_delay', 's_threshold'], smartwallet: ['s_entrypoint', 's_session'], staking: ['s_token', 's_reward', 's_exitfee'] })) {
+for (const [tpl, ids] of Object.entries({ erc20: ['s_decimals', 's_cap', 's_burn'], erc721: ['s_royalty', 's_baseuri'], escrow: ['s_token', 's_timeout'], vesting: ['s_token', 's_cliff'], paywall: ['s_token'], dao: ['s_quorum', 's_voting', 's_delay', 's_threshold'], smartwallet: ['s_session'], staking: ['s_token', 's_reward', 's_exitfee'] })) {
   ev(`renderSimpleForm('${tpl}')`);
   await new Promise((r) => setTimeout(r, 0)); // the form is reorganised right after it renders
   const d = doc.querySelector('#simpleForm details.adv');
@@ -286,7 +286,7 @@ ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value change
   fire(sg, '0x' + '1'.repeat(40) + '\nnot-an-address'); ok(sg.classList.contains('invalid'), 'bad signer line flagged');
   fire(sg, '0x' + '1'.repeat(40) + '\n0x' + '2'.repeat(40)); ok(!sg.classList.contains('invalid'), 'good signer list accepted');
   // constructor panel
-  ev("setMultichainMode('portable')"); ev("renderSimpleForm('smartwallet')"); ev("activeNetwork='arc'"); ev("genSimple('smartwallet')");
+  ev("setMultichainMode('portable')"); ev("renderSimpleForm('dao')"); ev("activeNetwork='arc'"); doc.getElementById('s_token').value = '0x' + '3'.repeat(40); ev("genSimple('dao')");
   const a0 = doc.getElementById('ctor_arg_0');
   fire(a0, 'nope'); ok(a0.classList.contains('invalid'), 'constructor address flagged');
   const a1 = doc.getElementById('ctor_arg_1');

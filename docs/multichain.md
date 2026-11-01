@@ -13,7 +13,7 @@ A selector in the left sidebar ("Multichain mode") chooses how contracts are gen
 
 - Token addresses (USDC, EURC, staking and reward tokens, vault asset, NFT payment token, AMM and order book pair) are constructor arguments. The constructor checks they are contracts.
 - Amounts written as "100" tokens use the token's own `decimals()` instead of assuming 6 (matters for 18-decimal USDC on some chains).
-- Smart wallet: the EntryPoint address and the daily limit (in the native token's smallest unit) are constructor arguments.
+- Smart wallet: the daily limit (in the native token's smallest unit) is a constructor argument.
 - DAO: the governance token and the voting period (in blocks, which differ per chain) are constructor arguments.
 - CCTP bridge: Circle CCTP V2 (TokenMessengerV2 and MessageTransmitterV2). The old V1 form is only used in single mode.
 
@@ -21,7 +21,6 @@ A selector in the left sidebar ("Multichain mode") chooses how contracts are gen
 
 - A value you type into a generator form (for example a custom token) applies to the network you generated for. Other networks get their own default, or stay empty and must be filled in.
 - Networks without a known default (for example Robinhood and BNB for USDC) leave the field empty; deployment on that network fails with a clear message until you fill it.
-- The ERC-4337 EntryPoint default (v0.6) is the same on every network, but check it exists on the chain you deploy to.
 - Block time differs per chain, so check the DAO voting period for each network.
 - CCTP V2 addresses come from developers.circle.com (contract addresses page). Arc (domain 26), Ethereum, Avalanche, OP, Arbitrum, Base and Polygon, plus their testnets, are included.
 - Mainnet deployments still ask for confirmation for every network and use real funds.

@@ -12,7 +12,6 @@ const LAB_AUX = {
   eurc: '0x00000000000000000000000000000000000000ec',
   messenger: '0x0000000000000000000000000000000000000a11',
   transmitter: '0x0000000000000000000000000000000000000a12',
-  entryPoint: '0x0000000000000000000000000000000000000e17',
 };
 const LAB_TOKEN_ABI = [
   'function mint(address to, uint256 amount)', 'function approve(address spender, uint256 amount) returns (bool)',
@@ -303,9 +302,8 @@ function labCtorDefault(inp, i){
       case 'eurc': return LAB.tokens.eurc;
       case 'tokenMessenger': return LAB_AUX.messenger;
       case 'messageTransmitter': return LAB_AUX.transmitter;
-      case 'entryPoint': return LAB_AUX.entryPoint;
       case 'gasAlias': return ZERO_ADDRESS;
-      case 'nativeScaled': return scaleUnits(meta.units, 18);
+      case 'nativeScaled': return scaleUnits(meta.units, (NETWORKS[activeNetwork] && NETWORKS[activeNetwork].gasDecimals) || 18);
       default: return meta.userSet || meta.hint === 'static' ? (meta.value || '') : '';
     }
   }

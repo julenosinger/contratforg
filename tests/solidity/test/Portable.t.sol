@@ -93,10 +93,9 @@ contract ConfigTest is P {
         vm.expectRevert(bytes("token is not a contract"));
         new DaoSrc.ArcDAO(address(0xBEEF), 1);
     }
-    function testWalletGetsEntryPointAndLimit() public {
-        address ep = address(0xE17);
-        WalletSrc.ArcSmartWallet w = new WalletSrc.ArcSmartWallet(ep, 777);
-        require(w.entryPoint() == ep && w.DAILY_LIMIT() == 777, "config");
+    function testWalletGetsDailyLimit() public {
+        WalletSrc.ArcSmartWallet w = new WalletSrc.ArcSmartWallet(777);
+        require(w.DAILY_LIMIT() == 777, "config");
     }
     function testAmmUsesConstructorTokens() public {
         AmmSrc.ArcSwapAMM a = new AmmSrc.ArcSwapAMM(address(t6), address(t18));

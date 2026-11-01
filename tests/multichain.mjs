@@ -156,7 +156,7 @@ async function runMulti(mode, setup) {
   });
   const r = await run();
   eq(deployed.length, 1, 'smart wallet deploys on arc');
-  eq(deployed[0].args.length, 2, 'smart wallet gets 2 args');
+  eq(deployed[0].args.length, 1, 'smart wallet gets 1 arg (the daily limit)');
   void app; void r;
 }
 

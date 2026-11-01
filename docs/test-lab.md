@@ -10,7 +10,7 @@
 **Test Lab (menu 18)** runs the contract you just generated on a private simulated chain in the browser. No wallet, network or real funds.
 - Five test accounts (Alice, Bob, Carol, Dave, Eve) with test USDC, EURC and native balance.
 - Contracts that hard-code the real USDC/EURC address work unchanged: the test tokens are placed at those addresses.
-- Constructor arguments are pre-filled with test values (tokens, CCTP stand-ins, entry point).
+- Constructor arguments are pre-filled with test values (tokens, CCTP stand-ins).
 - Move time forward (hour, day, week, month, custom) or mine blocks: useful for vesting, timelocks and streams.
 - Each call shows gas, decoded events and the revert reason (custom errors, panics, out of gas, the 24 KB size limit).
 - "Quick check" calls every read function that needs no input.
