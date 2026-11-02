@@ -45,6 +45,17 @@ for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderb
   eq(M[k].level, 'experimental', `${k} stays experimental`);
 }
 
+
+/* docs/mainnet-gate.md lists every template with its level */
+{
+  const doc = fs.readFileSync(path.join(repo, 'docs', 'mainnet-gate.md'), 'utf8');
+  for (const [k, e] of Object.entries(M)) {
+    const row = doc.split('\n').find((l) => l.startsWith('|') && l.includes('`' + k + '`'));
+    ok(!!row, `mainnet-gate.md has a row for ${k}`);
+    if (row) ok(row.includes(e.level), `mainnet-gate.md row for ${k} says ${e.level}`, row.slice(0, 80));
+  }
+}
+
 /* unknown or missing templates are experimental */
 eq(ev("matLevel('does-not-exist')"), 'experimental', 'unknown template');
 eq(ev('matLevel(undefined)'), 'experimental', 'no template');
