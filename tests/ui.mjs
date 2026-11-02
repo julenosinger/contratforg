@@ -580,7 +580,7 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
   await ev('multiDeploy()'); eq(e.deployed.length, 0, 'multi-deploy refuses a draft');
   ev("setMultichainMode('single')");
   // second layer: a placeholder that slipped past the field checks is still caught at deploy time
-  ev("pendingSource = { name:'Slip', code:'// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\ncontract Slip { address a = 0x0000000000000000000000000000000000dEaD; }', template:'escrow', problems: [] }");
+  ev("pendingSource = { name:'Slip', code:'// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\ncontract Slip { address a = 0x000000000000000000000000000000000000dEaD; }', template:'escrow', problems: [] }");
   ev("activeNetwork='arc'; updateSideNet()"); await ev('compileAndDeploy()');
   eq(e.deployed.length, 0, 'regex guard blocks a placeholder on a testnet');
   // fixing the fields clears the draft
@@ -590,8 +590,16 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
   ok(!d.getElementById('btnCompileDeploy').disabled && !d.querySelector('#currentContract .cc-chip.draft'), 'buttons come back');
   // parties must differ
   const set = (id, v) => { const el = d.getElementById(id); el.value = v; };
+  const goodSeller = d.getElementById('s_seller').value;
   set('s_seller', d.getElementById('s_buyer').value); ev('genSimple("escrow")');
   ok(ev('pendingSource.problems').some((p) => /differ|same|different/i.test(p)), 'buyer and seller must differ');
+  ok(!PLACE.test(ev('pendingSource.code')), 'that draft has no placeholder in it: only the field check can block it');
+  ev("activeNetwork='arc'; updateSideNet()"); const before = e.deployed.length; await ev('compileAndDeploy()');
+  eq(e.deployed.length, before, 'a draft with valid-looking but clashing parties is still blocked');
+  ok(d.getElementById('btnCompileDeploy').disabled, 'and the deploy button is off');
+  set('s_seller', '0x000000000000000000000000000000000000dEaD'); ev('genSimple("escrow")');
+  ok(ev('pendingSource.problems').some((p) => /placeholder/i.test(p)), 'a typed 0x...dEaD is reported as a placeholder');
+  set('s_seller', goodSeller); ev('genSimple("escrow")');
 }
 {
   const e = deployEnv(); const { d, ev } = e;
@@ -658,6 +666,9 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
   eq([d.getElementById('s_spendlimit').value, d.getElementById('s_limit_unit').textContent.split(',')[0]], ['0.1', 'ETH'], 'Ethereum: 0.1 ETH (default follows the network)');
   fillParties(e.a, 'ethereum'); ev("genSimple('smartwallet')");
   ok(/DAILY_LIMIT = 100000000000000000;/.test(ev('pendingSource.code')) && /0\.1 ETH/.test(ev('pendingSource.code')), 'the generated limit is 0.1 ETH');
+  d.getElementById('s_spendlimit').value = ''; ev("genSimple('smartwallet')");
+  ok(/DAILY_LIMIT = 100000000000000000;/.test(ev('pendingSource.code')), 'an empty limit falls back to the network default (0.1 ETH), not to 100');
+  d.getElementById('s_spendlimit').value = '0.1';
   // a value typed by the user is kept when the network changes
   const lim = d.getElementById('s_spendlimit'); lim.value = '5'; lim.dispatchEvent(new w.Event('input', { bubbles: true }));
   ev("activeNetwork='arc'; updateSideNet()");
