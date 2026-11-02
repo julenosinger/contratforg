@@ -832,3 +832,11 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .light .mat-experimental{color:#8A2A10;background:#FBE3DA;}
 .light .mat-reviewed{color:#6B5A10;background:#F7EFC6;}
 .light .mat-audited{color:#14603A;background:#D8F0E2;}
+
+/* ---- Draft state (required addresses missing) ---- */
+.req-draft{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.12em;padding:2px 8px;border-radius:2px;background:#FF6A39;color:#1a0a04;margin-left:10px;}
+.req-reason{border:1px solid #B8452A;background:#2A1008;color:#FFB9A0;border-radius:var(--radius);padding:9px 12px;margin:0 0 12px;font-size:12px;line-height:1.5;}
+.cc-chip.draft{background:#2A1008;color:#FFB9A0;border-color:#B8452A;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+label .req-star{color:#FF6A39;margin-left:3px;}
+.light .req-reason{background:#FBE3DA;color:#8A2A10;}

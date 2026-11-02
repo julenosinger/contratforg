@@ -228,8 +228,7 @@
           </div>
           <div class="field full">
             <label>Signers (one address per line)</label>
-            <textarea id="tre_signers" placeholder="0xAaa...&#10;0xBbb...&#10;0xCcc...">0x0000000000000000000000000000000000dEaD
-0x0000000000000000000000000000000000bEEF</textarea>
+            <textarea id="tre_signers" placeholder="0xAaa...&#10;0xBbb...&#10;0xCcc..." aria-required="true"></textarea>
           </div>
           <div class="field">
             <label>Enable payment streaming</label>
@@ -400,10 +399,11 @@
           </div>
         </div>
         <div class="mc-panel" id="ctorArgsPanel" style="display:none;"></div>
+        <div class="req-reason" id="draftReason" role="alert" style="display:none;"></div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="compileAndDeploy()">Compile and deploy</button>
-          <button class="btn btn-ghost" onclick="downloadSource()">Download .sol</button>
-          <button class="btn btn-ghost" onclick="copySource()">Copy code</button>
+          <button class="btn btn-primary" id="btnCompileDeploy" onclick="compileAndDeploy()">Compile and deploy</button>
+          <button class="btn btn-ghost" id="btnDownloadSol" onclick="downloadSource()">Download .sol</button>
+          <button class="btn btn-ghost" id="btnCopySol" onclick="copySource()">Copy code</button>
         </div>
         <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
         <div class="deploy-result" id="deployResult" style="display:none;" aria-live="polite"></div>
@@ -927,6 +927,7 @@
 <script src="multichain.js"></script>
 <script src="multideploy.js"></script>
 <script src="maturity.js"></script>
+<script src="required.js"></script>
 <script src="playground.js"></script>
 <script src="lab.js"></script>
 <script src="ui.js"></script>

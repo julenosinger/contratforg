@@ -655,7 +655,7 @@ function renderSimpleForm(id){
 function genSimple(id){
   const net=NETWORKS[activeNetwork];
   const g=(id)=>document.getElementById(id)?.value ?? '';
-  let code='', name='', mcSpecs=[];
+  let code='', name='', mcSpecs=[], mcProblems=[];
 
   if(id==='dao'){
     genSimpleDAO(); return;
@@ -758,6 +758,7 @@ contract ${name} {
     const royalty=g('s_royalty')||'0';
     const baseuri=g('s_baseuri')||'';
     const usdc = net.usdc;
+    if(!isPortable() && !/^0+(\.0+)?$/.test(String(price).trim()) && !usdc) mcProblems = ['Payment token: '+net.label+' has no default stablecoin, so set the mint price to 0 or use a portable mode'];
     mcSpecs = [
       { kind:'addr', name:'usdc', type:'address', value: usdc==='' ? '0x0000000000000000000000000000000000000000' : usdc, param:'usdc_', hint:'usdc', optional: /^0+(\.0+)?$/.test(String(price).trim()) },
       { kind:'scaled', name:'mintPrice', expr: price, tokenParam:'usdc_' }
@@ -894,10 +895,14 @@ contract ${name} {
 
   else if(id==='escrow'){
     name=g('s_name').replace(/[^A-Za-z0-9]/g,'')||'ArcEscrow';
-    const buyer=g('s_buyer')||'0x0000000000000000000000000000000000dEaD';
-    const seller=g('s_seller')||'0x0000000000000000000000000000000000bEEF';
-    const arbiter=g('s_arbiter')||'0x0000000000000000000000000000000000cAfE';
+    // an empty or wrong party makes this a draft (see required.js); the stand-ins only keep the draft readable
+    const buyer=g('s_buyer').trim()||REQ_DRAFT_ADDR.a;
+    const seller=g('s_seller').trim()||REQ_DRAFT_ADDR.b;
+    const arbiter=g('s_arbiter').trim()||REQ_DRAFT_ADDR.c;
     const token=resolveToken(g('s_token'),'usdc');
+    mcProblems = reqProblems([
+      { label:'Buyer', value:g('s_buyer'), required:true }, { label:'Seller', value:g('s_seller'), required:true }, { label:'Arbiter', value:g('s_arbiter'), required:true }
+    ], true).concat([reqTokenProblem('Token', g('s_token'), token, net.label)].filter(Boolean));
     const amount=g('s_amount')||'0';
     const timeout=g('s_timeout')||'14';
     mcSpecs = [
@@ -975,7 +980,8 @@ contract ${name} {
   else if(id==='vesting'){
     name=g('s_name').replace(/[^A-Za-z0-9]/g,'')||'ArcVesting';
     const token=resolveToken(g('s_token'),'usdc');
-    const beneficiary=g('s_beneficiary')||'0x0000000000000000000000000000000000bEEF';
+    const beneficiary=g('s_beneficiary').trim()||REQ_DRAFT_ADDR.b;
+    mcProblems = reqProblems([{ label:'Beneficiary', value:g('s_beneficiary'), required:true }]).concat([reqTokenProblem('Token', g('s_token'), token, net.label)].filter(Boolean));
     const amount=g('s_amount')||'0';
     const duration=g('s_duration')||'365';
     const cliff=g('s_cliff')||'0';
@@ -1048,7 +1054,8 @@ contract ${name} {
     const token=resolveToken(g('s_token'),'usdc');
     const amount=g('s_amount')||'0';
     const duration=g('s_duration')||'30';
-    const beneficiary=g('s_beneficiary')||'0x0000000000000000000000000000000000bEEF';
+    const beneficiary=g('s_beneficiary').trim()||REQ_DRAFT_ADDR.b;
+    mcProblems = reqProblems([{ label:'Beneficiary', value:g('s_beneficiary'), required:true }]).concat([reqTokenProblem('Token', g('s_token'), token, net.label)].filter(Boolean));
     mcSpecs = [
       { kind:'addr', name:'token', type:'IERC20', value:token, param:'token_', hint:'usdc', userSet:!!g('s_token').trim() },
       { kind:'scaled', name:'pricePerPeriod', expr:amount, tokenParam:'token_' }
@@ -1111,7 +1118,7 @@ contract ${name} {
   code = portabilize(code, mcSpecs);
   code = matStamp(code, id);
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = { name, code, template: id };
+  pendingSource = { name, code, template: id, problems: mcProblems };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -1382,6 +1389,8 @@ function genSwap(){
   const needsTokens = !(kind==='amm' && multi==='factory');
   const tokA = portable ? 'tokenA_' : tokenA, tokB = portable ? 'tokenB_' : tokenB;
   if(needsTokens && !portable){
+    const badToken = reqProblems([{ label:'Token A', value:document.getElementById('swap_tokenA').value }, { label:'Token B', value:document.getElementById('swap_tokenB').value }])[0];
+    if(badToken){ alert(badToken+'.'); return; }
     if(tokenA===ZERO || tokenB===ZERO){
       alert('No default token for '+net.label+'. Enter the Token A and Token B addresses.');
       return;
@@ -1587,7 +1596,10 @@ function genTreasury(){
   const threshold=document.getElementById('tre_threshold').value||'1';
   const signersRaw=document.getElementById('tre_signers').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const streaming=document.getElementById('tre_streaming').value==='yes';
-  const signersArr = signersRaw.length ? signersRaw : ['0x0000000000000000000000000000000000dEaD'];
+  const signersArr = signersRaw.length ? signersRaw : [REQ_DRAFT_ADDR.a];   // a draft only: see required.js
+  const treasuryProblems = reqProblems(signersRaw.map((a, i) => ({ label:'Signer '+(i+1), value:a, required:true })), true);
+  if(!signersRaw.length) treasuryProblems.push('Signers are required: enter one address per line');
+  else if(Number.isInteger(Number(threshold)) && Number(threshold) > signersRaw.length) treasuryProblems.push('The threshold ('+threshold+') is higher than the number of signers ('+signersRaw.length+')');
 
   const signersSolList = signersArr.map(a=>`        _addSigner(${a});`).join('\n');
   const T = String(threshold).trim();
@@ -1859,7 +1871,7 @@ ${streaming?`
   ]);
   code = matStamp(code, 'treasury');
   showCode('treasuryCode', name+'.sol', code);
-  pendingSource = { name, code, template: 'treasury' };
+  pendingSource = { name, code, template: 'treasury', problems: treasuryProblems };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -1872,6 +1884,7 @@ function genVault(){
   const name=(document.getElementById('vault_name').value||'ArcYieldVault').replace(/[^A-Za-z0-9]/g,'');
   const symbol=document.getElementById('vault_symbol').value||'avTKN';
   const asset=resolveToken(document.getElementById('vault_asset').value,'usdc');
+  const vaultProblems=[reqTokenProblem('Asset', document.getElementById('vault_asset').value, asset, net.label)].filter(Boolean);
   const perf=document.getElementById('vault_perf').value||'0';
   const strategy=document.getElementById('vault_strategy').value;
   const cap=document.getElementById('vault_cap').value||'0';
@@ -2060,7 +2073,7 @@ contract ${name} {
   ]);
   code = matStamp(code, 'vault');
   showCode('vaultCode', name+'.sol', code);
-  pendingSource = { name, code, template: 'vault' };
+  pendingSource = { name, code, template: 'vault', problems: vaultProblems };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -2075,6 +2088,7 @@ function genMultisend(){
   const maxRecipients=document.getElementById('ms_max').value||'200';
   const feeBps=document.getElementById('ms_fee').value||'0';
   const feeOwner=document.getElementById('ms_owner').value.trim();
+  const msProblems=reqProblems([{ label:'Fee recipient', value:feeOwner }]);
 
   let code = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
@@ -2168,7 +2182,7 @@ ${(mode==='native' || mode==='both') ? `    /// @notice Gas given to each recipi
   code = portabilize(code, []);
   code = matStamp(code, 'multisend');
   showCode('multisendCode', name+'.sol', code);
-  pendingSource = { name, code, template: 'multisend' };
+  pendingSource = { name, code, template: 'multisend', problems: msProblems };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -2180,9 +2194,15 @@ function genCrosschain(){
   if(isPortable()){ genCrosschainV2(); return; }
   const net=NETWORKS[activeNetwork];
   const name=(document.getElementById('cc_name').value||'ArcCrossPay').replace(/[^A-Za-z0-9]/g,'');
-  const tokenMessenger = document.getElementById('cc_tokenmessenger').value.trim() || net.cctp.tokenMessenger || '0x0000000000000000000000000000000000dEaD';
-  const msgTransmitter = document.getElementById('cc_msgtransmitter').value.trim() || net.cctp.messageTransmitter || '0x0000000000000000000000000000000000dEaD';
-  const usdc = document.getElementById('cc_usdc').value.trim() || net.usdc || '0x0000000000000000000000000000000000dEaD';
+  const ccField = (id, fallback) => document.getElementById(id).value.trim() || fallback || '';
+  const tokenMessenger = ccField('cc_tokenmessenger', net.cctp.tokenMessenger) || REQ_DRAFT_ADDR.a;   // a draft only: see required.js
+  const msgTransmitter = ccField('cc_msgtransmitter', net.cctp.messageTransmitter) || REQ_DRAFT_ADDR.a;
+  const usdc = ccField('cc_usdc', net.usdc) || REQ_DRAFT_ADDR.a;
+  const ccProblems = reqProblems([
+    { label:'Token Messenger', value:ccField('cc_tokenmessenger', net.cctp.tokenMessenger), required:true },
+    { label:'Message Transmitter', value:ccField('cc_msgtransmitter', net.cctp.messageTransmitter), required:true },
+    { label:'USDC', value:ccField('cc_usdc', net.usdc), required:true }
+  ]).map(p => p.replace(/ is required$/, ' is required: '+net.label+' has no default for it'));
   const mode = document.getElementById('cc_mode').value;
   const resume = document.getElementById('cc_resume').value==='yes';
 
@@ -2424,7 +2444,7 @@ contract ${name} {
   code = portabilize(code, []);
   code = matStamp(code, 'crosschain');
   showCode('crosschainCode', name+'.sol', code);
-  pendingSource = { name, code, template: 'crosschain' };
+  pendingSource = { name, code, template: 'crosschain', problems: ccProblems };
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
   renderCtorArgs();
 }
@@ -2474,6 +2494,7 @@ function isAddr(a){ return /^0x[0-9a-fA-F]{40}$/.test(String(a||'')); }
 
 function downloadSource(){
   if(!pendingSource.code){ logConsole('warn','No contract generated yet.'); return; }
+  if(reqBlockReason()){ logConsole('warn','Download blocked. '+reqBlockReason()); return; }
   const blob=new Blob([pendingSource.code], {type:'text/plain'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -2484,6 +2505,7 @@ function downloadSource(){
 
 function copySource(){
   if(!pendingSource.code){ logConsole('warn','No contract generated yet.'); return; }
+  if(reqBlockReason()){ logConsole('warn','Copy blocked. '+reqBlockReason()); return; }
   navigator.clipboard.writeText(pendingSource.code).then(()=>logConsole('ok','Source code copied to clipboard.'));
 }
 
@@ -2503,10 +2525,10 @@ function deployFromBuffer(){
 async function compileAndDeploy(){
   if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
   if(!signer){ logConsole('err','Connect your wallet first.'); return; }
-  if(NETWORKS[activeNetwork]?.isMainnet && /0x0{34,36}dEaD/i.test(pendingSource.code)){
-    logConsole('err','Mainnet deploy blocked: the contract contains the placeholder address 0x…dEaD. Replace it with a real address (signers, buyer, CCTP or token addresses) and generate again.');
-    return;
-  }
+  const draftReason = reqBlockReason();   // on every network: a draft is never compiled or deployed
+  if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return; }
+  const sameAsDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
+  if(sameAsDeployer){ logConsole('err','Deploy blocked. '+sameAsDeployer.label+' cannot be the wallet that deploys the contract. Use another address and generate again.'); return; }
   if(!(await matGate([activeNetwork], pendingSource))){ logConsole('warn','Mainnet deployment cancelled (maturity check not confirmed).'); return; }
   if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: pendingSource.facts || [], acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
 
@@ -3306,7 +3328,9 @@ function genSimpleDAO(){
   const net=NETWORKS[activeNetwork];
   const g=id=>document.getElementById(id)?.value||'';
   const name=(g('s_name')||'ArcDAO').replace(/[^A-Za-z0-9]/g,'');
-  const token  = g('s_token')||'0x0000000000000000000000000000000000000001';
+  const tokenRaw = g('s_token').trim();
+  const token  = tokenRaw || REQ_DRAFT_ADDR.a;   // a draft only: the governance token must be entered (see required.js)
+  const daoProblems = isPortable() ? reqProblems([{ label:'Governance token', value:tokenRaw }]) : reqProblems([{ label:'Governance token', value:tokenRaw, required:true }]);
   const quorum = g('s_quorum')||'4';
   const voting = g('s_voting')||'45818';
   const delay  = g('s_delay')||'172800';
@@ -3439,13 +3463,13 @@ contract ${name} {
     function proposalsLength() external view returns (uint256) { return _proposals.length; }
 }`;
   code = portabilize(code, [
-    { kind:'addr', name:'token', type:'IERC20Votes', value:token, param:'token_', hint:'static', userSet:true, argValue:g('s_token') },
+    { kind:'addr', name:'token', type:'IERC20Votes', value:token, param:'token_', hint:'static', userSet:true, argValue:tokenRaw },
     { kind:'uint', name:'VOTING_PERIOD', rhs:voting, param:'votingPeriod_', hint:'static', value:voting, userSet:true,
       note:'Voting length in blocks. Block time differs per chain, so set it for this network.' }
   ]);
   code = matStamp(code, 'dao');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code, template: 'dao'};
+  pendingSource = {name, code, template: 'dao', problems: daoProblems};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -3455,7 +3479,8 @@ function genSimpleSmartWallet(){
   const g=id=>document.getElementById(id)?.value||'';
   const name      =(g('s_name')||'ArcSmartWallet').replace(/[^A-Za-z0-9]/g,'');
   const guardian  = g('s_guardian').trim();
-  if(!/^0x[0-9a-fA-F]{40}$/.test(guardian)){ alert('Enter the guardian address (0x + 40 hex characters). The wallet needs a guardian for recovery.'); return; }
+  const guardianProblem = reqAddressProblem(guardian, { required:true, notDeployer:true });
+  if(guardianProblem){ alert('Guardian '+guardianProblem+'. The wallet needs a guardian for recovery, and it must not be the wallet that deploys it.'); return; }
   const nativeDec = net.gasDecimals||18;
   const spendlimit= g('s_spendlimit').trim()||'100';
   if(!/^\d+(\.\d+)?$/.test(spendlimit) || (spendlimit.split('.')[1]||'').length > nativeDec){
@@ -3898,7 +3923,7 @@ contract ${name} {
   ]);
   code = matStamp(code, 'smartwallet');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code, template: 'smartwallet'};
+  pendingSource = {name, code, template: 'smartwallet', notDeployer: [{ label:'Guardian', value:guardian }]};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -3909,6 +3934,7 @@ function genSimpleStaking(){
   const name   =(g('s_name')||'ArcStaking').replace(/[^A-Za-z0-9]/g,'');
   const stkTok = resolveToken(g('s_token'),'usdc');
   const rwdTok = g('s_reward')||stkTok;
+  const stakingProblems = [reqTokenProblem('Staking token', g('s_token'), stkTok, net.label), g('s_reward').trim() ? reqTokenProblem('Reward token', g('s_reward'), rwdTok, net.label) : ''].filter(Boolean);
   const apy    = g('s_apy')||'12';
   const lock   = g('s_lock')||'30';
   const exitFee= g('s_exitfee')||'100';
@@ -4058,7 +4084,7 @@ contract ${name} {
   ]);
   code = matStamp(code, 'staking');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code, template: 'staking'};
+  pendingSource = {name, code, template: 'staking', problems: stakingProblems};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }

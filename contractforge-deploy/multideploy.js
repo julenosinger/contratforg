@@ -118,7 +118,10 @@ function genCrosschainV2(){
   const code = matStamp(bridgeV2Source(name, net), 'bridge');
   pendingCtorArgs = bridgeCtorArgs({ tokenMessenger: val('cc_tokenmessenger'), messageTransmitter: val('cc_msgtransmitter'), usdc: val('cc_usdc') });
   showCode('crosschainCode', name + '.sol', code);
-  pendingSource = { name, code, template: 'bridge' };
+  const bridgeProblems = reqProblems([
+    { label:'Token Messenger', value:val('cc_tokenmessenger') }, { label:'Message Transmitter', value:val('cc_msgtransmitter') }, { label:'USDC', value:val('cc_usdc') }
+  ]);
+  pendingSource = { name, code, template: 'bridge', problems: bridgeProblems };
   document.getElementById('pendingContractLabel').value = name + '.sol  (' + net.label + ')';
   renderCtorArgs();
   if(!cctpV2(activeNetwork)) logConsole('warn', net.label + ' has no CCTP V2 deployment in this app. Enter the TokenMessenger and MessageTransmitter addresses before deploying.');
@@ -212,10 +215,10 @@ async function multiDeploy(){
   if(!signer || !account){ logConsole('err','Connect your wallet first.'); return; }
   const keys = [...mdState.selected].filter(k => NETWORKS[k]);
   if(!keys.length){ logConsole('err','Select at least one network.'); return; }
-  if(/0x0{34,36}dEaD/i.test(pendingSource.code) && keys.some(k => NETWORKS[k].isMainnet)){
-    logConsole('err','Mainnet deploy blocked: the contract contains the placeholder address 0x…dEaD. Replace it with a real address and generate again.');
-    return;
-  }
+  const draftReason = reqBlockReason();
+  if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return; }
+  const notDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
+  if(notDeployer){ logConsole('err','Deploy blocked. '+notDeployer.label+' cannot be the wallet that deploys the contract.'); return; }
 
   const mains = keys.filter(k => NETWORKS[k].isMainnet);
   const bname = pendingSource.name + 'Bridge';

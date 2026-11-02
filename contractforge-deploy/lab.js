@@ -331,6 +331,11 @@ async function labLoadContract(){
     labStatus('No contract yet', 'warn');
     return;
   }
+  if(typeof reqBlockReason === 'function' && reqBlockReason()){
+    labLog('warn', reqBlockReason());
+    labStatus('Draft: fix the required fields first', 'warn');
+    return;
+  }
   LAB.busy = true;
   labStatus('Starting the simulator…', 'busy');
   try{

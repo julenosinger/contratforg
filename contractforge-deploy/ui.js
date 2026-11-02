@@ -159,7 +159,7 @@ function renderCurrentContract(){
   if(!el) return;
   const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
   if(typeof labRenderHeader === 'function') labRenderHeader();
-  if(!has){ el.style.display = 'none'; el.innerHTML = ''; if(typeof renderHome === 'function') renderHome(); return; }
+  if(!has){ el.style.display = 'none'; el.innerHTML = ''; if(typeof reqApplyDraftState === 'function') reqApplyDraftState(); if(typeof renderHome === 'function') renderHome(); return; }
   uiSaveContract();
   if(typeof renderHome === 'function') renderHome();
   const lines = pendingSource.code.split('\n').length;
@@ -168,19 +168,26 @@ function renderCurrentContract(){
     ? '<span class="cc-chip">' + escapeHtml(MC_MODES[multichainMode].label) + '</span>' : '';
   el.style.display = 'flex';
   const matChip = (typeof matBadgeHtml === 'function') ? matBadgeHtml(pendingSource.template) : '';
+  const why = (typeof reqBlockReason === 'function') ? reqBlockReason() : '';
+  const dis = why ? ' disabled title="' + escapeHtml(why) + '"' : '';
+  const draftChip = why ? '<span class="cc-chip draft" title="' + escapeHtml(why) + '">DRAFT: ' + ((typeof reqCurrentProblems === 'function' && reqCurrentProblems().length) || 1) + ' to fix</span>' : '';
   el.innerHTML = '<div class="cc-info"><span class="cc-label">Current contract</span><b>' + escapeHtml(pendingSource.name) + '.sol</b>'
-    + matChip + '<span>' + lines + ' lines</span>' + modeChip
+    + matChip + draftChip + '<span>' + lines + ' lines</span>' + modeChip
     + (nArgs ? '<span class="cc-chip warn">' + nArgs + ' constructor argument' + (nArgs === 1 ? '' : 's') + ' to review</span>' : '')
     + '</div><div class="cc-actions">'
-    + '<button type="button" class="btn btn-ghost" onclick="ccTest()">Test</button>'
+    + '<button type="button" class="btn btn-ghost" onclick="ccTest()"' + dis + '>Test</button>'
     + '<button type="button" class="btn btn-ghost" onclick="ccAudit()">Audit</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="copySource()">Copy</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="downloadSource()">Download</button>'
+    + '<button type="button" class="btn btn-ghost" onclick="copySource()"' + dis + '>Copy</button>'
+    + '<button type="button" class="btn btn-ghost" onclick="downloadSource()"' + dis + '>Download</button>'
     + '<button type="button" class="btn btn-ghost" onclick="ccDiscard()">Discard</button>'
-    + '<button type="button" class="btn btn-primary" onclick="ccPublish()">Publish</button></div>';
+    + '<button type="button" class="btn btn-primary" onclick="ccPublish()"' + dis + '>Publish</button></div>'
+    + (why ? '<div class="cc-why" role="alert">' + escapeHtml(why) + '</div>' : '');
+  if(typeof reqApplyDraftState === 'function') reqApplyDraftState();
+  uiMarkRequired();
 }
-function ccPublish(){ deployFromBuffer(); }
+function ccPublish(){ if(typeof reqBlockReason === 'function' && reqBlockReason()) return; deployFromBuffer(); }
 function ccTest(){
+  if(typeof reqBlockReason === 'function' && reqBlockReason()) return;
   const item = document.querySelector('.nav-item[data-section="lab"]');
   if(item) item.click();
   window.scrollTo({ top:0, behavior:'smooth' });
@@ -235,6 +242,7 @@ function uiCollapseSimpleForm(){
   if(m && UI_ADV_SIMPLE[m[1]]) uiCollapseAdvanced(form, UI_ADV_SIMPLE[m[1]]);
   if(m) uiRestoreSimpleForm(m[1]);
   uiRefreshWalletUnit();
+  uiMarkRequired();
 }
 
 function initAdvancedOptions(){
@@ -429,11 +437,36 @@ const UI_RANGES = { // id -> [min, max, label]
 };
 const UI_ADDR = /^0x[0-9a-fA-F]{40}$/;
 
+/* Fields that must be filled before a contract can leave draft state: id -> templates that need it. */
+const UI_REQUIRED = { s_buyer:['escrow'], s_seller:['escrow'], s_arbiter:['escrow'], s_beneficiary:['vesting','paywall'], s_guardian:['smartwallet'], s_token:['dao'], tre_signers:['*'] };
+function uiMarkRequired(){
+  const tpl = (typeof uiCurrentSimpleTemplate === 'function') ? uiCurrentSimpleTemplate() : '';
+  Object.keys(UI_REQUIRED).forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const needs = UI_REQUIRED[id].indexOf('*') >= 0 || UI_REQUIRED[id].indexOf(tpl) >= 0;
+    const portableToken = id === 's_token' && typeof isPortable === 'function' && isPortable();
+    const on = needs && !portableToken;
+    if(on) el.setAttribute('aria-required', 'true'); else el.removeAttribute('aria-required');
+    const label = el.closest('.field') && el.closest('.field').querySelector('label');
+    if(label){
+      const star = label.querySelector('.req-star');
+      if(on && !star){ const sp = document.createElement('span'); sp.className = 'req-star'; sp.setAttribute('aria-hidden', 'true'); sp.textContent = '*'; label.appendChild(sp); }
+      if(!on && star) star.remove();
+    }
+  });
+}
+
 function uiFieldProblem(el){
   const v = (el.value || '').trim();
   if(el.id === 'tre_signers'){
-    const bad = v.split('\n').map(l => l.trim()).filter(Boolean).find(l => !UI_ADDR.test(l));
-    return bad ? 'Not an address: ' + bad.slice(0, 18) + (bad.length > 18 ? '…' : '') : '';
+    const lines = v.split('\n').map(l => l.trim()).filter(Boolean);
+    const bad = lines.find(l => !UI_ADDR.test(l));
+    if(bad) return 'Not an address: ' + bad.slice(0, 18) + (bad.length > 18 ? '…' : '');
+    if(lines.some(l => typeof REQ_PLACEHOLDER_RE !== 'undefined' && REQ_PLACEHOLDER_RE.test(l))) return 'A placeholder address is not allowed. Enter the real signers.';
+    if(lines.some(l => /^0x0{40}$/.test(l))) return 'The zero address cannot be a signer.';
+    const seen = new Set(); for(const l of lines.map(x => x.toLowerCase())){ if(seen.has(l)) return 'Each signer must be listed once.'; seen.add(l); }
+    return '';
   }
   if(!v) return '';
   const type = el.dataset ? el.dataset.type : '';
@@ -441,6 +474,8 @@ function uiFieldProblem(el){
   if(isAddrField){
     if(!UI_ADDR.test(v)) return 'Enter a valid address: 0x followed by 40 hex characters.';
     if(/^0x0{40}$/.test(v)) return el.dataset && el.dataset.allowzero ? '' : 'The zero address is not allowed.';
+    if(typeof REQ_PLACEHOLDER_RE !== 'undefined' && REQ_PLACEHOLDER_RE.test(v)) return 'That is a placeholder address. Enter a real one.';
+    if(el.id === 's_guardian' && typeof reqAddressProblem === 'function' && reqAddressProblem(v, { notDeployer:true }) === 'cannot be the wallet that deploys the contract') return 'The guardian cannot be the wallet that deploys the contract.';
     if(/[a-f]/.test(v.slice(2)) && /[A-F]/.test(v.slice(2)) && typeof ethers !== 'undefined' && ethers.utils && ethers.utils.getAddress){
       try{ ethers.utils.getAddress(v); }catch(_){ return 'Checksum does not match. Check the capitalisation.'; }
     }
