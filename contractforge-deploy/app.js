@@ -1109,8 +1109,9 @@ contract ${name} {
   }
 
   code = portabilize(code, mcSpecs);
+  code = matStamp(code, id);
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: id };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -1569,8 +1570,10 @@ contract ${name} {
     ];
   }
   const filename = multi==='factory' && kind==='amm' ? name+'Factory.sol' : name+'.sol';
+  const swapTemplate = kind==='amm' ? (multi==='factory' ? 'swap-amm-factory' : 'swap-amm-single') : 'swap-orderbook';
+  code = matStamp(code, swapTemplate);
   showCode('swapCode', filename, code);
-  pendingSource = { name: (multi==='factory' && kind==='amm')?name+'Factory':name, code };
+  pendingSource = { name: (multi==='factory' && kind==='amm')?name+'Factory':name, code, template: swapTemplate };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = filename+'  ('+net.label+')';
 }
@@ -1854,8 +1857,9 @@ ${streaming?`
   code = portabilize(code, [
     { kind:'addr', name:'gasTokenAlias', type:'address', value:gasAlias, param:'gasTokenAlias_', hint:'gasAlias', check:false, allowZero:true, userSet:false }
   ]);
+  code = matStamp(code, 'treasury');
   showCode('treasuryCode', name+'.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: 'treasury' };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -2054,8 +2058,9 @@ contract ${name} {
     { kind:'addr', name:'asset', type:'IERC20', value:asset, param:'asset_', hint:'usdc', userSet:!!document.getElementById('vault_asset').value.trim() },
     { kind:'scaled', name:'depositCap', expr:cap, tokenParam:'asset_' }
   ]);
+  code = matStamp(code, 'vault');
   showCode('vaultCode', name+'.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: 'vault' };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -2161,8 +2166,9 @@ ${(mode==='native' || mode==='both') ? `    /// @notice Gas given to each recipi
   code += `}`;
 
   code = portabilize(code, []);
+  code = matStamp(code, 'multisend');
   showCode('multisendCode', name+'.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: 'multisend' };
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
@@ -2416,8 +2422,9 @@ contract ${name} {
 }`;
 
   code = portabilize(code, []);
+  code = matStamp(code, 'crosschain');
   showCode('crosschainCode', name+'.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: 'crosschain' };
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
   renderCtorArgs();
 }
@@ -2495,7 +2502,8 @@ async function compileAndDeploy(){
     logConsole('err','Mainnet deploy blocked: the contract contains the placeholder address 0x…dEaD. Replace it with a real address (signers, buyer, CCTP or token addresses) and generate again.');
     return;
   }
-  if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
+  if(!(await matGate([activeNetwork], pendingSource))){ logConsole('warn','Mainnet deployment cancelled (maturity check not confirmed).'); return; }
+  if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: pendingSource.facts || [], acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
 
   if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
   logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
@@ -2540,7 +2548,7 @@ async function compileSource(name, code){
   const bytecode = '0x'+contracts[target].evm.bytecode.object;
 
   logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
-  return { name, target, abi, bytecode };
+  return { name, target, abi, bytecode, sourceHash: matHash(code) };
 }
 
 async function compilePending(){
@@ -2554,6 +2562,10 @@ async function compilePending(){
 
 /* Sends the deployment (constructor values already validated) on network netKey. */
 async function deployCompiled(compiled, ctorValues, netKey){
+  // Last line of defence: whatever path got here, a mainnet needs the maturity check to have been confirmed for this exact source.
+  if(NETWORKS[netKey].isMainnet && !matIsApproved(compiled.sourceHash, netKey)){
+    throw new Error('Mainnet deploy blocked: the maturity check was not confirmed for this contract on '+NETWORKS[netKey].label+'.');
+  }
   const factory = new ethers.ContractFactory(compiled.abi, compiled.bytecode, signer);
   logConsole('step','Sending deploy transaction on '+NETWORKS[netKey].label+'… confirm in your wallet.');
   const contract = await factory.deploy(...ctorValues);
@@ -3151,7 +3163,7 @@ function loadFromUrlHash(){
       renderNetBar(); updateSideNet();
     }
     if(config.name && config.code){
-      pendingSource = { name: config.name, code: config.code };
+      pendingSource = { name: config.name, code: config.code, template: 'imported' };   // never trust a template named inside a link
       pendingCtorArgs = []; renderCtorArgs();
       document.getElementById('pendingContractLabel').value = config.name+'.sol  ('+NETWORKS[activeNetwork].label+')';
       document.getElementById('auditContractLabel').value = config.name+'.sol';
@@ -3461,8 +3473,9 @@ contract ${name} {
     { kind:'uint', name:'VOTING_PERIOD', rhs:voting, param:'votingPeriod_', hint:'static', value:voting, userSet:true,
       note:'Voting length in blocks. Block time differs per chain, so set it for this network.' }
   ]);
+  code = matStamp(code, 'dao');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code};
+  pendingSource = {name, code, template: 'dao'};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -3913,8 +3926,9 @@ contract ${name} {
     { kind:'uint', name:'DAILY_LIMIT', rhs:limitWei, param:'dailyLimit_', hint:'nativeScaled', units:spendlimit, value:'',
       note:'Daily spend limit for session keys, in the native token smallest unit ('+nativeDec+' decimals here).' }
   ]);
+  code = matStamp(code, 'smartwallet');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code};
+  pendingSource = {name, code, template: 'smartwallet'};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -4072,8 +4086,9 @@ contract ${name} {
     { kind:'addr', name:'stakingToken', type:'IERC20', value:stkTok, param:'stakingToken_', hint:'usdc', userSet:!!g('s_token').trim() },
     { kind:'addr', name:'rewardToken', type:'IERC20', value:(rwdTok||stkTok), param: sameReward ? 'stakingToken_' : 'rewardToken_', hint: sameReward ? 'usdc' : 'static', userSet:!sameReward }
   ]);
+  code = matStamp(code, 'staking');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code};
+  pendingSource = {name, code, template: 'staking'};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }
@@ -4108,7 +4123,7 @@ function wizardPick(category, el){
   subs.forEach(s=>{
     const c=document.createElement('div');
     c.className='tcard'; c.style.padding='16px'; c.style.cursor='pointer';
-    c.innerHTML=`<h3 style="font-size:16px;">${s.name}</h3><p style="font-size:12px;">${s.sub}</p>`;
+    c.innerHTML=`<h3 style="font-size:16px;">${s.name}</h3>${typeof matBadgeFor==='function'?'<div class="mat-row">'+matBadgeFor(s.id==='swap'?'swap-amm-single':s.id)+'</div>':''}<p style="font-size:12px;">${s.sub}</p>`;
     c.onclick=()=>{
       document.querySelectorAll('#wp-1 .tcard').forEach(x=>x.classList.remove('selected'));
       c.classList.add('selected');
@@ -4249,7 +4264,10 @@ Respond ONLY with Solidity code — no markdown, no backticks, no explanation.`;
     document.getElementById('nl_code').textContent=code;
     document.getElementById('nl_output').style.display='block';
 
-    pendingSource={name:contractName, code};
+    code = matStamp(code, 'ai');
+    lastNLCode = code;
+    document.getElementById('nl_code').textContent = code;
+    pendingSource={name:contractName, code, template:'ai'};
     pendingCtorArgs = []; renderCtorArgs();
     document.getElementById('pendingContractLabel').value=contractName+'.sol (AI — '+NETWORKS[activeNetwork].label+')';
     document.getElementById('auditContractLabel').value=contractName+'.sol';

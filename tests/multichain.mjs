@@ -122,6 +122,13 @@ async function runMulti(mode, setup) {
   ev(`setMultichainMode('${mode}')`);
   // mainnet deployments open a summary the user must confirm by typing the network name
   w.setInterval(() => {
+    const gate = w.document.getElementById('experimentalGate');   // experimental contracts need a tick and a phrase first
+    if (gate && !gate.dataset.done && !w.__noAuto) {
+      gate.dataset.done = '1';
+      const box = w.document.getElementById('egBox'); box.checked = true; box.dispatchEvent(new w.Event('change', { bubbles: true }));
+      const inp = w.document.getElementById('egInput'); inp.value = w.MAT_PHRASE_FOR_TESTS || 'DEPLOY EXPERIMENTAL'; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+      w.document.getElementById('egOk').click();
+    }
     const input = w.document.getElementById('dcInput');
     if (!input || input.dataset.done || w.__noAuto) return;
     input.dataset.done = '1';
@@ -206,7 +213,16 @@ async function runMulti(mode, setup) {
   const { app, deployed } = await runMulti('portable', ({ ev }, fill) => { ev("renderSimpleForm('escrow')"); fill(); ev("activeNetwork='arcMain'"); ev("genSimple('escrow')"); });
   const { w, ev } = app;
   w.__noAuto = true;
+  const passGate = () => { const d = w.document; const b = d.getElementById('egBox'); b.checked = true; b.dispatchEvent(new w.Event('change', { bubbles: true })); const i = d.getElementById('egInput'); i.value = 'DEPLOY EXPERIMENTAL'; i.dispatchEvent(new w.Event('input', { bubbles: true })); d.getElementById('egOk').click(); };
+  let gated = ev('compileAndDeploy()');
+  await new Promise((r) => setTimeout(r, 20));
+  ok(!!w.document.getElementById('experimentalGate'), 'an experimental contract on a mainnet asks for the extra confirmation first');
+  w.document.getElementById('egCancel').click();
+  await gated;
+  eq(deployed.length, 0, 'cancelling the extra confirmation sends nothing');
   const run = ev('compileAndDeploy()');
+  await new Promise((r) => setTimeout(r, 20));
+  passGate();
   await new Promise((r) => setTimeout(r, 20));
   ok(!!w.document.getElementById('deployConfirm'), 'single deploy on mainnet opens the summary');
   ok(/token/.test(w.document.querySelector('#deployConfirm .dc-args').textContent), 'summary lists the constructor arguments');

@@ -115,10 +115,10 @@ function genCrosschainV2(){
   const net = NETWORKS[activeNetwork];
   const name = (document.getElementById('cc_name').value || 'ArcCrossPay').replace(/[^A-Za-z0-9]/g, '');
   const val = (id) => (document.getElementById(id)?.value || '').trim();
-  const code = bridgeV2Source(name, net);
+  const code = matStamp(bridgeV2Source(name, net), 'bridge');
   pendingCtorArgs = bridgeCtorArgs({ tokenMessenger: val('cc_tokenmessenger'), messageTransmitter: val('cc_msgtransmitter'), usdc: val('cc_usdc') });
   showCode('crosschainCode', name + '.sol', code);
-  pendingSource = { name, code };
+  pendingSource = { name, code, template: 'bridge' };
   document.getElementById('pendingContractLabel').value = name + '.sol  (' + net.label + ')';
   renderCtorArgs();
   if(!cctpV2(activeNetwork)) logConsole('warn', net.label + ' has no CCTP V2 deployment in this app. Enter the TokenMessenger and MessageTransmitter addresses before deploying.');
@@ -217,6 +217,15 @@ async function multiDeploy(){
     return;
   }
 
+  const mains = keys.filter(k => NETWORKS[k].isMainnet);
+  const bname = pendingSource.name + 'Bridge';
+  const wantBridgeEarly = multichainMode === 'cross' && mdState.includeBridge;
+  const bridgeCode = wantBridgeEarly ? matStamp(bridgeV2Source(bname, NETWORKS[activeNetwork]), 'bridge') : '';
+  if(mains.length){
+    if(!(await matGate(mains, pendingSource))){ logConsole('warn','Multi-deploy cancelled (maturity check not confirmed).'); return; }
+    if(wantBridgeEarly && !(await matGate(mains, { name: bname, code: bridgeCode, template: 'bridge' }))){ logConsole('warn','Multi-deploy cancelled (the bridge was not confirmed).'); return; }
+  }
+
   mdSetRunning(true);
   const original = activeNetwork;
   const results = [];
@@ -228,8 +237,7 @@ async function multiDeploy(){
     let bridge = null, bridgeInputs = [];
     const wantBridge = multichainMode === 'cross' && mdState.includeBridge;
     if(wantBridge){
-      const bname = pendingSource.name + 'Bridge';
-      bridge = await compileSource(bname, bridgeV2Source(bname, NETWORKS[original]));
+      bridge = await compileSource(bname, bridgeCode);
       bridgeInputs = (bridge.abi.find(x => x.type === 'constructor') || { inputs: [] }).inputs;
     }
 
@@ -238,7 +246,7 @@ async function multiDeploy(){
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
         logConsole('step','— '+net.label+' —');
-        if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
+        if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true, maturity: matDialogInfo(pendingSource.template), facts: pendingSource.facts || [], acks: pendingSource.acks || [] }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }
         const values = mdRowValues(key, mainInputs);

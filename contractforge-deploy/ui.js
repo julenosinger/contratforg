@@ -99,7 +99,7 @@ function initHome(){
       else if(!e.target.closest('#netPanel') && !e.target.closest('#netChangeBtn')) toggleNetPanel(false);
     }
   });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm') && !document.getElementById('switchConfirm') && !document.getElementById('actionConfirm')) toggleNetPanel(false); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && uiNetPanelOpen() && !document.getElementById('deployConfirm') && !document.getElementById('switchConfirm') && !document.getElementById('actionConfirm') && !document.getElementById('experimentalGate')) toggleNetPanel(false); });
   const mark = document.querySelector('.brand .mark');
   if(mark){
     mark.setAttribute('role', 'button'); mark.setAttribute('tabindex', '0'); mark.style.cursor = 'pointer';
@@ -115,7 +115,7 @@ function renderHeaderMeta(){
   if(!meta || typeof NETWORKS === 'undefined') return;
   const all = Object.values(NETWORKS);
   const main = all.filter(n => n.isMainnet).length;
-  meta.innerHTML = all.length + ' NETWORKS<br>' + main + ' MAINNET · ' + (all.length - main) + ' TESTNET<br><b id="headVersion">v3.0 — multichain</b>';
+  meta.innerHTML = all.length + ' NETWORKS<br>' + main + ' MAINNET · ' + (all.length - main) + ' TESTNET<br><b id="headVersion">v' + (typeof GENERATOR_VERSION === 'string' ? GENERATOR_VERSION : '3') + ' — multichain</b>';
   if(typeof activeNetwork !== 'undefined' && NETWORKS[activeNetwork] && NETWORKS[activeNetwork].isMainnet) meta.style.color = '#C9A24B';
 }
 
@@ -167,8 +167,9 @@ function renderCurrentContract(){
   const modeChip = (typeof multichainMode !== 'undefined' && multichainMode !== 'single' && typeof MC_MODES !== 'undefined')
     ? '<span class="cc-chip">' + escapeHtml(MC_MODES[multichainMode].label) + '</span>' : '';
   el.style.display = 'flex';
+  const matChip = (typeof matBadgeHtml === 'function') ? matBadgeHtml(pendingSource.template) : '';
   el.innerHTML = '<div class="cc-info"><span class="cc-label">Current contract</span><b>' + escapeHtml(pendingSource.name) + '.sol</b>'
-    + '<span>' + lines + ' lines</span>' + modeChip
+    + matChip + '<span>' + lines + ' lines</span>' + modeChip
     + (nArgs ? '<span class="cc-chip warn">' + nArgs + ' constructor argument' + (nArgs === 1 ? '' : 's') + ' to review</span>' : '')
     + '</div><div class="cc-actions">'
     + '<button type="button" class="btn btn-ghost" onclick="ccTest()">Test</button>'
@@ -246,6 +247,57 @@ function initAdvancedOptions(){
 }
 
 /* ---- Mainnet deployment summary (replaces the browser confirm box) ---- */
+function uiMaturityBanner(m){
+  if(!m) return '';
+  const link = m.docUrl ? ' <a href="' + escapeHtml(m.docUrl) + '" target="_blank" rel="noopener noreferrer">Read the review</a>' : '';
+  if(m.level === 'audited') return '<div class="dc-banner dc-audited" role="note"><b>\u2713 Independently audited.</b>' + link + '</div>';
+  if(m.level === 'reviewed') return '<div class="dc-banner dc-reviewed" role="note"><b>\u25D0 Reviewed internally, NOT audited by a third party.</b>' + link + '</div>';
+  return '<div class="dc-banner dc-experimental" role="note"><b>\u26A0 Experimental.</b> You confirmed the risk in the previous step.</div>';
+}
+
+/* The extra step for an experimental contract on a mainnet: a box to tick and a phrase to type. */
+function uiExperimentalGate(opts){
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const phrase = (typeof MAT_PHRASE === 'string') ? MAT_PHRASE : 'DEPLOY EXPERIMENTAL';
+    const root = document.createElement('div');
+    root.className = 'dc-backdrop'; root.id = 'experimentalGate';
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'egTitle');
+    root.innerHTML = '<div class="dc-box">'
+      + '<div class="dc-head"><span class="dc-tag">EXPERIMENTAL</span><h3 id="egTitle">Not ready for a mainnet</h3></div>'
+      + '<p class="dc-warn">' + escapeHtml(opts.name) + ' has not been reviewed or audited to the standard needed for real funds.</p>'
+      + '<div class="dc-rows">'
+      + '<div class="dc-row"><span>Why</span><b>' + escapeHtml(opts.info.reason) + '</b></div>'
+      + '<div class="dc-row"><span>Network' + (opts.nets.length === 1 ? '' : 's') + '</span><b>' + escapeHtml(opts.nets.join(', ')) + '</b></div>'
+      + '</div>'
+      + '<label class="dc-ack"><input type="checkbox" id="egBox" /> I understand this contract has not been reviewed or audited and I can lose funds</label>'
+      + '<label class="dc-type" for="egInput">Type <b>' + escapeHtml(phrase) + '</b> to continue</label>'
+      + '<input id="egInput" autocomplete="off" spellcheck="false" />'
+      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="egCancel">Cancel</button>'
+      + '<button type="button" class="btn btn-primary" id="egOk" disabled>Continue</button></div></div>';
+    document.body.appendChild(root);
+    const box = root.querySelector('#egBox'), input = root.querySelector('#egInput'), ok = root.querySelector('#egOk'), cancel = root.querySelector('#egCancel');
+    const ready = () => box.checked && input.value.trim() === phrase;
+    const finish = (v) => { document.removeEventListener('keydown', onKey, true); root.remove(); if(prev && prev.focus) prev.focus(); resolve(v); };
+    const onKey = (e) => {
+      if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
+      else if(e.key === 'Enter' && e.target === input && ready()){ e.preventDefault(); finish(true); }
+      else if(e.key === 'Tab'){
+        const f = [box, input, cancel, ok].filter(x => !x.disabled);
+        const i = f.indexOf(document.activeElement);
+        if(e.shiftKey && i <= 0){ e.preventDefault(); f[f.length - 1].focus(); }
+        else if(!e.shiftKey && i === f.length - 1){ e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    const refresh = () => { ok.disabled = !ready(); };
+    box.addEventListener('change', refresh); input.addEventListener('input', refresh);
+    ok.addEventListener('click', () => { if(ready()) finish(true); });
+    cancel.addEventListener('click', () => finish(false));
+    cancel.focus();   // the safe choice is the default
+  });
+}
+
 function uiConfirmMainnet(net, details){
   return new Promise((resolve) => {
     const prev = document.activeElement;
@@ -257,6 +309,7 @@ function uiConfirmMainnet(net, details){
       ['Contract', src ? escapeHtml(src.name) + '.sol <span class="dc-dim">(' + src.code.split('\n').length + ' lines)</span>' : '<span class="dc-dim">none</span>'],
       ['Gas paid in', 'real ' + escapeHtml(net.gasSymbol)]
     ];
+    (details && details.facts || []).forEach(f => rows.push([escapeHtml(f[0]), '<b>' + escapeHtml(f[1]) + '</b>']));
     const args = (details && details.args) || [];
     const argHtml = args.length
       ? '<div class="dc-args"><div class="dc-sub">Constructor arguments</div>' + args.map(a => '<div class="dc-arg"><span>' + escapeHtml(a.label) + '</span><code>' + escapeHtml(a.value || '(empty)') + '</code></div>').join('') + '</div>'
@@ -267,9 +320,11 @@ function uiConfirmMainnet(net, details){
     root.innerHTML = '<div class="dc-box">'
       + '<div class="dc-head"><span class="dc-tag">MAINNET</span><h3 id="dcTitle">Confirm deployment</h3></div>'
       + '<p class="dc-warn">This uses real funds and cannot be undone.</p>'
+      + uiMaturityBanner(details && details.maturity)
       + '<div class="dc-rows">' + rows.map(r => '<div class="dc-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('') + '</div>'
       + argHtml
       + '<ul class="dc-check"><li>The source was reviewed or audited</li><li>It was tested on a testnet first</li><li>Every address above is correct for this network</li></ul>'
+      + (details && details.acks || []).map((t, i) => '<label class="dc-ack"><input type="checkbox" class="dc-ackbox" id="dcAck' + i + '" /> ' + escapeHtml(t) + '</label>').join('')
       + '<label class="dc-type" for="dcInput">Type <b>' + escapeHtml(net.label) + '</b> to confirm</label>'
       + '<input id="dcInput" autocomplete="off" spellcheck="false" />'
       + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="dcCancel">Cancel</button>'
@@ -278,7 +333,8 @@ function uiConfirmMainnet(net, details){
     document.body.appendChild(root);
     const input = root.querySelector('#dcInput'), ok = root.querySelector('#dcConfirm'), cancel = root.querySelector('#dcCancel');
     const finish = (v) => { document.removeEventListener('keydown', onKey, true); root.remove(); if(prev && prev.focus) prev.focus(); resolve(v); };
-    const matches = () => input.value.trim().toLowerCase() === String(net.label).toLowerCase();
+    const matches = () => input.value.trim().toLowerCase() === String(net.label).toLowerCase() && [...root.querySelectorAll('.dc-ackbox')].every(b => b.checked);
+    root.querySelectorAll('.dc-ackbox').forEach(b => b.addEventListener('change', () => { ok.disabled = !matches(); }));
     const onKey = (e) => {
       if(e.key === 'Escape'){ e.preventDefault(); finish(false); }
       else if(e.key === 'Enter' && e.target === input && matches()){ e.preventDefault(); finish(true); }
@@ -489,7 +545,7 @@ function uiStoreWrite(o){ try{ localStorage.setItem(UI_STORE, JSON.stringify(o))
 function uiSaveContract(){
   if(typeof pendingSource === 'undefined' || !pendingSource || !pendingSource.code) return;
   const o = uiStoreRead();
-  o.contract = { name: pendingSource.name, code: pendingSource.code, args: (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs : [], savedAt: Date.now() };
+  o.contract = { name: pendingSource.name, code: pendingSource.code, template: pendingSource.template || '', problems: pendingSource.problems || [], facts: pendingSource.facts || [], args: (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs : [], savedAt: Date.now() };
   uiStoreWrite(o);
 }
 
@@ -541,7 +597,10 @@ function uiRestoreSession(){
   Object.entries(o.forms || {}).filter(([k]) => !k.startsWith('s:')).forEach(([k, v]) => uiSetFieldValue(document.getElementById(k), v));
   const c = o.contract;
   if(c && typeof c.name === 'string' && typeof c.code === 'string' && c.code && typeof pendingSource !== 'undefined' && !pendingSource.code){
-    pendingSource = { name: c.name, code: c.code };
+    const known = typeof c.template === 'string' && typeof MATURITY !== 'undefined' && Object.prototype.hasOwnProperty.call(MATURITY, c.template);
+    pendingSource = { name: c.name, code: c.code, template: known ? c.template : 'imported' };   // an unknown template is treated as experimental
+    if(Array.isArray(c.problems) && c.problems.length) pendingSource.problems = c.problems.filter(x => typeof x === 'string');
+    if(Array.isArray(c.facts)) pendingSource.facts = c.facts.filter(x => Array.isArray(x) && x.length === 2);
     pendingCtorArgs = Array.isArray(c.args) ? c.args : [];
     const label = document.getElementById('pendingContractLabel');
     if(label) label.value = c.name + '.sol  (' + NETWORKS[activeNetwork].label + ')';

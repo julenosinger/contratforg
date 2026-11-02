@@ -813,3 +813,22 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .lab-table td{padding:5px 8px;text-align:right;font-family:var(--mono);color:#C9D3CE;border-bottom:1px solid #141C19;}
 .lab-table tr.lab-acting td{background:#101C18;}
 .light .lab-card{background:#F8F5EC;border-color:#D0C9B8;}
+
+/* ---- Maturity badges and the mainnet gate ---- */
+.mat-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:2px 9px;border-radius:999px;border:1px solid;white-space:nowrap;}
+.mat-small{font-size:9.5px;padding:1px 8px;}
+.mat-experimental{color:#FFB9A0;border-color:#B8452A;background:#2A1008;}
+.mat-reviewed{color:#E9D28A;border-color:#8A7424;background:#221C06;}
+.mat-audited{color:#9BE0B8;border-color:#2F8F5B;background:#08221A;}
+.mat-row{margin:-2px 0 8px;}
+.mat-slot{margin-left:12px;display:inline-flex;vertical-align:middle;}
+.dc-banner{border:1px solid;border-radius:var(--radius);padding:8px 12px;margin:0 0 12px;font-size:12px;line-height:1.5;}
+.dc-banner a{color:inherit;text-decoration:underline;}
+.dc-reviewed{color:#E9D28A;border-color:#8A7424;background:#221C06;}
+.dc-experimental{color:#FFB9A0;border-color:#B8452A;background:#2A1008;}
+.dc-audited{color:#9BE0B8;border-color:#2F8F5B;background:#08221A;}
+.dc-ack{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;font-size:12px;color:#C9D3CE;line-height:1.5;}
+.dc-ack input{margin-top:3px;}
+.light .mat-experimental{color:#8A2A10;background:#FBE3DA;}
+.light .mat-reviewed{color:#6B5A10;background:#F7EFC6;}
+.light .mat-audited{color:#14603A;background:#D8F0E2;}
