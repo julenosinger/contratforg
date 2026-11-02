@@ -55,5 +55,13 @@ set('ms_mode', 'both'); ev('genMultisend()'); save('Multisend');
     console.log('single/' + file);
   };
   dump('Wallet');
-  dump('WalletZeroGuardian', () => a2.set('s_guardian', '0x0000000000000000000000000000000000000000'));
+  // The generator now refuses a zero guardian, so this variant is made from the valid source: it exists only to
+  // prove that the contract's own constructor also rejects a zero guardian.
+  {
+    const src = fs.readFileSync(path.join(single, 'Wallet.sol'), 'utf8');
+    const zero = src.replace(/(address public guardian\s*=\s*)0x[0-9a-fA-F]{40}(\s*;)/, '$10x0000000000000000000000000000000000000000$2');
+    if (zero === src) throw new Error('could not build the zero-guardian variant');
+    fs.writeFileSync(path.join(single, 'WalletZeroGuardian.sol'), zero.replace(/\bArcSmartWallet\b/g, 'ArcSmartWallet'));
+    console.log('single/WalletZeroGuardian');
+  }
 }

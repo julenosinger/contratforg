@@ -5,10 +5,20 @@
 
 /* Always-visible banner so the user knows which network (and what kind of funds) they are on. */
 /* The smart wallet's daily limit is typed in whole units of the network's gas token. */
+/* The wallet's daily limit follows the network: the default and the unit both come from NETWORKS, and a value the user
+   typed is kept (the unit next to it still names the gas token of the selected network). */
 function uiRefreshWalletUnit(){
+  if(typeof NETWORKS === 'undefined' || !NETWORKS[activeNetwork]) return;
+  const net = NETWORKS[activeNetwork];
   const el = document.getElementById('s_limit_unit');
-  if(el && typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) el.textContent = NETWORKS[activeNetwork].gasSymbol + ', the network\'s gas token';
+  if(el) el.textContent = net.gasSymbol + ', the gas token of ' + net.label;
+  const input = document.getElementById('s_spendlimit');
+  if(input){
+    if(input.dataset.touched !== '1') input.value = net.walletDailyDefault;
+    input.setAttribute('placeholder', 'e.g. ' + net.walletDailyDefault);
+  }
 }
+document.addEventListener('input', e => { if(e.target && e.target.id === 's_spendlimit') e.target.dataset.touched = '1'; });
 
 function renderNetBanner(){
   const el = document.getElementById('netBanner');
@@ -592,7 +602,7 @@ function uiCurrentSimpleTemplate(){
 }
 
 function uiFormKey(el){
-  if(!el || !el.id || el.type === 'password' || /key|secret|pass/i.test(el.id)) return '';
+  if(!el || !el.id || el.type === 'password' || /key|secret|pass/i.test(el.id) || el.id === 's_spendlimit') return '';   // the daily limit always starts from the selected network's default
   if(UI_FORM_PREFIX.test(el.id) && !el.closest('#simpleForm')) return el.id;
   if(el.closest('#simpleForm')){ const t = uiCurrentSimpleTemplate(); return t ? 's:' + t + ':' + el.id : ''; }
   return '';
@@ -624,7 +634,7 @@ function uiRestoreSimpleForm(tpl){
   uiRestoredTemplates[tpl] = true;
   const forms = uiStoreRead().forms || {};
   const prefix = 's:' + tpl + ':';
-  Object.keys(forms).filter(k => k.startsWith(prefix)).forEach(k => uiSetFieldValue(document.getElementById('simpleForm').querySelector('#' + k.slice(prefix.length)), forms[k]));
+  Object.keys(forms).filter(k => k.startsWith(prefix) && !k.endsWith(':s_spendlimit')).forEach(k => uiSetFieldValue(document.getElementById('simpleForm').querySelector('#' + k.slice(prefix.length)), forms[k]));
 }
 
 function uiRestoreSession(){

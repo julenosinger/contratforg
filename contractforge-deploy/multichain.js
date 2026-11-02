@@ -57,7 +57,7 @@ function hintValue(arg, netKey){
     case 'tokenMessenger': return cctpV2(netKey)?.tokenMessenger || '';
     case 'messageTransmitter': return cctpV2(netKey)?.messageTransmitter || '';
     case 'gasAlias': return (n.gasSymbol === 'USDC' && n.usdc) ? n.usdc : ZERO_ADDRESS; // ERC-20 address of the same money as the gas token, or none
-    case 'nativeScaled': return scaleUnits(arg.units, n.gasDecimals || 18);
+    case 'nativeScaled': return scaleUnits(arg.perNetworkDefault && n.walletDailyDefault ? n.walletDailyDefault : arg.units, n.gasDecimals || 18);   // untouched = each network's own default
     default: return arg.value || '';
   }
 }
@@ -118,7 +118,7 @@ function portabilize(code, specs){
       code = code.replace(re, (m, ind) => `${ind}uint256 public ${sp.name};`);
       addParam(sp.param, 'uint256');
       assigns.push(`${sp.name} = ${sp.param};`);
-      args.push({ param: sp.param, type:'uint256', hint: sp.hint || 'static', value: sp.value, units: sp.units, userSet: !!sp.userSet, genNetwork: activeNetwork, note: sp.note });
+      args.push({ param: sp.param, type:'uint256', hint: sp.hint || 'static', value: sp.value, units: sp.units, perNetworkDefault: !!sp.perNetworkDefault, userSet: !!sp.userSet, genNetwork: activeNetwork, note: sp.note });
     } else {
       throw new Error('portabilize: unknown spec kind');
     }

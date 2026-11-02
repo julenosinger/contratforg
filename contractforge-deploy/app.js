@@ -8,7 +8,7 @@ const NETWORKS = {
   ethereum: {
     label:'Ethereum', chainIdHex:'0x1', chainIdDec:1, isMainnet:true,
     rpc:'https://eth.llamarpc.com', explorer:'https://etherscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     eurc:'0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c',
     usdcDecimals:6,
@@ -18,7 +18,7 @@ const NETWORKS = {
   polygon: {
     label:'Polygon', chainIdHex:'0x89', chainIdDec:137, isMainnet:true,
     rpc:'https://polygon.llamarpc.com', explorer:'https://polygonscan.com',
-    gasSymbol:'POL', gasDecimals:18,
+    gasSymbol:'POL', gasDecimals:18, walletDailyDefault:'100',
     usdc:'0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
     eurc:'',
     usdcDecimals:6,
@@ -28,7 +28,7 @@ const NETWORKS = {
   base: {
     label:'Base', chainIdHex:'0x2105', chainIdDec:8453, isMainnet:true,
     rpc:'https://mainnet.base.org', explorer:'https://basescan.org',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     eurc:'0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42',
     usdcDecimals:6,
@@ -38,7 +38,7 @@ const NETWORKS = {
   arbitrum: {
     label:'Arbitrum One', chainIdHex:'0xa4b1', chainIdDec:42161, isMainnet:true,
     rpc:'https://arb1.arbitrum.io/rpc', explorer:'https://arbiscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
     eurc:'',
     usdcDecimals:6,
@@ -48,7 +48,7 @@ const NETWORKS = {
   optimism: {
     label:'Optimism', chainIdHex:'0xa', chainIdDec:10, isMainnet:true,
     rpc:'https://mainnet.optimism.io', explorer:'https://optimistic.etherscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
     eurc:'',
     usdcDecimals:6,
@@ -58,7 +58,7 @@ const NETWORKS = {
   avalanche: {
     label:'Avalanche C-Chain', chainIdHex:'0xa86a', chainIdDec:43114, isMainnet:true,
     rpc:'https://api.avax.network/ext/bc/C/rpc', explorer:'https://snowtrace.io',
-    gasSymbol:'AVAX', gasDecimals:18,
+    gasSymbol:'AVAX', gasDecimals:18, walletDailyDefault:'2',
     usdc:'0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
     eurc:'',
     usdcDecimals:6,
@@ -68,7 +68,7 @@ const NETWORKS = {
   bnb: {
     label:'BNB Chain', chainIdHex:'0x38', chainIdDec:56, isMainnet:true,
     rpc:'https://bsc-dataseed.binance.org', explorer:'https://bscscan.com',
-    gasSymbol:'BNB', gasDecimals:18,
+    gasSymbol:'BNB', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
     eurc:'',
     usdcDecimals:18,
@@ -78,7 +78,7 @@ const NETWORKS = {
   robinhoodMain: {
     label:'Robinhood Chain', chainIdHex:'0xB61F', chainIdDec:46623, isMainnet:true,
     rpc:'https://rpc.chain.robinhood.com', explorer:'https://explorer.chain.robinhood.com',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'', eurc:'', usdcDecimals:6,
     cctp:{ tokenMessenger:'', messageTransmitter:'' },
     explorerApi:'',
@@ -86,7 +86,7 @@ const NETWORKS = {
   arcMain: {
     label:'Arc Mainnet', chainIdHex:'0x13b2', chainIdDec:5042, isMainnet:true,
     rpc:'https://rpc.mainnet.arc.io', explorer:'https://explorer.arc.io',
-    gasSymbol:'USDC', gasDecimals:18,
+    gasSymbol:'USDC', gasDecimals:18, walletDailyDefault:'100',
     usdc:'0x3600000000000000000000000000000000000000',
     eurc:'0xbEf5f6d51CB62b58e6A8f77868681825C6fe21c1',
     usdcDecimals:6,
@@ -98,7 +98,7 @@ const NETWORKS = {
   arc: {
     label:'Arc Testnet', chainIdHex:'0x4cef52', chainIdDec:5042002, isMainnet:false,
     rpc:'https://rpc.testnet.arc.io', explorer:'https://explorer.testnet.arc.io',
-    gasSymbol:'USDC', gasDecimals:18,
+    gasSymbol:'USDC', gasDecimals:18, walletDailyDefault:'100',
     usdc:'0x3600000000000000000000000000000000000000',
     eurc:'0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
     usdcDecimals:6,
@@ -108,7 +108,7 @@ const NETWORKS = {
   robinhood: {
     label:'Robinhood Testnet', chainIdHex:'0xB626', chainIdDec:46630, isMainnet:false,
     rpc:'https://rpc.testnet.chain.robinhood.com', explorer:'https://explorer.testnet.chain.robinhood.com',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'', eurc:'', usdcDecimals:6,
     cctp:{ tokenMessenger:'', messageTransmitter:'' },
     explorerApi:'',
@@ -116,7 +116,7 @@ const NETWORKS = {
   sepolia: {
     label:'Ethereum Sepolia', chainIdHex:'0xaa36a7', chainIdDec:11155111, isMainnet:false,
     rpc:'https://rpc.sepolia.org', explorer:'https://sepolia.etherscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     eurc:'0x08210F9170F89Ab7658F0B5E3fF39b0E03C594D4',
     usdcDecimals:6,
@@ -126,7 +126,7 @@ const NETWORKS = {
   amoy: {
     label:'Polygon Amoy', chainIdHex:'0x13882', chainIdDec:80002, isMainnet:false,
     rpc:'https://rpc-amoy.polygon.technology', explorer:'https://amoy.polygonscan.com',
-    gasSymbol:'POL', gasDecimals:18,
+    gasSymbol:'POL', gasDecimals:18, walletDailyDefault:'100',
     usdc:'0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', eurc:'',
     usdcDecimals:6,
     cctp:{ tokenMessenger:'0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', messageTransmitter:'0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' },
@@ -135,7 +135,7 @@ const NETWORKS = {
   basesep: {
     label:'Base Sepolia', chainIdHex:'0x14a34', chainIdDec:84532, isMainnet:false,
     rpc:'https://sepolia.base.org', explorer:'https://sepolia.basescan.org',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x036CbD53842c5426634e7929541eC2318f3dCF7e', eurc:'',
     usdcDecimals:6,
     cctp:{ tokenMessenger:'0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', messageTransmitter:'0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' },
@@ -144,7 +144,7 @@ const NETWORKS = {
   arbsep: {
     label:'Arbitrum Sepolia', chainIdHex:'0x66eee', chainIdDec:421614, isMainnet:false,
     rpc:'https://sepolia-rollup.arbitrum.io/rpc', explorer:'https://sepolia.arbiscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', eurc:'',
     usdcDecimals:6,
     cctp:{ tokenMessenger:'0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', messageTransmitter:'0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' },
@@ -153,7 +153,7 @@ const NETWORKS = {
   opsep: {
     label:'Optimism Sepolia', chainIdHex:'0xaa37dc', chainIdDec:11155420, isMainnet:false,
     rpc:'https://sepolia.optimism.io', explorer:'https://sepolia-optimism.etherscan.io',
-    gasSymbol:'ETH', gasDecimals:18,
+    gasSymbol:'ETH', gasDecimals:18, walletDailyDefault:'0.1',
     usdc:'0x5fd84259d66Cd46123540766Be93DFE6D43130D7', eurc:'',
     usdcDecimals:6,
     cctp:{ tokenMessenger:'0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5', messageTransmitter:'0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' },
@@ -628,7 +628,7 @@ function renderSimpleForm(id){
         <div class="field"><label>Guardian (recovery address)</label><input id="s_guardian" placeholder="0x..."/></div>
         <div class="field"><label>Longest session key validity (hours, max 720)</label><input id="s_session" type="number" min="1" max="720" step="1" value="24"/></div>
         <div class="field"><label>Recovery delay (days, 1 to 30)</label><input id="s_rdelay" type="number" min="1" max="30" step="1" value="2"/></div>
-        <div class="field"><label>Daily spend limit for session keys (<span id="s_limit_unit">USDC</span>)</label><input id="s_spendlimit" type="number" min="0" step="any" value="100" placeholder="e.g. 100"/></div>
+        <div class="field"><label>Daily spend limit for session keys (<span id="s_limit_unit">${net.gasSymbol}</span>)</label><input id="s_spendlimit" type="number" min="0" step="any" value="${net.walletDailyDefault}" placeholder="e.g. ${net.walletDailyDefault}"/></div>
       </div>
       <div class="btnrow">
         <button class="btn btn-primary" onclick="genSimple('smartwallet')">Generate contract</button>
@@ -3482,7 +3482,8 @@ function genSimpleSmartWallet(){
   const guardianProblem = reqAddressProblem(guardian, { required:true, notDeployer:true });
   if(guardianProblem){ alert('Guardian '+guardianProblem+'. The wallet needs a guardian for recovery, and it must not be the wallet that deploys it.'); return; }
   const nativeDec = net.gasDecimals||18;
-  const spendlimit= g('s_spendlimit').trim()||'100';
+  const spendlimit= g('s_spendlimit').trim()||net.walletDailyDefault;
+  const limitIsDefault = spendlimit === net.walletDailyDefault;
   if(!/^\d+(\.\d+)?$/.test(spendlimit) || (spendlimit.split('.')[1]||'').length > nativeDec){
     alert('The daily limit must be a plain number with at most '+nativeDec+' decimals (it is counted in '+net.gasSymbol+').'); return;
   }
@@ -3918,12 +3919,14 @@ contract ${name} {
 }
 `;
   code = portabilize(code, [
-    { kind:'uint', name:'DAILY_LIMIT', rhs:limitWei, param:'dailyLimit_', hint:'nativeScaled', units:spendlimit, value:'',
+    { kind:'uint', name:'DAILY_LIMIT', rhs:limitWei, param:'dailyLimit_', hint:'nativeScaled', units:spendlimit, perNetworkDefault:limitIsDefault, value:'',
       note:'Daily spend limit for session keys, in the native token smallest unit ('+nativeDec+' decimals here).' }
   ]);
   code = matStamp(code, 'smartwallet');
   showCode('simpleCode', name+'.sol', code);
-  pendingSource = {name, code, template: 'smartwallet', notDeployer: [{ label:'Guardian', value:guardian }]};
+  pendingSource = {name, code, template: 'smartwallet', notDeployer: [{ label:'Guardian', value:guardian }],
+    facts: [['Session-key daily limit', isPortable() ? spendlimit+' (gas token of each network)' : spendlimit+' '+net.gasSymbol]],
+    acks: ['I checked the daily limit for session keys shown above']};
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+NETWORKS[activeNetwork].label+')';
 }

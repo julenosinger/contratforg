@@ -19,7 +19,7 @@ pragma solidity 0.8.24;
 ///    Anything an allowlisted contract does for its callers is within reach of the key, so only allowlist
 ///    contracts you trust.
 ///
-///  DAILY LIMIT: 100 ETH (native currency, 18 decimals), shared by all session keys.
+///  DAILY LIMIT: 0.1 ETH (native currency, 18 decimals), shared by all session keys.
 ///  It works like a bucket that refills evenly over 24 hours: a key can spend the whole limit at once, then
 ///  only what has refilled since. This avoids a double spend around midnight. The owner is not limited.
 ///  On Arc the native currency is USDC with 18 decimals, so the limit is in 18-decimal units.
@@ -58,7 +58,7 @@ contract ArcSmartWallet {
     address public guardian = 0x0634688461104186381004477438910770978768;
 
     /// @notice Native-currency limit for session keys, per 24 hours (smallest unit of the native token).
-    uint256 public constant DAILY_LIMIT = 100000000000000000000;
+    uint256 public constant DAILY_LIMIT = 100000000000000000;
     /// @notice The longest a session key may stay valid, fixed when this wallet is generated (never more than 30 days).
     uint256 public constant MAX_SESSION_DURATION = 24 hours;
     uint256 public constant MAX_SESSION_TARGETS = 16;
