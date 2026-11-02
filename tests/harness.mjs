@@ -76,6 +76,9 @@ export function* generateAll(app, net) {
   };
   for (const id of SIMPLE) yield run(`simple-${id}`, () => { ev(`renderSimpleForm('${id}');`); fillAddresses(app, net); ev(`genSimple('${id}');`); });
   for (const fn of ADVANCED) yield run(fn, () => { fillAddresses(app, net); ev(`${fn}();`); });
+  for (const m of ['native', 'both']) {   // the default (tokens only) is covered above
+    yield run(`genMultisend-${m}`, () => { fillAddresses(app, net); set('ms_mode', m); ev('genMultisend();'); set('ms_mode', 'erc20'); });
+  }
   for (const [kind, multi] of SWAP_VARIANTS) {
     yield run(`swap-${kind}-${multi}`, () => { set('swap_kind', kind); set('swap_multi', multi); fillAddresses(app, net); ev('genSwap();'); });
   }

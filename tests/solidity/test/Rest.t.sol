@@ -8,6 +8,7 @@ import "../src/portable/Nft.sol" as NftSrc;
 import "../src/portable/Multisend.sol" as MultiSrc;
 
 interface Vm {
+    function deal(address, uint256) external;
     function prank(address) external;
     function warp(uint256) external;
     function expectRevert(bytes calldata) external;
@@ -36,6 +37,13 @@ contract BlockTok is Tok {
     function setBlocked(address a) external { blocked = a; }
     function transferFrom(address f,address t,uint a) external override returns(bool){ require(t != blocked, "blocked"); allowance[f][msg.sender]-=a; balanceOf[f]-=a; balanceOf[t]+=a; return true; }
 }
+/// a recipient that tries to re-enter the batch while it is being paid
+contract Reenter { MultiSrc.ArcMultiSend m; uint public got; bool done;
+    constructor(MultiSrc.ArcMultiSend _m) payable { m = _m; }
+    receive() external payable { got += msg.value; if (!done) { done = true; address[] memory r = new address[](1); uint[] memory a = new uint[](1); r[0] = address(this); a[0] = 1; m.multiSendNative{value: 1}(r, a); } } }
+contract GasBurner { fallback() external payable { uint i; while (true) { i++; } } }
+contract ReturnBomb { fallback() external payable { assembly { return(0, 200000) } } }
+contract Wallet { uint public n; receive() external payable { n += 1; } }
 contract Receiver { function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) { return 0x150b7a02; } }
 contract NotReceiver { }
 
@@ -209,6 +217,49 @@ contract RestTest {
         vm.prank(alice); m.multiSendToken(address(t), r, a);
         require(t.balanceOf(address(m)) == 777e6, "balances already in the contract are never used");
         require(t.balanceOf(r[0]) == 9e6, "recipients simply receive what the token delivers");
+    }
+    function testMultisendTokenMustBeAContract() public {
+        MultiSrc.ArcMultiSend m = new MultiSrc.ArcMultiSend();
+        (address[] memory r, uint[] memory a) = _batch(1, 5);
+        vm.prank(alice); vm.expectRevert(bytes("token is not a contract")); m.multiSendToken(address(0x1234), r, a);
+        vm.prank(alice); vm.expectRevert(bytes("token is not a contract")); m.multiSendToken(address(0), r, a);
+    }
+    function _one(address r, uint v) internal pure returns (address[] memory rs, uint[] memory as_) { rs = new address[](1); as_ = new uint[](1); rs[0] = r; as_[0] = v; }
+    function testMultisendNativePaysWalletsAndRefundsChange() public {
+        MultiSrc.ArcMultiSend m = new MultiSrc.ArcMultiSend();
+        Wallet w = new Wallet(); address eoa = address(0xE0A);
+        address[] memory r = new address[](2); uint[] memory a = new uint[](2);
+        r[0] = address(w); r[1] = eoa; a[0] = 3 ether; a[1] = 2 ether;
+        vm.deal(alice, 10 ether);
+        vm.prank(alice); m.multiSendNative{value: 7 ether}(r, a);
+        require(address(w).balance == 3 ether && eoa.balance == 2 ether, "recipients paid");
+        require(w.n() == 1, "a contract wallet's receive() ran");
+        require(alice.balance == 5 ether, "the 2 ether of change came back");
+        require(address(m).balance == 0, "nothing stays in the contract");
+        vm.prank(alice); vm.expectRevert(bytes("insufficient value sent")); m.multiSendNative{value: 4 ether}(r, a);
+    }
+    function testMultisendNativeReentrancyAndBombs() public {
+        MultiSrc.ArcMultiSend m = new MultiSrc.ArcMultiSend();
+        vm.deal(alice, 1000);
+        Reenter e = new Reenter(m); vm.deal(address(e), 10);
+        (address[] memory r, uint[] memory a) = _one(address(e), 100);
+        vm.prank(alice); m.multiSendNative{value: 150}(r, a);
+        require(address(m).balance == 0 && alice.balance == 900, "re-entering cannot take anything from the batch");
+        require(address(e).balance == 10 - 1 + 100 + 1, "the attacker only received its own payment and its own value back");
+        ReturnBomb b = new ReturnBomb();
+        (address[] memory r2, uint[] memory a2) = _one(address(b), 1);
+        uint g0 = gasleft(); vm.prank(alice); m.multiSendNative{value: 1}(r2, a2);
+        require(g0 - gasleft() < 400000, "a huge return value does not blow up the gas");
+    }
+    function testMultisendNativeGasBurnerIsBounded() public {
+        MultiSrc.ArcMultiSend m = new MultiSrc.ArcMultiSend();
+        vm.deal(alice, 1000);
+        GasBurner g = new GasBurner();
+        (address[] memory r, uint[] memory a) = _one(address(g), 1);
+        uint g0 = gasleft();
+        vm.prank(alice); try m.multiSendNative{value: 1}(r, a) { revert("should not pass"); } catch { }
+        require(g0 - gasleft() < 400000, "only the capped gas is spent, not the whole transaction");
+        require(m.NATIVE_TRANSFER_GAS() == 200000, "the cap is public");
     }
     function testMultisendNoReturnTokenAndBlockedRecipient() public {
         NoRetTok n = new NoRetTok(); MultiSrc.ArcMultiSend m = new MultiSrc.ArcMultiSend();

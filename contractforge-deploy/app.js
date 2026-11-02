@@ -2086,7 +2086,10 @@ contract ${name} {
     uint256 public constant MAX_RECIPIENTS = ${maxRecipients};
     uint256 public constant FEE_BPS = ${feeBps};
     address public feeRecipient = ${feeOwner || 'msg.sender'};
-
+${(mode==='native' || mode==='both') ? `    /// @notice Gas given to each recipient of a native payment. Enough for a normal contract wallet; a recipient that
+    ///         burns gas fails its own payment instead of using up the whole transaction.
+    uint256 public constant NATIVE_TRANSFER_GAS = 200000;
+` : ''}
     event BatchSent(address indexed sender, address token, uint256 totalAmount, uint256 recipients);
 `;
 
@@ -2097,6 +2100,7 @@ contract ${name} {
     ///         transfer fails (for example a recipient blocked by the token) the whole batch reverts.
     ///         Tokens that charge a fee on transfer deliver less than listed; use plain tokens such as USDC.
     function multiSendToken(address token, address[] calldata recipients, uint256[] calldata amounts) external {
+        require(token.code.length > 0, "token is not a contract");
         require(recipients.length == amounts.length, "length mismatch");
         require(recipients.length <= MAX_RECIPIENTS, "too many recipients");
 
@@ -2134,7 +2138,7 @@ contract ${name} {
         require(msg.value >= total + fee, "insufficient value sent");
 
         for (uint256 i = 0; i < recipients.length; i++) {
-            (bool ok, ) = recipients[i].call{value: amounts[i]}("");
+            (bool ok, ) = recipients[i].call{value: amounts[i], gas: NATIVE_TRANSFER_GAS}("");
             require(ok, "native transfer failed");
         }
         if (fee > 0) {

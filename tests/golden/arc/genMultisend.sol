@@ -21,6 +21,7 @@ contract ArcMultiSend {
     ///         transfer fails (for example a recipient blocked by the token) the whole batch reverts.
     ///         Tokens that charge a fee on transfer deliver less than listed; use plain tokens such as USDC.
     function multiSendToken(address token, address[] calldata recipients, uint256[] calldata amounts) external {
+        require(token.code.length > 0, "token is not a contract");
         require(recipients.length == amounts.length, "length mismatch");
         require(recipients.length <= MAX_RECIPIENTS, "too many recipients");
 

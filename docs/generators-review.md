@@ -42,7 +42,7 @@ Still true: the admin can cancel any proposal (a guardian key), only "for" votes
 | Escrow | The refund timeout started at deployment, so a late deposit could be refunded at once | The timeout starts when the buyer funds |
 | Vesting | Anyone could fund; vesting started at deployment | Only the deployer funds, and vesting starts at funding |
 | Subscription | The owner could raise the price just before a payment | `subscribeAtMost(maxPrice)`; the beneficiary cannot be the zero address |
-| MultiSend | The contract held the tokens during the batch | Tokens go straight from the sender to each recipient |
+| MultiSend | The contract held the tokens during the batch; a token address without a contract looked like a successful batch; a gas-burning native recipient could use up the whole transaction | Tokens go straight from the sender to each recipient; the token must be a contract; each native payment gets at most 200,000 gas (`NATIVE_TRANSFER_GAS`) |
 | Order book | Tiny partial fills avoided the protocol fee | The fee rounds up |
 | ERC-20 | The owner could mint to the zero address | Refused |
 | CCTP bridge | USDC burned for a recipient blocked on the destination chain cannot be recovered | Documented in the contract |
