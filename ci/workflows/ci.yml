@@ -1,0 +1,166 @@
+# CI: every push to main and every pull request runs the whole suite on a clean machine.
+# No secrets are needed and none are used (no ANTHROPIC_API_KEY, no pull_request_target).
+# Versions are pinned on purpose; docs/ci.md says how to update them.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# bash with pipefail, so 'cmd | tee log' fails when cmd fails
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.22.1'
+  FOUNDRY_VERSION: 'v1.7.1'
+  SOLC_VERSION: '0.8.24'
+  SLITHER_VERSION: '0.11.6'
+  SOLC_SELECT_VERSION: '1.2.0'
+  # tests/solidity/foundry.toml sets offline = true for the sandbox; on a clean runner Foundry must fetch solc 0.8.28.
+  FOUNDRY_OFFLINE: 'false'
+
+jobs:
+  node:
+    name: node
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      # Foundry is installed here only for anvil, which tests/playground.mjs starts.
+      - uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+      - name: Run the Node test suites
+        run: npm test
+        working-directory: tests
+      - name: Golden files are up to date
+        run: |
+          node golden.mjs --update
+          git diff --exit-code -- golden || { echo "::error::tests/golden is out of date: run 'node golden.mjs --update' in tests/ and commit the result"; exit 1; }
+        working-directory: tests
+      - name: Build the Cloudflare zip
+        run: npm run build:zip
+        working-directory: tests
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: contractforge-cloudflare
+          path: |
+            dist/contractforge-cloudflare.zip
+            dist/contractforge-cloudflare.zip.sha256
+          if-no-files-found: error
+
+  forge:
+    name: forge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+      - name: Foundry tests (swap sources)
+        run: npm run test:swap 2>&1 | tee "$RUNNER_TEMP/forge-swap.log"
+        working-directory: tests
+      - name: Foundry tests (portable and single sources)
+        run: npm run test:portable 2>&1 | tee "$RUNNER_TEMP/forge-portable.log"
+        working-directory: tests
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Foundry"
+            for f in swap portable; do
+              line=$(grep -E "test suites .*tests (passed|failed)" "$RUNNER_TEMP/forge-$f.log" | tail -1 || true)
+              echo "- $f: ${line:-no result line found}"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  slither:
+    name: slither
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+      - name: Install Slither and solc ${{ env.SOLC_VERSION }}
+        run: |
+          python -m pip install "slither-analyzer==${SLITHER_VERSION}" "solc-select==${SOLC_SELECT_VERSION}"
+          solc-select install "${SOLC_VERSION}"
+          solc-select use "${SOLC_VERSION}"
+          solc --version
+          slither --version
+      - name: Slither on every distinct generated contract
+        run: node slither-check.mjs 2>&1 | tee "$RUNNER_TEMP/slither.log"
+        working-directory: tests
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Slither"
+            echo '```'
+            sed -n '/^sources:/p;/^Slither findings/,/^$/p;/^OK:/p;/^FAIL:/,$p' "$RUNNER_TEMP/slither.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: slither-report
+          path: tests/slither-out
+          if-no-files-found: warn
+
+  workflows:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: actionlint 1.7.7
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/actionlint.tgz" https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  $RUNNER_TEMP/actionlint.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color

@@ -22,6 +22,9 @@ M=[
  ('required: a draft is never blocked','contractforge-deploy/required.js',"  if(p.length) return 'Draft: ' + p.join('; ') + '.';","  if(false) return '';",'ui.mjs'),
  ('wallet: the old default of 100 returns','contractforge-deploy/app.js',"const spendlimit= g('s_spendlimit').trim()||net.walletDailyDefault;","const spendlimit= g('s_spendlimit').trim()||'100';",'ui.mjs'),
 ]
+if '--self-test' in sys.argv:
+    # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
+    M=[('self-test: a comment edit nobody tests','contractforge-deploy/maturity.js',"   Maturity of every generator, and the mainnet gate.","   Maturity of every generator, and the mainnet gate (edited by the self-test).",'maturity.mjs')]
 bad=0
 for name,f,old,new,test in M:
     path=REPO+'/'+f
@@ -39,3 +42,4 @@ for name,f,old,new,test in M:
     finally:
         subprocess.run(['git','checkout','--',f],cwd=REPO)
 print('uncaught mutations:',bad)
+sys.exit(1 if bad else 0)
