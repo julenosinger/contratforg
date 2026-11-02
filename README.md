@@ -45,7 +45,7 @@ cd contractforge-deploy
 python3 -m http.server 8080      # abra http://localhost:8080
 ```
 
-Sem a função `/api/ai` os botões de IA mostram "AI is not configured". Para testá-los localmente use
+Sem a função `/api/ai` (ou sem `ANTHROPIC_API_KEY`) os recursos de IA avisam que não estão configurados ou disponíveis. Para testá-los localmente use
 `vercel dev` ou `wrangler pages dev` (não foram testados neste repositório) com `ANTHROPIC_API_KEY` definida.
 
 ## Testes
@@ -61,7 +61,7 @@ npm run test:swap             # Foundry: regenera as fontes e roda forge test
 npm run test:portable         # Foundry: idem, modos portáteis
 node slither-check.mjs        # Slither nos contratos gerados (precisa de slither 0.11.6 e solc 0.8.24)
 npm run build:zip             # gera ../dist/contractforge-cloudflare.zip e o .sha256
-python3 ../tests/mutation-check.py   # desliga cada proteção e espera que algum teste falhe
+cd .. && python3 tests/mutation-check.py   # (na raiz) desliga cada proteção e espera que algum teste falhe
 ```
 
 Detalhes, versões fixadas e o que o CI faz: [docs/ci.md](docs/ci.md).
