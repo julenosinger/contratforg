@@ -129,6 +129,8 @@ npm run test:swap && npm run test:portable   # Foundry (needs forge)
 python3 tests/mutation-check.py              # switches 17 guards off one at a time and expects a failure each time
 ```
 
+The same checks run in CI on every push and pull request (see `docs/ci.md`); the mutation check runs weekly.
+
 ## 7. Fora do escopo / achados
 
 - The CSP still has `unsafe-inline` and `unsafe-eval` (the page still uses inline `onclick`). Not touched.
