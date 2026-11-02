@@ -10,7 +10,7 @@ npm run test:swap && npm run test:portable   # Foundry
 node slither-check.mjs      # precisa de slither 0.11.6 e solc 0.8.24
 ```
 
-O CI roda tudo isso em cada push e pull request (`.github/workflows/ci.yml`); veja [docs/ci.md](docs/ci.md).
+O CI roda tudo isso em cada push e pull request (`.github/workflows/ci.yml`, instalado a partir de `ci/workflows/`; veja [ci/README.md](ci/README.md) e [docs/ci.md](docs/ci.md)).
 
 ## Mudar um gerador
 

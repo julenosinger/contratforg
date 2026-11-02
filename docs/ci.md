@@ -3,7 +3,9 @@
 Status as of 2026-11-02. The workflows were checked with actionlint 1.7.7 and every step was run by hand in a fresh
 clone, but **they have not run on GitHub yet**: the first real run happens when this branch is pushed.
 
-## 1. Workflows (`.github/workflows/`)
+## 1. Workflows (`ci/workflows/`, to be installed in `.github/workflows/`)
+
+**The files are in `ci/workflows/` because Arc Studio cannot push to `.github/workflows/`** (GitHub rejects it). Until you copy them to `.github/workflows/` (instructions in `ci/README.md`), nothing runs on GitHub. After copying, keep the two copies in step or delete `ci/`.
 
 | Workflow | When | What it does |
 |---|---|---|
@@ -164,6 +166,7 @@ No other new High or Medium issue appeared: the other 23 triaged cases match wha
    `git checkout`).
 9. **Slither coverage**: 35 distinct files from the golden set (four networks) and the portable set. The cross-mode bridge
    and other variants that only appear under special form values are not analysed.
-10. **Not verified**: the workflows on GitHub's runners (first push), `foundry-toolchain`'s `version` input format with `v1.7.1`
+10. **Where the workflows live**: `ci/workflows/`, because the Arc Studio push is refused for `.github/workflows/`. Installing them is a manual step (`ci/README.md`). To do it from the GitHub web UI no token is needed. The rejected push also made me rewrite the nine unpushed commits (never published) so that none of them touches `.github/workflows/`.
+11. **Not verified**: the workflows on GitHub's runners (first push), `foundry-toolchain`'s `version` input format with `v1.7.1`
     (it matches the release tag; the local binary is 1.7.1), `solc-select install 0.8.24` from a clean runner, and
     Dependabot. The same commands were run locally in a fresh clone, with a locally downloaded solc 0.8.24 in place of solc-select.
