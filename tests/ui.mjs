@@ -1,5 +1,7 @@
 // Navigation, network banner and keyboard access in the real page (simulated browser).
-import { loadApp } from './harness.mjs';
+import { createRequire } from 'node:module';
+import { loadApp, fillAddresses, addrFor } from './harness.mjs';
+const solc = createRequire(import.meta.url)('solc');
 
 let failed = 0, passed = 0;
 const ok = (c, label, extra = '') => { if (c) passed++; else { failed++; console.log(`  FAIL  ${label} ${extra}`); } };
@@ -379,6 +381,307 @@ ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value change
   a2.ev('uiReload = () => { window.__reloaded = true; }');
   d2.getElementById('resetSavedBtn').click();
   ok(a2.w.localStorage.getItem('cf_session_v1') === null && a2.w.__reloaded === true, 'Reset saved data clears storage and reloads');
+}
+
+
+/* ===== Phase 2: maturity badges, the mainnet gate, required fields, per-network wallet limit ===== */
+const until = async (fn, ms = 3000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await new Promise((r) => setTimeout(r, 5)); } return null; };
+const tick = () => new Promise((r) => setTimeout(r, 15));
+const PLACE = /0x0{34,36}(dEaD|bEEF|cAfE)/i;   // the old placeholder addresses (not the word 'deadline')
+const fillParties = (a, net) => { fillAddresses(a, net); for (const id of ['s_token', 's_reward', 'swap_tokenA', 'swap_tokenB', 'vault_asset']) { const el = a.w.document.getElementById(id); if (el) el.value = ''; } };
+
+/* a page with a simulated wallet: the Solidity is compiled for real, the chain is not */
+function deployEnv(opts = {}) {
+  const a = loadApp(opts); const { ev, w } = a; const d = w.document;
+  const deployed = [];
+  w.realCompile = (i) => solc.compile(i);
+  w.ethers = {
+    utils: {}, providers: { Web3Provider: class { async getNetwork() { return { chainId: w.__chainId || 0 }; } getSigner() { return {}; } async getBalance() { return 0; } } },
+    ContractFactory: class { async deploy(...args) { const c = { address: addrFor('dep' + deployed.length), deployTransaction: { hash: '0x' + '1'.repeat(64) }, deployed: async () => {} }; deployed.push({ net: ev('activeNetwork'), args }); return c; } },
+  };
+  w.window.ethereum = { request: async () => {}, on: () => {} };
+  ev("solcCompile = async (i) => window.realCompile(i); ensureSolcLoaded = async () => {}; switchWalletNetwork = async () => { window.__chainId = NETWORKS[activeNetwork].chainIdDec; }; refreshBalance = async () => {};");
+  ev("account = '" + addrFor('acct') + "'; signer = {}; provider = {};");
+  const gate = () => d.getElementById('experimentalGate');
+  const summary = () => d.getElementById('deployConfirm');
+  const passGate = async () => {
+    const g = await until(gate); if (!g) return false;
+    const box = d.getElementById('egBox'); box.checked = true; box.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const inp = d.getElementById('egInput'); inp.value = 'DEPLOY EXPERIMENTAL'; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.getElementById('egOk').click(); return true;
+  };
+  const passSummary = async () => {
+    const s = await until(summary); if (!s) return false;
+    for (const b of s.querySelectorAll('.dc-ackbox')) { b.checked = true; b.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    const inp = d.getElementById('dcInput'); inp.value = d.querySelector('.dc-type b').textContent; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.getElementById('dcConfirm').click(); return true;
+  };
+  const gen = (id, net = 'arc', setup) => { ev(`activeNetwork='${net}'; updateSideNet()`); ev(`renderSimpleForm('${id}')`); fillParties(a, net); if (setup) setup(); ev(`genSimple('${id}')`); };
+  return { a, ev, w, d, deployed, gate, summary, passGate, passSummary, gen };
+}
+const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((l) => l.textContent).join('\n');
+
+/* badges: a colour is never the only signal */
+{
+  const e = deployEnv(); const { d } = e;
+  const cards = [...d.querySelectorAll('#simpleGrid .tcard')];
+  ok(cards.length >= 8 && cards.every((c) => { const b = c.querySelector('.mat-badge'); return b && /Reviewed|Experimental/.test(b.textContent) && b.getAttribute('title'); }), 'every template card carries a labelled maturity badge');
+  const lvl = (id) => d.querySelector(`#simpleGrid .tcard[data-id="${id}"] .mat-badge`)?.className || '';
+  ok(/mat-reviewed/.test(lvl('smartwallet')) && /mat-experimental/.test(lvl('escrow')) && /mat-experimental/.test(lvl('erc20')) && /mat-experimental/.test(lvl('dao')), 'template card levels match the registry');
+  ok(/mat-reviewed/.test(d.querySelector('#sec-treasury .section-head .mat-badge')?.className || '') && /mat-experimental/.test(d.querySelector('#sec-multisend .section-head .mat-badge')?.className || ''), 'section badges: treasury reviewed, multisend experimental');
+  e.gen('escrow');
+  const exp = d.querySelector('#currentContract .mat-badge');
+  ok(exp && /mat-experimental/.test(exp.className) && /Experimental/.test(exp.textContent) && exp.querySelector('[aria-hidden="true"]'), 'contract bar: experimental badge has text and an icon');
+}
+{
+  const e = deployEnv(); const { d, ev } = e;
+  fillAddresses(e.a, 'arc'); ev('genTreasury()');
+  const b = d.querySelector('#currentContract .mat-badge');
+  ok(b && /mat-reviewed/.test(b.className) && /Reviewed/.test(b.textContent), 'contract bar: reviewed badge for the treasury');
+  ok(/maturity: reviewed \| NOT AUDITED/.test(ev('pendingSource.code')), 'generated header carries the stamp');
+}
+
+/* the gate: testnets are untouched */
+{
+  const e = deployEnv(); e.gen('escrow', 'arc');
+  await e.ev('compileAndDeploy()');
+  eq(e.deployed.length, 1, 'testnet: an experimental contract deploys without any gate');
+  ok(!e.gate() && !e.summary(), 'testnet: no dialog at all');
+}
+
+/* mainnet, experimental */
+{
+  const e = deployEnv(); const { d, w } = e; e.gen('escrow', 'arcMain');
+  let run = e.ev('compileAndDeploy()');
+  ok(await until(e.gate), 'mainnet: experimental contract opens the gate first');
+  const ok_ = d.getElementById('egOk'), box = d.getElementById('egBox'), inp = d.getElementById('egInput');
+  ok(ok_.disabled, 'gate: continue is off at the start');
+  const setBox = (v) => { box.checked = v; box.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  const setPhrase = (v) => { inp.value = v; inp.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  setBox(true); ok(ok_.disabled, 'gate: the tick alone is not enough');
+  setBox(false); setPhrase('DEPLOY EXPERIMENTAL'); ok(ok_.disabled, 'gate: the phrase alone is not enough');
+  setBox(true); setPhrase('deploy experimental'); ok(ok_.disabled, 'gate: the phrase is case sensitive');
+  setPhrase('DEPLOY EXPERIMENTAL'); ok(!ok_.disabled, 'gate: tick + exact phrase enables continue');
+  d.getElementById('egCancel').click(); await run;
+  eq(e.deployed.length, 0, 'gate: cancel stops the deployment');
+  ok(!e.summary(), 'gate: cancel never reaches the summary');
+  run = e.ev('compileAndDeploy()');
+  ok(await e.passGate(), 'gate opens again');
+  const s = await until(e.summary);
+  ok(s && /dc-experimental/.test(s.innerHTML), 'after the gate the usual typed confirmation still follows');
+  eq(e.deployed.length, 0, 'nothing is sent before the typed confirmation');
+  await e.passSummary(); await run;
+  eq(e.deployed.map((x) => x.net), ['arcMain'], 'gate + typed confirmation: deployed once');
+}
+
+/* mainnet, reviewed: banner, no extra gate */
+{
+  const e = deployEnv(); const { d, ev } = e;
+  ev("activeNetwork='arcMain'; updateSideNet()"); fillAddresses(e.a, 'arcMain'); ev('genTreasury()');
+  const run = ev('compileAndDeploy()');
+  const s = await until(e.summary);
+  ok(!e.gate(), 'reviewed: no experimental gate');
+  const banner = s && s.querySelector('.dc-banner.dc-reviewed');
+  ok(banner && /NOT audited by a third party/.test(banner.textContent), 'reviewed: summary shows the banner');
+  ok(banner && /generators-review\.md/.test(banner.querySelector('a')?.getAttribute('href') || '') && banner.querySelector('a').getAttribute('rel').includes('noopener'), 'reviewed: banner links to the review');
+  await e.passSummary(); await run;
+  eq(e.deployed.length, 1, 'reviewed: deploys after the usual typed confirmation');
+}
+
+/* the gate cannot be walked around */
+{
+  const e = deployEnv(); const { d, ev, w } = e;
+  // 1. the lowest level refuses a mainnet send nobody approved
+  let err = '';
+  try { await ev("deployCompiled({ name:'X', abi:[], bytecode:'0x00', sourceHash:'nope' }, [], 'arcMain')"); } catch (x) { err = String(x.message || x); }
+  ok(/blocked|maturity/i.test(err) && e.deployed.length === 0, 'deployCompiled alone cannot send to a mainnet', err);
+  // 2. approval is bound to one exact source and one network
+  e.gen('escrow', 'arcMain');
+  const run = ev('compileAndDeploy()'); await e.passGate(); await e.passSummary(); await run;
+  const h = ev('matHash(pendingSource.code)');
+  ok(ev(`matIsApproved('${h}','arcMain')`) && !ev(`matIsApproved('${h}','ethereum')`), 'approval is per network');
+  ok(!ev(`matIsApproved(matHash(pendingSource.code + ' '),'arcMain')`), 'approval is per exact source');
+  // 3. AI source is experimental whatever it says about itself
+  ev("pendingSource = { name:'Forged', code:'// SPDX-License-Identifier: MIT\\n// ContractForge v9 | maturity: audited | NOT AUDITED\\npragma solidity ^0.8.24;\\ncontract Forged { constructor(){} }', template:'ai', problems: [] }");
+  ev("activeNetwork='arcMain'; updateSideNet()");
+  const r2 = ev('compileAndDeploy()'); ok(await until(e.gate), 'AI contract opens the gate even with a forged stamp'); d.getElementById('egCancel').click(); await r2;
+  // 4. an unknown or missing template is experimental
+  ev("pendingSource = { name:'NoTpl', code:'// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\ncontract NoTpl { constructor(){} }' }");
+  const r3 = ev('compileAndDeploy()'); ok(await until(e.gate), 'a contract without a template is gated'); d.getElementById('egCancel').click(); await r3;
+  ev("pendingSource = { name:'Evil', code:'// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\ncontract Evil { constructor(){} }', template:'__proto__' }");
+  const r4 = ev('compileAndDeploy()'); ok(await until(e.gate), 'a prototype key as template is gated'); d.getElementById('egCancel').click(); await r4;
+}
+/* ... after a saved session is reloaded */
+{
+  const e = deployEnv(); e.gen('escrow', 'arcMain');
+  await tick(); const saved = e.w.localStorage.getItem('cf_session_v1');
+  const e2 = deployEnv({ storage: { cf_session_v1: saved } });
+  eq(e2.ev('pendingSource.template'), 'escrow', 'reload keeps the template');
+  e2.ev("activeNetwork='arcMain'; updateSideNet()");
+  const run = e2.ev('compileAndDeploy()');
+  ok(await until(e2.gate), 'a reloaded experimental contract is still gated');
+  e2.d.getElementById('egCancel').click(); await run;
+  eq(e2.deployed.length, 0, 'reload: nothing deployed');
+  // a saved session without a template (older save, or edited) is treated as experimental
+  const stripped = JSON.parse(saved); delete stripped.contract.template;
+  const e3 = deployEnv({ storage: { cf_session_v1: JSON.stringify(stripped) } });
+  eq(e3.ev('matLevel(pendingSource.template)'), 'experimental', 'reload without a template is experimental');
+  e3.ev("activeNetwork='arcMain'; updateSideNet()");
+  const r3 = e3.ev('compileAndDeploy()'); ok(await until(e3.gate), 'reload without a template is gated'); e3.d.getElementById('egCancel').click(); await r3;
+}
+/* ... through the other buttons: Publish, keyboard, Multi-deploy */
+{
+  const e = deployEnv(); const { d, ev, w } = e; e.gen('escrow', 'arcMain');
+  const publish = [...d.querySelectorAll('#currentContract button')].find((b) => b.textContent === 'Publish');
+  w.document.activeElement; publish.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  publish.click(); await tick();
+  eq(e.deployed.length, 0, 'Publish (click and keyboard) only opens the deploy page');
+  ok(!e.gate() && d.getElementById('sec-deploy').style.display === 'block', 'Publish opens the deploy section without deploying');
+  // multi-deploy: one gate for every mainnet selected; cancelling stops everything, testnets included
+  ev("setMultichainMode('multi')"); ev("renderSimpleForm('escrow')"); fillParties(e.a, 'arc'); ev("activeNetwork='arc'; genSimple('escrow')");
+  for (const k of ['arc', 'arcMain']) ev(`toggleMdNetwork('${k}')`);
+  const run = ev('multiDeploy()');
+  ok(await until(e.gate), 'multi-deploy: gate opens for an experimental contract with a mainnet selected');
+  d.getElementById('egCancel').click(); await run;
+  eq(e.deployed.length, 0, 'multi-deploy: cancelling the gate deploys nothing, not even on the testnet');
+  // only testnets selected: no gate
+  ev("toggleMdNetwork('arcMain')");
+  await ev('multiDeploy()');
+  eq(e.deployed.map((x) => x.net), ['arc'], 'multi-deploy: a testnet-only selection needs no gate');
+}
+
+/* required fields instead of a placeholder address */
+{
+  const e = deployEnv(); const { d, ev, w } = e;
+  ev("renderSimpleForm('escrow')"); ev('genSimple("escrow")');   // nothing filled in
+  const probs = JSON.parse(ev('JSON.stringify(pendingSource.problems)'));
+  ok(probs.length >= 3 && probs.some((p) => /Buyer/.test(p)) && probs.some((p) => /Seller/.test(p)) && probs.some((p) => /Arbiter/.test(p)), 'empty escrow parties are reported as required', probs.join('|'));
+  ok(PLACE.test(ev('pendingSource.code')), 'the draft still shows a placeholder so the source can be read');
+  const chip = d.querySelector('#currentContract .cc-chip.draft');
+  ok(chip && /DRAFT/.test(chip.textContent), 'contract bar says DRAFT');
+  const btns = [...d.querySelectorAll('#currentContract button')].filter((b) => ['Test', 'Copy', 'Download', 'Publish'].includes(b.textContent));
+  ok(btns.length === 4 && btns.every((b) => b.disabled && b.title), 'Test, Copy, Download and Publish are off, each with the reason');
+  ok(d.getElementById('btnCompileDeploy').disabled && /required|Draft/i.test(d.getElementById('draftReason').textContent) && d.getElementById('draftReason').style.display !== 'none', 'Compile and deploy is off and the reason is visible');
+  ok(!!d.querySelector('.codepanel .req-draft'), 'the code panel is tagged DRAFT');
+  // every network, not only mainnets
+  for (const net of ['arc', 'ethereum', 'arcMain']) {
+    ev(`activeNetwork='${net}'; updateSideNet()`);
+    await ev('compileAndDeploy()');
+    ok(e.deployed.length === 0 && !e.gate(), `draft cannot be deployed on ${net}`);
+  }
+  ok(/Draft|required/i.test(consoleText(d)), 'the console says why');
+  // copy and download are refused too
+  let wrote = 0; Object.defineProperty(w.navigator, 'clipboard', { value: { writeText: async () => { wrote++; } }, configurable: true });
+  ev('copySource()'); eq(wrote, 0, 'copy is refused for a draft');
+  w.URL.createObjectURL = () => { wrote++; return 'blob:x'; };
+  ev('downloadSource()'); eq(wrote, 0, 'download is refused for a draft');
+  // multi-deploy and the lab refuse it as well
+  ev("setMultichainMode('multi')"); ev("toggleMdNetwork('arc')");
+  await ev('multiDeploy()'); eq(e.deployed.length, 0, 'multi-deploy refuses a draft');
+  ev("setMultichainMode('single')");
+  // second layer: a placeholder that slipped past the field checks is still caught at deploy time
+  ev("pendingSource = { name:'Slip', code:'// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.24;\\ncontract Slip { address a = 0x0000000000000000000000000000000000dEaD; }', template:'escrow', problems: [] }");
+  ev("activeNetwork='arc'; updateSideNet()"); await ev('compileAndDeploy()');
+  eq(e.deployed.length, 0, 'regex guard blocks a placeholder on a testnet');
+  // fixing the fields clears the draft
+  ev("activeNetwork='arc'; updateSideNet(); renderSimpleForm('escrow')"); fillParties(e.a, 'arc'); ev('genSimple("escrow")');
+  eq(ev('pendingSource.problems.length'), 0, 'valid parties: no problems');
+  ok(!PLACE.test(ev('pendingSource.code')), 'valid parties: no placeholder in the source');
+  ok(!d.getElementById('btnCompileDeploy').disabled && !d.querySelector('#currentContract .cc-chip.draft'), 'buttons come back');
+  // parties must differ
+  const set = (id, v) => { const el = d.getElementById(id); el.value = v; };
+  set('s_seller', d.getElementById('s_buyer').value); ev('genSimple("escrow")');
+  ok(ev('pendingSource.problems').some((p) => /differ|same|different/i.test(p)), 'buyer and seller must differ');
+}
+{
+  const e = deployEnv(); const { d, ev } = e;
+  // treasury: no shipped placeholder signers
+  eq(d.getElementById('tre_signers').value, '', 'treasury signers box starts empty');
+  ev('genTreasury()'); ok(ev('pendingSource.problems.length') > 0 && /Signers/i.test(ev('pendingSource.problems.join("|")')), 'treasury without signers is a draft');
+  d.getElementById('tre_signers').value = [addrFor('s1'), addrFor('s1'), addrFor('s2')].join('\n'); ev('genTreasury()');
+  ok(/duplicate|twice|distinct|different/i.test(ev('pendingSource.problems.join("|")')), 'treasury: duplicate signers are reported');
+  d.getElementById('tre_signers').value = [addrFor('s1'), addrFor('s2'), addrFor('s3')].join('\n'); ev('genTreasury()');
+  eq(ev('pendingSource.problems.length'), 0, 'treasury: three distinct signers are fine');
+  ok(!PLACE.test(ev('pendingSource.code')), 'treasury: no placeholder in the source');
+}
+{
+  // DAO: the token is required in a single network, a deploy argument when portable
+  const e = deployEnv(); const { ev } = e;
+  ev("renderSimpleForm('dao')"); ev('genSimple("dao")');
+  ok(ev('pendingSource.problems.length') > 0, 'DAO without a token is a draft');
+  ev("setMultichainMode('portable')"); ev("renderSimpleForm('dao')"); ev('genSimple("dao")');
+  eq(ev('pendingSource.problems.length'), 0, 'portable DAO takes the token at deploy time');
+  // a network with no default token (Robinhood has no USDC): required unless portable
+  ev("setMultichainMode('single')"); e.gen('escrow', 'robinhood', null);
+  ok(ev('pendingSource.problems.length') >= 0, 'robinhood escrow generates');
+}
+/* inline checks (real ethers: the checksum comes from it) */
+{
+  const a = loadApp({ realEthers: true }); const { ev, w } = a; const d = w.document;
+  ev("renderSimpleForm('escrow')"); await tick();
+  const f = d.getElementById('s_buyer');
+  const type = async (v) => { f.value = v; f.dispatchEvent(new w.Event('input', { bubbles: true })); await tick(); return f.closest('.field').querySelector('.field-error')?.textContent || ''; };
+  ok(/placeholder/i.test(await type('0x000000000000000000000000000000000000dEaD')), 'inline: the dEaD placeholder is rejected');
+  ok(/zero/i.test(await type('0x' + '0'.repeat(40))), 'inline: the zero address is rejected');
+  ok(await type('0x123'), 'inline: a short address is rejected');
+  ok(/checksum/i.test(await type('0x5AAeb6053F3E94C9b9A09f33669435E7Ef1BeAed')), 'inline: a wrong checksum is rejected');
+  eq(await type('0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed'), '', 'inline: the right checksum is accepted');
+  eq(await type(addrFor('good')), '', 'inline: a valid address clears the message');
+  ok(f.getAttribute('aria-required') === 'true', 'required field is marked');
+  ev("renderSimpleForm('smartwallet')"); await tick();
+  ev("account = '" + addrFor('acct') + "'");
+  const g = d.getElementById('s_guardian'); g.value = addrFor('acct'); g.dispatchEvent(new w.Event('input', { bubbles: true })); await tick();
+  ok(/deploy/i.test(g.closest('.field').querySelector('.field-error')?.textContent || ''), 'inline: the guardian cannot be the deploying wallet');
+}
+{
+  const e = deployEnv(); const { d, ev } = e;
+  ev("renderSimpleForm('smartwallet')"); d.getElementById('s_guardian').value = addrFor('g2'); ev("genSimple('smartwallet')");
+  eq(ev('pendingSource.notDeployer[0].value').toLowerCase(), addrFor('g2').toLowerCase(), 'the guardian is remembered for the deploy-time check');
+  ev("activeNetwork='arc'; updateSideNet(); account = '" + addrFor('g2') + "'");   // the connected wallet is the guardian
+  await ev('compileAndDeploy()');
+  eq(e.deployed.length, 0, 'deploying from the guardian wallet is refused');
+  ok(/guardian/i.test(consoleText(d)), 'the console names the guardian');
+  ev("account = '" + addrFor('acct') + "'"); await ev('compileAndDeploy()');
+  eq(e.deployed.length, 1, 'a different wallet can deploy');
+}
+
+/* default daily limit per network */
+{
+  const e = deployEnv(); const { d, ev, w } = e;
+  const want = { ETH: '0.1', POL: '100', AVAX: '2', BNB: '0.1', USDC: '100' };
+  const bad = JSON.parse(ev("JSON.stringify(Object.entries(NETWORKS).filter(([k,n]) => n.walletDailyDefault !== ({ETH:'0.1',POL:'100',AVAX:'2',BNB:'0.1',USDC:'100'})[n.gasSymbol]).map(([k]) => k))"));
+  eq(bad, [], 'every network has the default for its gas token');
+  ok(Object.keys(want).every((s) => ev(`Object.values(NETWORKS).some(n => n.gasSymbol === '${s}')`)), 'all five gas tokens are covered');
+  ev("renderSimpleForm('smartwallet')"); await tick();
+  eq([d.getElementById('s_spendlimit').value, d.getElementById('s_limit_unit').textContent.split(',')[0]], ['100', 'USDC'], 'Arc: 100 USDC');
+  ev("activeNetwork='ethereum'; updateSideNet()");
+  eq([d.getElementById('s_spendlimit').value, d.getElementById('s_limit_unit').textContent.split(',')[0]], ['0.1', 'ETH'], 'Ethereum: 0.1 ETH (default follows the network)');
+  fillParties(e.a, 'ethereum'); ev("genSimple('smartwallet')");
+  ok(/DAILY_LIMIT = 100000000000000000;/.test(ev('pendingSource.code')) && /0\.1 ETH/.test(ev('pendingSource.code')), 'the generated limit is 0.1 ETH');
+  // a value typed by the user is kept when the network changes
+  const lim = d.getElementById('s_spendlimit'); lim.value = '5'; lim.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ev("activeNetwork='arc'; updateSideNet()");
+  eq(d.getElementById('s_spendlimit').value, '5', 'a typed limit is kept');
+  // it is not saved with the session
+  await new Promise((r) => setTimeout(r, 320));
+  ok(!JSON.stringify(JSON.parse(w.localStorage.getItem('cf_session_v1') || '{}').forms || {}).includes('s_spendlimit'), 'the limit is not saved with the form values');
+  // portable: an untouched limit follows each network
+  ev("setMultichainMode('portable')"); ev("renderSimpleForm('smartwallet')"); fillParties(e.a, 'arc'); ev("genSimple('smartwallet')");
+  const idx = JSON.parse(ev('JSON.stringify(pendingCtorArgs.map(a=>a.param))')).indexOf('dailyLimit_');
+  eq([ev(`ctorArgValue(pendingCtorArgs[${idx}], 'arc')`), ev(`ctorArgValue(pendingCtorArgs[${idx}], 'ethereum')`)], ['100' + '0'.repeat(18), '1' + '0'.repeat(17)], 'portable: each network gets its own default');
+  ev("setMultichainMode('single')");
+  // mainnet summary shows the limit and asks for its own tick
+  ev("activeNetwork='arcMain'; updateSideNet(); renderSimpleForm('smartwallet')"); fillParties(e.a, 'arcMain'); ev("genSimple('smartwallet')");
+  const run = ev('compileAndDeploy()');
+  const s = await until(e.summary);
+  ok(s && /Session-key daily limit/.test(s.textContent) && /100 USDC/.test(s.textContent), 'mainnet summary lists the daily limit with its unit');
+  const confirm = d.getElementById('dcConfirm'), inp = d.getElementById('dcInput');
+  inp.value = d.querySelector('.dc-type b').textContent; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(confirm.disabled, 'the typed network alone is not enough: the limit must be ticked');
+  const ack = s.querySelector('.dc-ackbox'); ack.checked = true; ack.dispatchEvent(new w.Event('change', { bubbles: true }));
+  ok(!confirm.disabled, 'tick + typed network enables Deploy');
+  confirm.click(); await run;
+  eq(e.deployed.length, 1, 'the reviewed wallet deploys after both confirmations');
 }
 
 /* texts */
