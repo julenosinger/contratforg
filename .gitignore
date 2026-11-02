@@ -16,3 +16,6 @@ tests/solidity/src/
 tests/solidity/out/
 tests/solidity/cache/
 tests/slither-out/
+
+# build artifacts (see scripts/build-zip.mjs)
+*.zip

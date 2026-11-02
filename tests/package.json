@@ -4,9 +4,10 @@
   "type": "module",
   "description": "Checks the ContractForge generators. 'npm test' compiles every generator in every multichain mode, compares single-network output with tests/golden, runs the multichain behaviour tests, and checks navigation, the network banner, keyboard access, the mainnet maturity gate, required address fields, the per-network wallet limit, the maturity table against the repository (maturity.mjs) and the AI proxy (ai-proxy.mjs). 'npm run test:swap' and 'npm run test:portable' regenerate the contracts and run the Foundry tests (need Foundry). Run from this folder after 'npm install'.",
   "scripts": {
-    "test": "node compile-generators.mjs && node golden.mjs && node maturity.mjs && node ai-proxy.mjs && node multichain.mjs && node ui.mjs && node playground.mjs && node lab.mjs && node solc-loader.mjs",
+    "test": "node compile-generators.mjs && node golden.mjs && node maturity.mjs && node ai-proxy.mjs && node multichain.mjs && node ui.mjs && node playground.mjs && node lab.mjs && node solc-loader.mjs && node zip.mjs",
     "test:swap": "node dump-swap-sources.mjs && cd solidity && forge test",
-    "test:portable": "node dump-portable-sources.mjs && cd solidity && forge test"
+    "test:portable": "node dump-portable-sources.mjs && cd solidity && forge test",
+    "build:zip": "node ../scripts/build-zip.mjs"
   },
   "devDependencies": {
     "ethers": "5.7.2",
