@@ -25,7 +25,7 @@ one test artefact (see section 6), which is why the seed variation matters.
 |---|---|
 | `Factory.t.sol` (21) | unit (sorted tokens, symmetric `getPair`, duplicate pair refused in either order, identical / zero / non-contract tokens refused, `PairCreated`, `allPairsLength`); fuzz (random creation orders never give two pairs for one set of tokens; only contracts can be tokens); invariants over three pairs and three accounts (a swap never lowers k, reserves never exceed balances, account shares + locked minimum = `totalShares`, a funded pair never has an empty side); hostile tokens (fee-on-transfer, sender surcharge, returns false, returns nothing, re-enters) and the proof that a dishonest token only hurts its own pair. Changing the sign of the swap fee breaks the invariants |
 | `Dao.t.sol` (25) | 14 unit, 5 fuzz (snapshot weight, exact quorum rule for supplies up to 2^112, timelock and grace window, voting window, proposal threshold), 5 invariants + 1 sanity check (a proposal executes at most once; a cancelled one never executes; execution only inside the window; votes only in the period, with snapshot weight, once per account; the outcome follows an independent tally). Reachability probes confirmed the handler reaches votes, queueing, execution, cancellation, defeat and expiry |
-| `Nft.t.sol` (10) | supply, ids, transfer authority (fuzzed), wrong-owner transfers, approvals cleared, safe transfers, interfaces, hostile payment token; invariants for a five-token collection and for one with a re-entering token (probes confirmed sold-out and the re-entry attempt are reached) |
+| `Nft.t.sol` (11) | supply, ids, transfer authority (fuzzed), wrong-owner transfers, approvals cleared, safe transfers, interfaces, hostile payment token; invariants for a five-token collection and for one with a re-entering token (probes confirmed sold-out and the re-entry attempt are reached) |
 | `Multisend.t.sol` (12) | fuzzed conservation of value for token and native batches, atomicity, limits, rejecting / gas-burning / re-entering recipients; invariants: the contract never holds funds, value is conserved |
 
 ## 3. Promotions (C): the rule applied to every template
@@ -60,7 +60,7 @@ exist in the repository, so the file that changed is `ci/workflows/ci.yml`; copy
 
 ## 6. Slither: re-evaluation (E)
 
-Baseline before this phase (37 -> 35 files; phase 3): High 20, Medium 27, Low 114, Informational 51, Optimization 105.
+Baseline before this phase (35 distinct files, phase 3): High 20, Medium 27, Low 114, Informational 51, Optimization 105.
 After (87 sources, 37 distinct files; the new files are the one- and five-token NFT variants): **High 20 (20 triaged), Medium 23 (23 triaged),
 Low 98, Informational 51, Optimization 115**. No entry is stale, no new High or Medium finding. The Medium count drops by the five NFT reentrancy
 findings and the Low count drops with the three missing-event findings and the NFT's `reentrancy-benign`.
