@@ -4,3 +4,12 @@ test = "test"
 solc_version = "0.8.28"
 offline = true
 evm_version = "cancun"
+
+# Sized so the whole suite finishes in about a minute in CI (invariants: 64 runs x 100 calls per property).
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 64
+depth = 100
+fail_on_revert = false
