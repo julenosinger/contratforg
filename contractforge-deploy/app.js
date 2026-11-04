@@ -339,7 +339,7 @@ function setWalletConnected(addr){
   const net    = NETWORKS[activeNetwork];
   const isMain = net?.isMainnet;
   status.classList.add('connected');
-  status.innerHTML = `<span class="dot"></span> ${addr.slice(0,6)}…${addr.slice(-4)}
+  status.innerHTML = `<span class="dot"></span> ${escapeHtml(addr.slice(0,6))}…${escapeHtml(addr.slice(-4))}
     <span style="color:${isMain?'#C9A24B':'#5C6B65'};font-size:10px;margin-left:6px;">
       ${isMain?'⚠ '+net.label+' MAINNET':net?.label||''}
     </span>`;
@@ -2493,12 +2493,15 @@ contract ${name} {
 /* ======================================================================
    CODE DISPLAY / DOWNLOAD
    ====================================================================== */
+const AUDIT_SEVERITIES = ['critical','high','medium','low','info'];
+
 function showCode(panelId, filename, code){
+  filename = String(filename);
   const panel=document.getElementById(panelId);
   panel.style.display='block';
   panel.innerHTML=`
     <div class="codehead">
-      <span class="filename">${filename}</span>
+      <span class="filename">${escapeHtml(filename)}</span>
       <span style="font-family:var(--mono);font-size:10.5px;color:#5C6B65;">${code.split('\n').length} lines</span>
     </div>
     <pre>${escapeHtml(code)}</pre>
@@ -2845,9 +2848,10 @@ function renderAuditReport(report){
   const sorted = [...(report.findings||[])].sort((a,b)=>sevOrder.indexOf(a.severity)-sevOrder.indexOf(b.severity));
   sorted.forEach(f=>{
     const div = document.createElement('div');
-    div.className = 'audit-finding '+f.severity;
+    const sev = AUDIT_SEVERITIES.includes(String(f.severity).toLowerCase()) ? String(f.severity).toLowerCase() : 'info';   // the severity comes from the AI answer: only known words reach the markup
+    div.className = 'audit-finding '+sev;
     div.innerHTML = `
-      <div><span class="sev">${f.severity.toUpperCase()}</span><h4>${escapeHtml(f.title||'')}</h4></div>
+      <div><span class="sev">${sev.toUpperCase()}</span><h4>${escapeHtml(f.title||'')}</h4></div>
       <p>${escapeHtml(f.description||'')}</p>
       ${f.recommendation?`<p style="margin-top:6px;color:#7E8C86;font-size:11.5px;"><b style="color:var(--gold);">Fix:</b> ${escapeHtml(f.recommendation)}</p>`:''}
       ${f.lineHint?`<div class="line-ref">→ ${escapeHtml(f.lineHint)}</div>`:''}`;
@@ -4435,7 +4439,7 @@ async function loadAnalytics(){
       {label:'Latest block',value:latest.toLocaleString(),sub:'current head'},
     ];
     document.getElementById('an_kpis').innerHTML=kpiData.map(k=>`
-      <div class="an-card"><div class="anv">${k.value}</div><div class="anl">${k.label}</div><div class="ans">${k.sub}</div></div>`).join('');
+      <div class="an-card"><div class="anv">${escapeHtml(k.value)}</div><div class="anl">${escapeHtml(k.label)}</div><div class="ans">${escapeHtml(k.sub)}</div></div>`).join('');
 
     const maxB=Math.max(...buckets,1);
     document.getElementById('an_bars').innerHTML=buckets.map(v=>`<div class="bar" style="height:${Math.max(4,(v/maxB*76))}px;" title="${v} events"></div>`).join('');
@@ -4449,7 +4453,10 @@ async function loadAnalytics(){
     } else {
       recent.forEach(log=>{
         const div=document.createElement('div'); div.className='line ok';
-        div.innerHTML=`<span class="t">blk ${log.blockNumber}</span><span class="msg">Topic: ${log.topics[0]?.slice(0,18)||'unknown'}… tx: ${log.transactionHash.slice(0,14)}…</span>`;
+        // the log comes from an RPC node: build it from text nodes, not markup
+        const t1=document.createElement('span'); t1.className='t'; t1.textContent='blk '+log.blockNumber;
+        const m1=document.createElement('span'); m1.className='msg'; m1.textContent='Topic: '+(String(log.topics&&log.topics[0]||'').slice(0,18)||'unknown')+'… tx: '+String(log.transactionHash).slice(0,14)+'…';
+        div.append(t1,m1);
         evEl.appendChild(div);
       });
     }
@@ -4465,7 +4472,7 @@ function renderAnalyticsHistoryPills(){
   const pills=document.getElementById('an_history_pills');
   if(!pills) return;
   pills.innerHTML=hist.filter(h=>h && isAddr(h.address)).slice(0,6).map(h=>`
-    <div class="pill" onclick="document.getElementById('an_address').value='${h.address}'">${escapeHtml(h.name)} (${escapeHtml(h.network)})</div>`).join('');
+    <div class="pill" onclick="document.getElementById('an_address').value='${escapeHtml(h.address)}'">${escapeHtml(h.name)} (${escapeHtml(h.network)})</div>`).join('');
 }
 
 /* ======================================================================
@@ -4491,8 +4498,8 @@ async function generateTests(){
 
     document.getElementById('testCards').innerHTML=`
       <div class="test-card">
-        <h4>✓ ${pendingSource.name} — ${testCount} test functions</h4>
-        <div class="tc">${framework==='foundry'?'Foundry (.t.sol)':framework==='hardhat'?'Hardhat (Mocha/Chai)':'Foundry + Hardhat'} · ${coverage} coverage · ${data.outputTokens||'?'} tokens</div>
+        <h4>✓ ${escapeHtml(pendingSource.name)} — ${Number(testCount)||0} test functions</h4>
+        <div class="tc">${framework==='foundry'?'Foundry (.t.sol)':framework==='hardhat'?'Hardhat (Mocha/Chai)':'Foundry + Hardhat'} · ${escapeHtml(coverage)} coverage · ${Number(data.outputTokens)||'?'} tokens</div>
       </div>`;
     document.getElementById('testCode').textContent=code;
     document.getElementById('testOutput').style.display='block';

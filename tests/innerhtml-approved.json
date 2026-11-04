@@ -1,0 +1,341 @@
+{
+ "readme": "Approved dynamic innerHTML-style sinks. Each entry is pinned to a hash of the statement; changing the statement requires a new review. See tests/innerhtml-lint.mjs.",
+ "entries": [
+  {
+   "file": "app.js",
+   "hash": "7a19b346484b",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "`<span class=\"chip\" style=\"${net.isMainnet?'background:#C9A24B;':''}\"></span>${net.label} ${net.isMainnet?'<sp"
+  },
+  {
+   "file": "app.js",
+   "hash": "592dd81df22b",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "`<span class=\"dot\"></span> ${escapeHtml(addr.slice(0,6))}\u2026${escapeHtml(addr.slice(-4))} <span style=\"color:${i"
+  },
+  {
+   "file": "app.js",
+   "hash": "9c9c9a703114",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "`<span class=\"t\">[${time}]</span><span class=\"msg\">${escapeHtml(msg)}</span>`;"
+  },
+  {
+   "file": "app.js",
+   "hash": "5fe27e76f683",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "` <div class=\"corner\"></div> ${t.isNew?'<div class=\"new-badge\">NEW</div>':''} <div class=\"idx\">${String(i+1).p"
+  },
+  {
+   "file": "app.js",
+   "hash": "56d180902a1b",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it. (the form is built from the template table and the network defaults)",
+   "excerpt": "html;"
+  },
+  {
+   "file": "app.js",
+   "hash": "c8551ee2efc3",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "` <div class=\"codehead\"> <span class=\"filename\">${escapeHtml(filename)}</span> <span style=\"font-family:var(--"
+  },
+  {
+   "file": "app.js",
+   "hash": "493db092f566",
+   "category": "N",
+   "why": "Only numbers the program computed (Math.* always returns a number, so an outside value cannot carry markup through it) and fixed colours. The audit score is clamped with Math.max/Math.min, so a hostile value becomes NaN and not markup.",
+   "excerpt": "` <div style=\"position:relative;width:72px;height:72px;\"> <svg width=\"72\" height=\"72\" viewBox=\"0 0 72 72\" styl"
+  },
+  {
+   "file": "app.js",
+   "hash": "c2535017f274",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "` <div><span class=\"sev\">${sev.toUpperCase()}</span><h4>${escapeHtml(f.title||'')}</h4></div> <p>${escapeHtml("
+  },
+  {
+   "file": "app.js",
+   "hash": "21d0fc75e72b",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "` <span class=\"hnet\">${escapeHtml(entry.network||'unknown')}</span> <span class=\"hname\">${escapeHtml(entry.nam"
+  },
+  {
+   "file": "app.js",
+   "hash": "54bf714e09fb",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "`<span class=\"t\">[${t}]</span><span class=\"msg\">${escapeHtml(msg)}</span>`;"
+  },
+  {
+   "file": "app.js",
+   "hash": "54bf714e09fb",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "`<span class=\"t\">[${t}]</span><span class=\"msg\">${escapeHtml(msg)}</span>`;"
+  },
+  {
+   "file": "app.js",
+   "hash": "32b5452a0078",
+   "category": "E",
+   "why": "The only interpolated value is encodeURIComponent(url) inside a fixed https URL; no quote or angle bracket can survive it.",
+   "excerpt": "`<img src=\"${qrUrl}\" alt=\"QR Code\" style=\"border:8px solid var(--paper);border-radius:2px;\" /> <div style=\"fon"
+  },
+  {
+   "file": "app.js",
+   "hash": "b567852b7d10",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "`<h3 style=\"font-size:16px;\">${s.name}</h3>${typeof matBadgeFor==='function'?'<div class=\"mat-row\">'+matBadgeF"
+  },
+  {
+   "file": "app.js",
+   "hash": "709fae439ce3",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "`<span class=\"chip\"></span>${net.label}`;"
+  },
+  {
+   "file": "app.js",
+   "hash": "b0c56688dac1",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "`<span class=\"chip\" style=\"background:#C9A24B;\"></span>${net.label} <span style=\"font-family:var(--mono);font-"
+  },
+  {
+   "file": "app.js",
+   "hash": "5fc190e95098",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "kpiData.map(k=>` <div class=\"an-card\"><div class=\"anv\">${escapeHtml(k.value)}</div><div class=\"anl\">${escapeHt"
+  },
+  {
+   "file": "app.js",
+   "hash": "7ebba464c54b",
+   "category": "N",
+   "why": "Only numbers the program computed (Math.* always returns a number, so an outside value cannot carry markup through it) and fixed colours.",
+   "excerpt": "buckets.map(v=>`<div class=\"bar\" style=\"height:${Math.max(4,(v/maxB*76))}px;\" title=\"${v} events\"></div>`).joi"
+  },
+  {
+   "file": "app.js",
+   "hash": "eaffa5e9ae06",
+   "category": "N",
+   "why": "Only numbers the program computed (Math.* always returns a number, so an outside value cannot carry markup through it) and fixed colours. lookback is a number chosen in the form and parsed to an integer.",
+   "excerpt": "buckets.map((_,i)=>`<span>${i===0?'-'+lookback:i===9?'now':''}</span>`).join('');"
+  },
+  {
+   "file": "app.js",
+   "hash": "80125403927f",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "hist.filter(h=>h && isAddr(h.address)).slice(0,6).map(h=>` <div class=\"pill\" onclick=\"document.getElementById("
+  },
+  {
+   "file": "app.js",
+   "hash": "cac30ad80926",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "` <div class=\"test-card\"> <h4>\u2713 ${escapeHtml(pendingSource.name)} \u2014 ${Number(testCount)||0} test functions</h4"
+  },
+  {
+   "file": "lab.js",
+   "hash": "cb2c2df1ccf5",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<span class=\"t\">[' + t + ']</span><span class=\"msg\">' + escapeHtml(msg) + '</span>';"
+  },
+  {
+   "file": "lab.js",
+   "hash": "20f48ddb9580",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs. Balances are formatted numbers.",
+   "excerpt": "html + '</tbody></table>';"
+  },
+  {
+   "file": "lab.js",
+   "hash": "a82b6749e26a",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"fn-group\">Transactions in the lab</div>' + LAB.txs.map(c => '<div class=\"pg-call pg-call-' + (c.o"
+  },
+  {
+   "file": "lab.js",
+   "hash": "898db24ede7f",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"fn-group\">Constructor arguments</div>' + '<p class=\"lab-note\">Filled with test values where the l"
+  },
+  {
+   "file": "lab.js",
+   "hash": "67cc8a1e0d24",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "html;"
+  },
+  {
+   "file": "lab.js",
+   "hash": "d221542f1f9c",
+   "category": "C",
+   "why": "Interpolates the five fixed account names of the lab and their index.",
+   "excerpt": "LAB_NAMES.map((n, i) => '<option value=\"' + i + '\">' + n + '</option>').join('');"
+  },
+  {
+   "file": "maturity.js",
+   "hash": "3ab0a4412378",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "insertAdjacentHTML('afterend', '<div class=\"mat-row\">' + matBadgeFor(card.dataset.id) + '</div>');"
+  },
+  {
+   "file": "maturity.js",
+   "hash": "775b6d7564f0",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "matBadgeFor(MAT_SECTION_TEMPLATE[sec]());"
+  },
+  {
+   "file": "multichain.js",
+   "hash": "e65e866bfd31",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"mc-title\">Constructor arguments <span>for '+escapeHtml(net.label)+'</span></div>' + rows.map((a,i"
+  },
+  {
+   "file": "multichain.js",
+   "hash": "d1cea2afdd42",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "'<div class=\"mc-label\">Multichain mode</div><div class=\"mc-seg\" role=\"group\" aria-label=\"Multichain mode\">' + "
+  },
+  {
+   "file": "multideploy.js",
+   "hash": "899329b97300",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "html;"
+  },
+  {
+   "file": "playground.js",
+   "hash": "3e2a71757c16",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<h4>' + escapeHtml(item.name || item.type) + ' <span class=\"fn-out\">' + escapeHtml(outStr) + '</span>' + '<sp"
+  },
+  {
+   "file": "playground.js",
+   "hash": "8725656be3bb",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<span class=\"t\">[' + t + ']</span><span class=\"msg\">' + escapeHtml(msg) + '</span>';"
+  },
+  {
+   "file": "playground.js",
+   "hash": "5834af5bc683",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<b>' + escapeHtml(n.label) + '</b>' + (n.isMainnet ? ' <span class=\"pgc-live\">LIVE</span>' : '') + ' \u00b7 ' + es"
+  },
+  {
+   "file": "playground.js",
+   "hash": "b1a4ad6c48e4",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "html;"
+  },
+  {
+   "file": "playground.js",
+   "hash": "4dccd27e0d4a",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"fn-group\">Call history (this session)</div>' + pgCalls.map(c => '<div class=\"pg-call pg-call-' + "
+  },
+  {
+   "file": "ui.js",
+   "hash": "fd4f5b3157a6",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<span class=\"nb-tag\">' + (main ? 'MAINNET' : 'TESTNET') + '</span>' + '<span class=\"nb-net\">' + escapeHtml(ne"
+  },
+  {
+   "file": "ui.js",
+   "hash": "33ed27be5935",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div>Continue where you left off: <b>' + escapeHtml(pendingSource.name) + '.sol</b></div>' + '<div class=\"hc-"
+  },
+  {
+   "file": "ui.js",
+   "hash": "d371fe9e75d0",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "rows.map(([e, i]) => { const net = NETWORKS[e.network] || { label: String(e.network || 'unknown'), explorer: '"
+  },
+  {
+   "file": "ui.js",
+   "hash": "6d27734d9e4f",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "Object.entries(MC_MODES).map(([k, m]) => '<button type=\"button\" class=\"home-card' + (k === multichainMode ? ' "
+  },
+  {
+   "file": "ui.js",
+   "hash": "5ca83baaba51",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "Object.entries(NETWORKS).map(([k, n]) => '<span class=\"home-net' + (k === activeNetwork ? ' current' : '') + ("
+  },
+  {
+   "file": "ui.js",
+   "hash": "7277f8d27cec",
+   "category": "C",
+   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "excerpt": "all.length + ' NETWORKS<br>' + main + ' MAINNET \u00b7 ' + (all.length - main) + ' TESTNET<br><b id=\"headVersion\">v"
+  },
+  {
+   "file": "ui.js",
+   "hash": "13fea11dce17",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"cc-info\"><span class=\"cc-label\">Current contract</span><b>' + escapeHtml(pendingSource.name) + '."
+  },
+  {
+   "file": "ui.js",
+   "hash": "e2655fdd7cd8",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dc-box\">' + '<div class=\"dc-head\"><span class=\"dc-tag\">EXPERIMENTAL</span><h3 id=\"egTitle\">Not re"
+  },
+  {
+   "file": "ui.js",
+   "hash": "61450eb79670",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dc-box\">' + '<div class=\"dc-head\"><span class=\"dc-tag\">MAINNET</span><h3 id=\"dcTitle\">Confirm dep"
+  },
+  {
+   "file": "ui.js",
+   "hash": "18ec65a51a24",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dc-box dc-small\">' + '<div class=\"dc-head\">' + (opts.tag ? '<span class=\"dc-tag\">' + escapeHtml(o"
+  },
+  {
+   "file": "ui.js",
+   "hash": "dcbf9f73a713",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dc-box dc-small\">' + '<div class=\"dc-head\"><span class=\"dc-tag\">MAINNET</span><h3 id=\"scTitle\">Sw"
+  },
+  {
+   "file": "ui.js",
+   "hash": "1b79b48a0fc7",
+   "category": "E",
+   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dr-title\">' + (uiDeployResults.length === 1 ? 'Deployed' : uiDeployResults.length + ' deployments"
+  }
+ ]
+}

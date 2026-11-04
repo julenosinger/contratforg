@@ -427,7 +427,7 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
   const cards = [...d.querySelectorAll('#simpleGrid .tcard')];
   ok(cards.length >= 8 && cards.every((c) => { const b = c.querySelector('.mat-badge'); return b && /Reviewed|Experimental/.test(b.textContent) && b.getAttribute('title'); }), 'every template card carries a labelled maturity badge');
   const lvl = (id) => d.querySelector(`#simpleGrid .tcard[data-id="${id}"] .mat-badge`)?.className || '';
-  ok(/mat-reviewed/.test(lvl('smartwallet')) && /mat-reviewed/.test(lvl('erc721')) && /mat-experimental/.test(lvl('escrow')) && /mat-experimental/.test(lvl('erc20')) && /mat-experimental/.test(lvl('dao')), 'template card levels match the registry');
+  ok(/mat-reviewed/.test(lvl('smartwallet')) && /mat-reviewed/.test(lvl('erc721')) && /mat-experimental/.test(lvl('escrow')) && /mat-experimental/.test(lvl('erc20')) && /mat-reviewed/.test(lvl('dao')), 'template card levels match the registry');
   ok(/mat-reviewed/.test(d.querySelector('#sec-treasury .section-head .mat-badge')?.className || '') && /mat-reviewed/.test(d.querySelector('#sec-multisend .section-head .mat-badge')?.className || '') && /mat-experimental/.test(d.querySelector('#sec-crosschain .section-head .mat-badge')?.className || ''), 'section badges: treasury and multisend reviewed, crosschain experimental');
   e.gen('escrow');
   const exp = d.querySelector('#currentContract .mat-badge');
