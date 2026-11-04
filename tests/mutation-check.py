@@ -1,6 +1,6 @@
 # Guard mutation check: switches each new guard off in turn and runs the tests that must notice.
 # Run from anywhere: python3 tests/mutation-check.py   (it restores each file with git checkout; commit your work first).
-import subprocess, sys
+import shutil, subprocess, sys
 import os
 REPO=os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 M=[
@@ -49,6 +49,19 @@ M=[
  ('dao: an account can vote twice','contractforge-deploy/app.js','        require(!p.hasVoted[msg.sender], "already voted");\n',"",'forge'),
  ('multisend: a token without code is accepted','contractforge-deploy/app.js','        require(token.code.length > 0, "token is not a contract");\n',"",'forge'),
  ('multisend: native payments lose their gas cap','contractforge-deploy/app.js',"{value: amounts[i], gas: NATIVE_TRANSFER_GAS}","{value: amounts[i]}",'forge'),
+ ('dao: transferAdmin hands the role over at once (no accept step)','contractforge-deploy/app.js',"        pendingAdmin = newAdmin;\n        emit AdminTransferStarted(admin, newAdmin);","        admin = newAdmin;\n        emit AdminTransferStarted(admin, newAdmin);",'forge'),
+ ('dao: renounce leaves a pending admin behind','contractforge-deploy/app.js',"        admin = address(0);\n        pendingAdmin = address(0);\n","        admin = address(0);\n",'forge'),
+ ('dao: a voting period of zero is accepted again','contractforge-deploy/app.js','        require(VOTING_PERIOD >= 1, "voting period must be at least 1 block");\n',"",'forge'),
+ ('dao: a pending admin can already cancel','contractforge-deploy/app.js','(admin != address(0) && msg.sender == admin), "not authorised");','(admin != address(0) && msg.sender == admin) || msg.sender == pendingAdmin, "not authorised");','forge'),
+ ('nft: ownership can be offered to the zero address','contractforge-deploy/app.js','        require(newOwner != address(0), "new owner is the zero address");\n',"",'forge'),
+ ('nft: anyone can accept the ownership','contractforge-deploy/app.js','        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");\n',"",'forge'),
+ ('wallet: the check ignores the function (the whole target is open again)','contractforge-deploy/app.js',"if (_permAt[_permKey(key, target, selector)] != _sessionVersion[key]) revert CallNotAllowed(target, selector);","if (_permAt[_permKey(key, target, bytes4(0))] != _sessionVersion[key] && _permAt[_permKey(key, target, selector)] != _sessionVersion[key] && false) revert CallNotAllowed(target, selector);",'forge'),
+ ('wallet: the blocked list stops applying to calls','contractforge-deploy/app.js',"if (selector == bytes4(0) || _isBlockedSelector(selector)) revert ForbiddenCall(selector);","if (selector == bytes4(0)) revert ForbiddenCall(selector);",'forge'),
+ ('wallet: a blocked function can be granted','contractforge-deploy/app.js',"            if (sel != bytes4(0) && _isBlockedSelector(sel)) revert ForbiddenCall(sel);\n","",'forge'),
+ ('nft: setBaseURI stops emitting its event','contractforge-deploy/app.js',"        emit BaseURIUpdated(baseURI, uri);\n","",'forge'),
+ ('subscription: setBeneficiary stops emitting its event','contractforge-deploy/app.js',"        emit BeneficiaryUpdated(beneficiary, newBeneficiary);\n","",'forge'),
+ ('factory: PairCreated stops indexing the tokens','contractforge-deploy/app.js',"event PairCreated(address indexed token0, address indexed token1, address pair);","event PairCreated(address token0, address token1, address pair);",'forge'),
+ ('slither pin: a changed function no longer breaks its pin','tests/slither-check.mjs',"else if (!pinsOf(entry).includes(f.pin.hash)) {","else if (false) {",'slither-pin.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
@@ -58,6 +71,8 @@ if '--only' in sys.argv:
     M = [m for m in M if key in m[0] or key == m[4]]
 bad=0
 for name,f,old,new,test in M:
+    if test == 'slither-pin.mjs' and not shutil.which('slither'):
+        print('SKIP (slither not installed): '+name); continue
     path=REPO+'/'+f
     s=open(path,encoding='utf-8').read()
     if s.count(old)<1:
