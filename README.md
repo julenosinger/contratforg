@@ -55,7 +55,8 @@ Requer Node 24 (o CI usa 24.22.1) e, para os testes que usam um nó local, o Fou
 ```
 cd tests
 npm ci
-npm test                      # compilação de todos os geradores, golden, maturidade, proxy de IA, multichain,
+REQUIRE_ANVIL=1 npm test      # (REQUIRE_ANVIL=1: sem anvil o teste do Playground falha em vez de ser pulado)
+                              # compilação de todos os geradores, golden, maturidade, proxy de IA, multichain,
                               # interface, Playground (usa anvil), Test Lab, carregador do solc e o zip
 npm run test:swap             # Foundry: regenera as fontes e roda forge test
 npm run test:portable         # Foundry: idem, modos portáteis

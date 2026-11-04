@@ -1,6 +1,6 @@
 # CI and repository hygiene (phase 3)
 
-Status as of 2026-11-02. The workflows were checked with actionlint 1.7.7 and every step was run by hand in a fresh
+Status as of 2026-11-04 (updated in phase 4; the first version was written on 2026-11-02). The workflows were checked with actionlint 1.7.7 and every step was run by hand in a fresh
 clone, but **they have not run on GitHub yet**: the first real run happens when this branch is pushed.
 
 ## 1. Workflows (`ci/workflows/`, to be installed in `.github/workflows/`)
@@ -9,7 +9,7 @@ clone, but **they have not run on GitHub yet**: the first real run happens when 
 
 | Workflow | When | What it does |
 |---|---|---|
-| `ci.yml` job **node** | push to `main`, every pull request | `npm ci` + `npm test` in `tests/` (compile every generator in every multichain mode, golden files, maturity table, AI proxy, multichain, UI, ABI playground against `anvil`, Test Lab, compiler loader, zip). Then `golden.mjs --update` followed by `git diff --exit-code -- golden`: it fails when a generator changed and the golden files were not updated. Builds the Cloudflare zip and uploads it as an artifact |
+| `ci.yml` job **node** | push to `main`, every pull request | `npm ci` + `npm test` in `tests/` (compile every generator in every multichain mode, golden files, maturity table, AI proxy, multichain, UI, ABI playground against `anvil`, Test Lab, compiler loader, zip). `REQUIRE_ANVIL=1` is set for this step, so a missing `anvil` fails the playground tests instead of skipping them (phase 4; this is a change in `ci/workflows/ci.yml` that must be copied to `.github/workflows/`). Then `golden.mjs --update` followed by `git diff --exit-code -- golden`: it fails when a generator changed and the golden files were not updated. Builds the Cloudflare zip and uploads it as an artifact |
 | `ci.yml` job **forge** | same | Foundry `v1.7.1`: `npm run test:swap` and `npm run test:portable` (each regenerates every Solidity source first, then runs the whole Foundry suite, fuzz included). The result line goes to the job summary |
 | `ci.yml` job **slither** | same | Slither on every distinct generated contract (see section 3). Reports are an artifact; the job fails on an untriaged High or Medium finding |
 | `ci.yml` job **actionlint** | same | actionlint 1.7.7 over the workflows, binary checked against its published sha256 |
@@ -81,13 +81,15 @@ Entries that match nothing are reported so they can be removed.
 | Informational | 51 | reported only | |
 | Optimization | 105 | reported only | |
 
-Those 47 High/Medium findings are 24 distinct (detector, contract, function) cases, covered by 24 triage entries:
+Those 47 High/Medium findings were 24 distinct (detector, contract, function) cases, covered by 24 triage entries (23 since phase 4):
 `arbitrary-send-eth` in the smart wallet (the wallet's purpose) and in MultiSend (the caller's own `msg.value`),
 `arbitrary-send-erc20` in the escrow (`fund` requires `msg.sender == buyer`), `reentrancy-balance` and
 `incorrect-equality` in the AMM, pair, order book and vault (balance reads that reject fee-on-transfer tokens, behind
 `nonReentrant`), `divide-before-multiply` (rounding that favours the pool or the maker), `incorrect-equality` on
-`ret.length == 0` (tokens that return nothing) and `reentrancy-no-eth` in staking (guarded). One entry is **not** a
-false positive: see finding 1 below.
+`ret.length == 0` (tokens that return nothing) and `reentrancy-no-eth` in staking (guarded). One entry was **not** a
+false positive (`ArcOriginals.mint`); it was fixed in phase 4 and the entry removed.
+
+**After phase 4** (2026-11-04, 37 distinct files from 87 sources): High 20 (20 triaged), Medium 23 (23 triaged), Low 98, Informational 51, Optimization 115; 23 triage entries, none stale, no new High or Medium finding. The three weakest reasons were rewritten to state their assumptions (`docs/phase4.md`).
 
 To add an entry, run the check, read the finding, decide whether it is real, and write why it is not (or link the
 issue). To see the Low and Informational findings: `node -e "…"` over `tests/slither-out/summary.json`, or open the
@@ -127,12 +129,12 @@ alerts and Dependabot security updates. Set *Actions → General → Workflow pe
 Found while building this phase. Nothing below was fixed (generator logic is out of scope here); each item is triaged
 with a pointer to this section.
 
-1. **Medium/Low, `ArcOriginals.mint` (NFT)**: the USDC payment (`transferFrom`) happens before `totalSupply` and the owner are
+1. **FIXED in phase 4 (2026-11-04), was Medium/Low, `ArcOriginals.mint` (NFT)**: the USDC payment (`transferFrom`) happens before `totalSupply` and the owner are
    updated, and the function has no reentrancy guard. A payment token that calls back could mint past `MAX_SUPPLY`. The
    token is chosen at deploy time and USDC has no callbacks, so the exposure is limited to deploying with a hostile token.
    Suggested fix: update `totalSupply`, `_owners` and `_balances` before the payment, or add `nonReentrant`. (Slither
    `reentrancy-no-eth`; the template stays `experimental`.)
-2. **Low, missing events**: `ArcSubscription.setPrice`, `ArcOriginals.setMintPrice` and `ArcYieldVault.setDepositCap` change
+2. **FIXED in phase 4 for the three setters named here; two more setters found, Low and still open (`setBaseURI` of the NFT, `setBeneficiary` of the subscription): missing events**: `ArcSubscription.setPrice`, `ArcOriginals.setMintPrice` and `ArcYieldVault.setDepositCap` change
    privileged parameters without emitting an event (Slither `events-maths`). Monitoring cannot see the change.
    Suggested fix: emit an event in each setter.
 3. **Test plumbing**: `npm run test:swap` could not run on a clean checkout (it only wrote the swap sources, while the
@@ -153,7 +155,7 @@ No other new High or Medium issue appeared: the other 23 triaged cases match wha
    0.8.28 for Foundry, Python 3.12, runner `ubuntu-24.04`.
 3. **Action SHAs**: all five were confirmed through the GitHub API; none is pending. The actionlint download is checked
    against a sha256 I computed from the release asset and that matches the published checksums file.
-4. **Triage**: 24 entries, one of which (`ArcOriginals.mint`) records a real weakness as accepted for now (finding 1).
+4. **Triage**: 23 entries since phase 4 (the entry for `ArcOriginals.mint` was removed when it was fixed). Three reasons name a weak assumption (smart wallet denylist, rounding in `addLiquidity`, `fillOrder` evidence).
    Review the reasons in `.github/slither-triage.json`.
 5. **Zip layout**: the script puts `index.html` at the root and `functions/` beside it, and leaves out `wrangler.toml`. The
    old zip had a wrapping `contractforge-deploy/` folder. I chose the layout a Pages direct upload needs; I did not test an
