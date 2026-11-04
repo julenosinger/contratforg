@@ -31,6 +31,8 @@ for (const [id, file] of [['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', '
 }
 // A collection that can hold exactly one token: the supply limit is the property under test for a hostile payment token.
 ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_price', '10'); set('s_supply', '1'); ev("genSimple('erc721')"); save('NftOne');
+// five tokens at most: small enough for the supply invariants to reach the limit
+ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_price', '10'); set('s_supply', '5'); ev("genSimple('erc721')"); save('NftFive');
 fillAddresses(app, 'arcMain'); clearTokens(); ev('genVault()'); save('Vault');
 fillAddresses(app, 'arcMain'); set('tre_streaming', 'yes'); ev('genTreasury()'); save('Treasury');
 set('swap_kind', 'amm'); set('swap_multi', 'single'); ev('genSwap()'); save('Amm');
