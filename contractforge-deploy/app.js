@@ -797,6 +797,8 @@ contract ${name} {
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
 
+    uint256 private _locked = 1;
+    modifier nonReentrant(){ require(_locked == 1, "reentrant call"); _locked = 2; _; _locked = 1; }
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
     constructor() { owner = msg.sender; }
@@ -831,16 +833,19 @@ contract ${name} {
         return (owner, (salePrice * royaltyBps) / 10000);
     }
 
-    function mint() external returns (uint256 tokenId) {
+    /// @notice Mints the next token to the caller and pays the owner. Checks, then effects, then the payment last:
+    ///         the supply and the owner are recorded before the payment token is called, and the function cannot be
+    ///         re-entered, so a payment token that calls back can neither mint past MAX_SUPPLY nor reuse a token id.
+    function mint() external nonReentrant returns (uint256 tokenId) {
         require(totalSupply < MAX_SUPPLY, "sold out");
-        if (mintPrice > 0) {
-            require(IERC20(usdc).transferFrom(msg.sender, owner, mintPrice), "USDC payment failed");
-        }
         tokenId = ++totalSupply;
         _owners[tokenId] = msg.sender;
         _balances[msg.sender] += 1;
         emit Transfer(address(0), msg.sender, tokenId);
         emit Minted(msg.sender, tokenId);
+        if (mintPrice > 0) {
+            require(IERC20(usdc).transferFrom(msg.sender, owner, mintPrice), "USDC payment failed");
+        }
     }
 
     function approve(address to, uint256 tokenId) external {

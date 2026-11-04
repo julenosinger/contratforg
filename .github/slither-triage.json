@@ -185,14 +185,6 @@
       "reason": "stake() is nonReentrant, so the state written after the token pull cannot be re-entered.",
       "doc": "docs/generators-review.md",
       "function": "stake"
-    },
-    {
-      "detector": "reentrancy-no-eth",
-      "contract": "ArcOriginals",
-      "severity": "Medium",
-      "reason": "KNOWN, NOT FIXED in the CI phase (out of scope): mint() pays before it updates totalSupply and has no guard. Only a hostile payment token could exploit it, and the token is chosen at deploy (USDC has no callbacks). Tracked in docs/ci.md, 'Achados do CI' #1.",
-      "doc": "docs/generators-review.md",
-      "function": "mint"
     }
   ]
 }
