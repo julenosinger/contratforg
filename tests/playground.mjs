@@ -1,11 +1,16 @@
-/* ABI Playground: real ethers + a local anvil node. Skipped when anvil is not installed. */
+/* ABI Playground: real ethers + a local anvil node.
+   Without anvil the tests are skipped on a developer machine, but with REQUIRE_ANVIL=1 (set in CI) a missing anvil is a failure,
+   so a broken Foundry install cannot leave the job green with nothing tested. */
 import { spawn, spawnSync } from 'node:child_process';
 import solc from 'solc';
 import ethersPkg from 'ethers';
 import { loadApp } from './harness.mjs';
 
 const { ethers } = ethersPkg;
-if (spawnSync('anvil', ['--version']).status !== 0) { console.log('anvil not found: playground tests skipped'); process.exit(0); }
+if (spawnSync('anvil', ['--version']).status !== 0) {
+  if (process.env.REQUIRE_ANVIL === '1') { console.error('FAIL: anvil not found and REQUIRE_ANVIL=1, so the playground tests cannot be skipped'); process.exit(1); }
+  console.log('anvil not found: playground tests skipped (set REQUIRE_ANVIL=1 to make this a failure)'); process.exit(0);
+}
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  FAIL  ' + m); } };
