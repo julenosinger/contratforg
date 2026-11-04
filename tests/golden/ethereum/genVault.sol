@@ -37,6 +37,7 @@ contract ArcYieldVault {
 
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
     event Withdraw(address indexed sender, address indexed owner, uint256 assets, uint256 shares, uint256 perfFee);
+    event DepositCapUpdated(uint256 oldCap, uint256 newCap);
     event FeesClaimed(address indexed to, uint256 amount);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -130,6 +131,7 @@ contract ArcYieldVault {
 
     function setDepositCap(uint256 newCap) external {
         require(msg.sender == owner, "not owner");
+        emit DepositCapUpdated(depositCap, newCap);
         depositCap = newCap;
     }
 

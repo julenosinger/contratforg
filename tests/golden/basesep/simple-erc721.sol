@@ -32,6 +32,7 @@ contract ArcOriginals {
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
 
     uint256 private _locked = 1;
     modifier nonReentrant(){ require(_locked == 1, "reentrant call"); _locked = 2; _; _locked = 1; }
@@ -120,7 +121,10 @@ contract ArcOriginals {
         }
     }
 
-    function setMintPrice(uint256 newPrice) external onlyOwner { mintPrice = newPrice; }
+    function setMintPrice(uint256 newPrice) external onlyOwner {
+        emit MintPriceUpdated(mintPrice, newPrice);
+        mintPrice = newPrice;
+    }
     function setBaseURI(string calldata uri) external onlyOwner { baseURI = uri; }
 
     function _toString(uint256 value) internal pure returns (string memory) {

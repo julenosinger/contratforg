@@ -18,6 +18,7 @@ contract ArcSubscription {
     mapping(address => uint256) public accessUntil;
 
     event Subscribed(address indexed user, uint256 until);
+    event PriceUpdated(uint256 oldPrice, uint256 newPrice);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -46,7 +47,10 @@ contract ArcSubscription {
         require(token.transferFrom(msg.sender, beneficiary, price), "payment failed");
     }
 
-    function setPrice(uint256 newPrice) external onlyOwner { pricePerPeriod = newPrice; }
+    function setPrice(uint256 newPrice) external onlyOwner {
+        emit PriceUpdated(pricePerPeriod, newPrice);
+        pricePerPeriod = newPrice;
+    }
     function setBeneficiary(address newBeneficiary) external onlyOwner {
         require(newBeneficiary != address(0), "zero beneficiary");
         beneficiary = newBeneficiary;

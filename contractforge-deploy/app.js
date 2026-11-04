@@ -796,6 +796,7 @@ contract ${name} {
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
 
     uint256 private _locked = 1;
     modifier nonReentrant(){ require(_locked == 1, "reentrant call"); _locked = 2; _; _locked = 1; }
@@ -884,7 +885,10 @@ contract ${name} {
         }
     }
 
-    function setMintPrice(uint256 newPrice) external onlyOwner { mintPrice = newPrice; }
+    function setMintPrice(uint256 newPrice) external onlyOwner {
+        emit MintPriceUpdated(mintPrice, newPrice);
+        mintPrice = newPrice;
+    }
     function setBaseURI(string calldata uri) external onlyOwner { baseURI = uri; }
 
     function _toString(uint256 value) internal pure returns (string memory) {
@@ -1084,6 +1088,7 @@ contract ${name} {
     mapping(address => uint256) public accessUntil;
 
     event Subscribed(address indexed user, uint256 until);
+    event PriceUpdated(uint256 oldPrice, uint256 newPrice);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -1112,7 +1117,10 @@ contract ${name} {
         require(token.transferFrom(msg.sender, beneficiary, price), "payment failed");
     }
 
-    function setPrice(uint256 newPrice) external onlyOwner { pricePerPeriod = newPrice; }
+    function setPrice(uint256 newPrice) external onlyOwner {
+        emit PriceUpdated(pricePerPeriod, newPrice);
+        pricePerPeriod = newPrice;
+    }
     function setBeneficiary(address newBeneficiary) external onlyOwner {
         require(newBeneficiary != address(0), "zero beneficiary");
         beneficiary = newBeneficiary;
@@ -1937,6 +1945,7 @@ contract ${name} {
 
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
     event Withdraw(address indexed sender, address indexed owner, uint256 assets, uint256 shares, uint256 perfFee);
+    event DepositCapUpdated(uint256 oldCap, uint256 newCap);
     event FeesClaimed(address indexed to, uint256 amount);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -2030,6 +2039,7 @@ contract ${name} {
 
     function setDepositCap(uint256 newCap) external {
         require(msg.sender == owner, "not owner");
+        emit DepositCapUpdated(depositCap, newCap);
         depositCap = newCap;
     }
 
