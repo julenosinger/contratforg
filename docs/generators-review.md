@@ -79,3 +79,13 @@ Both templates now have a dedicated Foundry suite with fuzz tests and invariants
   deliver less than listed; native currency forced into the contract by other means stays there; scale differs between native
   (18 decimals) and USDC (6) on Arc.
 - **Decision:** nothing relevant is open, suite requirement met: **reviewed**.
+
+### NFT owner rotation (phase 5, 2026-11-04)
+Decision: the NFT is kept at `reviewed` **because the same weakness that kept the DAO experimental is now fixed here too**, not because it is
+acceptable here. The owner receives every mint payment and the royalties and sets the price and the base URI; a key that could never be
+replaced would mean a lost key freezes the price and a compromised key cannot be contained. `ArcOriginals` now has
+`transferOwnership` / `acceptOwnership` (two steps; a pending owner has no powers; never the zero address; events
+`OwnershipTransferStarted` and `OwnershipTransferred`). There is deliberately no renounce: the owner is also the payee, so a zero owner
+would burn every payment. Tests: `Phase5Nft.t.sol` (three unit tests that failed against the previous output, and a fuzz test).
+The other generated contracts with a fixed owner (subscription, ERC-20, staking) have the same weakness; they are experimental and it is listed in `docs/phase5.md`.
+

@@ -20,6 +20,8 @@ contract ArcOriginals {
     uint256 public mintPrice = 10 * 10**6; // USDC, 6 decimals
     uint96  public royaltyBps = 500;
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
     address public usdc = 0x3600000000000000000000000000000000000000;
     uint256 public totalSupply;
 
@@ -33,12 +35,30 @@ contract ArcOriginals {
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
     event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     uint256 private _locked = 1;
     modifier nonReentrant(){ require(_locked == 1, "reentrant call"); _locked = 2; _; _locked = 1; }
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (mint payments, royalties, price and base URI) to newOwner; it takes effect when newOwner accepts.
+    ///         The owner can never be the zero address: the owner is also the payee, so there is no renounce.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "new owner is the zero address");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
 
     /// @notice ERC-165: ERC-721, ERC-721 metadata and ERC-2981 (royalties).
     function supportsInterface(bytes4 id) external pure returns (bool) {
