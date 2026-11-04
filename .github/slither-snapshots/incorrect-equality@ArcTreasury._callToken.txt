@@ -1,0 +1,1 @@
+function _callToken(address token, bytes memory data) private { (bool ok, bytes memory ret) = token.call(data); require(ok && (ret.length == 0 || abi.decode(ret, (bool))), "token transfer failed"); }

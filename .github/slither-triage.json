@@ -8,7 +8,8 @@
       "severity": "High",
       "reason": "False positive: fund() first requires msg.sender == buyer and pulls from the buyer, so the 'from' address is the caller.",
       "doc": "docs/generators-review.md",
-      "function": "fund"
+      "function": "fund",
+      "hash": "e64aa282c32f6117"
     },
     {
       "detector": "arbitrary-send-eth",
@@ -16,15 +17,17 @@
       "severity": "High",
       "reason": "By design: sends the caller's own msg.value to the recipients the caller chose. The contract is stateless and holds no other funds (tests/solidity/test/Rest.t.sol, MultiSend tests).",
       "doc": "docs/generators-review.md",
-      "function": "multiSendNative"
+      "function": "multiSendNative",
+      "hash": "1c7dbcd495fcb49b"
     },
     {
       "detector": "arbitrary-send-eth",
       "contract": "ArcSmartWallet",
       "severity": "High",
-      "reason": "By design: this is the wallet's purpose. Only the owner, or a session key limited to an allow-list, a daily limit and a list of blocked token-moving selectors, reaches _call. WEAK ASSUMPTION: the blocked-selector list is a denylist of known functions, so the owner must never allow-list a contract that can move the wallet's assets (docs/smart-wallet-review.md); see docs/phase4.md.",
+      "reason": "By design: the wallet exists to call other contracts. Only the owner, or a session key for the exact (target, function) pairs the owner granted (and never a blocked token function), can reach _call; a plain native transfer is its own pair and is charged to the daily limit. Re-read in phase 5 against the pair-based permission model. A granted pair is trusted (see docs/smart-wallet-review.md).",
       "doc": "docs/smart-wallet-review.md",
-      "function": "_call"
+      "function": "_call",
+      "hash": "3b98c1090ff58346"
     },
     {
       "detector": "reentrancy-balance",
@@ -32,7 +35,8 @@
       "severity": "High",
       "reason": "Balance reads around the token call are what reject fee-on-transfer tokens. Every external entry point of the pool is nonReentrant, so the read cannot be raced.",
       "doc": "docs/swap-amm-review.md",
-      "function": "_pull"
+      "function": "_pull",
+      "hash": "9fc4bcf56d953058"
     },
     {
       "detector": "incorrect-equality",
@@ -40,7 +44,8 @@
       "severity": "Medium",
       "reason": "Intended: the exact equality of the balance difference is the check that rejects fee-on-transfer tokens (swap-amm-review, 'verify exact payouts').",
       "doc": "docs/swap-amm-review.md",
-      "function": "_pull"
+      "function": "_pull",
+      "hash": "9fc4bcf56d953058"
     },
     {
       "detector": "reentrancy-balance",
@@ -48,7 +53,8 @@
       "severity": "High",
       "reason": "Balance reads around the token call are what reject fee-on-transfer tokens. Every external entry point of the pool is nonReentrant, so the read cannot be raced.",
       "doc": "docs/swap-amm-review.md",
-      "function": "_push"
+      "function": "_push",
+      "hash": "e1631d783dd4d5a9"
     },
     {
       "detector": "incorrect-equality",
@@ -56,7 +62,8 @@
       "severity": "Medium",
       "reason": "Intended: the exact equality of the balance difference is the check that rejects fee-on-transfer tokens (swap-amm-review, 'verify exact payouts').",
       "doc": "docs/swap-amm-review.md",
-      "function": "_push"
+      "function": "_push",
+      "hash": "e1631d783dd4d5a9"
     },
     {
       "detector": "divide-before-multiply",
@@ -64,7 +71,8 @@
       "severity": "Medium",
       "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (the quote of the Uniswap V2 router), and the share count is rounded down again. The depositor can lose a few units of the smallest denomination, never gain: the fuzz tests (Gen.t.sol, Lp.t.sol, Factory.t.sol invariants) show add/remove never returns more than was put in. The amount of the loss is not bounded by a proof here.",
       "doc": "docs/swap-amm-review.md",
-      "function": "addLiquidity"
+      "function": "addLiquidity",
+      "hash": "936cd32a7c2edae2"
     },
     {
       "detector": "reentrancy-balance",
@@ -72,7 +80,8 @@
       "severity": "High",
       "reason": "Balance reads around the token call are what reject fee-on-transfer tokens. Every external entry point of the pool is nonReentrant, so the read cannot be raced.",
       "doc": "docs/swap-amm-review.md",
-      "function": "_pull"
+      "function": "_pull",
+      "hash": "9fc4bcf56d953058"
     },
     {
       "detector": "incorrect-equality",
@@ -80,7 +89,8 @@
       "severity": "Medium",
       "reason": "Intended: the exact equality of the balance difference is the check that rejects fee-on-transfer tokens (swap-amm-review, 'verify exact payouts').",
       "doc": "docs/swap-amm-review.md",
-      "function": "_pull"
+      "function": "_pull",
+      "hash": "9fc4bcf56d953058"
     },
     {
       "detector": "reentrancy-balance",
@@ -88,7 +98,8 @@
       "severity": "High",
       "reason": "Balance reads around the token call are what reject fee-on-transfer tokens. Every external entry point of the pool is nonReentrant, so the read cannot be raced.",
       "doc": "docs/swap-amm-review.md",
-      "function": "_push"
+      "function": "_push",
+      "hash": "e1631d783dd4d5a9"
     },
     {
       "detector": "incorrect-equality",
@@ -96,7 +107,8 @@
       "severity": "Medium",
       "reason": "Intended: the exact equality of the balance difference is the check that rejects fee-on-transfer tokens (swap-amm-review, 'verify exact payouts').",
       "doc": "docs/swap-amm-review.md",
-      "function": "_push"
+      "function": "_push",
+      "hash": "e1631d783dd4d5a9"
     },
     {
       "detector": "divide-before-multiply",
@@ -104,7 +116,8 @@
       "severity": "Medium",
       "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (the quote of the Uniswap V2 router), and the share count is rounded down again. The depositor can lose a few units of the smallest denomination, never gain: the fuzz tests (Gen.t.sol, Lp.t.sol, Factory.t.sol invariants) show add/remove never returns more than was put in. The amount of the loss is not bounded by a proof here.",
       "doc": "docs/swap-amm-review.md",
-      "function": "addLiquidity"
+      "function": "addLiquidity",
+      "hash": "2a8fe7b109c47e98"
     },
     {
       "detector": "reentrancy-balance",
@@ -112,7 +125,8 @@
       "severity": "High",
       "reason": "createOrder is nonReentrant and measures the amount that really arrived, which is how fee-on-transfer tokens are refused.",
       "doc": "docs/generators-review.md",
-      "function": "createOrder"
+      "function": "createOrder",
+      "hash": "c8b1b5cddc97eb68"
     },
     {
       "detector": "incorrect-equality",
@@ -120,7 +134,8 @@
       "severity": "Medium",
       "reason": "Intended: exact equality of the received amount rejects fee-on-transfer tokens.",
       "doc": "docs/generators-review.md",
-      "function": "createOrder"
+      "function": "createOrder",
+      "hash": "c8b1b5cddc97eb68"
     },
     {
       "detector": "divide-before-multiply",
@@ -128,7 +143,8 @@
       "severity": "Medium",
       "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. WEAK EVIDENCE: the order book (experimental) has unit tests only (testFillCannotBeFree), no fuzz test of the rounding; see docs/phase4.md.",
       "doc": "docs/generators-review.md",
-      "function": "fillOrder"
+      "function": "fillOrder",
+      "hash": "a02898c0687ec409"
     },
     {
       "detector": "reentrancy-balance",
@@ -136,7 +152,8 @@
       "severity": "High",
       "reason": "createOrder is nonReentrant and measures the amount that really arrived, which is how fee-on-transfer tokens are refused.",
       "doc": "docs/generators-review.md",
-      "function": "createOrder"
+      "function": "createOrder",
+      "hash": "c8b1b5cddc97eb68"
     },
     {
       "detector": "incorrect-equality",
@@ -144,7 +161,8 @@
       "severity": "Medium",
       "reason": "Intended: exact equality of the received amount rejects fee-on-transfer tokens.",
       "doc": "docs/generators-review.md",
-      "function": "createOrder"
+      "function": "createOrder",
+      "hash": "c8b1b5cddc97eb68"
     },
     {
       "detector": "divide-before-multiply",
@@ -152,7 +170,8 @@
       "severity": "Medium",
       "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. WEAK EVIDENCE: the order book (experimental) has unit tests only (testFillCannotBeFree), no fuzz test of the rounding; see docs/phase4.md.",
       "doc": "docs/generators-review.md",
-      "function": "fillOrder"
+      "function": "fillOrder",
+      "hash": "a02898c0687ec409"
     },
     {
       "detector": "reentrancy-balance",
@@ -160,7 +179,8 @@
       "severity": "High",
       "reason": "_deposit is nonReentrant; the balance difference measures what really arrived so fee-on-transfer tokens are credited correctly.",
       "doc": "docs/generators-review.md",
-      "function": "_deposit"
+      "function": "_deposit",
+      "hash": "26729e91b2ec004f"
     },
     {
       "detector": "incorrect-equality",
@@ -168,7 +188,8 @@
       "severity": "Medium",
       "reason": "'ret.length == 0 ||' is the usual check for tokens that return nothing (USDT style); it is not a balance comparison.",
       "doc": "docs/generators-review.md",
-      "function": "_call"
+      "function": "_call",
+      "hash": "c5a7b5e2c7a3d382"
     },
     {
       "detector": "incorrect-equality",
@@ -176,7 +197,8 @@
       "severity": "Medium",
       "reason": "'ret.length == 0 ||' is the usual check for tokens that return nothing (USDT style); it is not a balance comparison.",
       "doc": "docs/generators-review.md",
-      "function": "_callToken"
+      "function": "_callToken",
+      "hash": "276b5c11a8957bf6"
     },
     {
       "detector": "reentrancy-no-eth",
@@ -184,7 +206,26 @@
       "severity": "Medium",
       "reason": "stake() is nonReentrant, so the state written after the token pull cannot be re-entered.",
       "doc": "docs/generators-review.md",
-      "function": "stake"
+      "function": "stake",
+      "hash": "b8b68c2ad228d0b9"
+    },
+    {
+      "detector": "uninitialized-local",
+      "contract": "ArcSmartWallet",
+      "severity": "Medium",
+      "reason": "False positive: in _checkSession the local `selector` is meant to be bytes4(0) when the call has no data, because the zero selector is the permission for a plain native transfer (the pair (target, 0x00000000)); a call WITH data sets it from the first four bytes and refuses 0x00000000. New in phase 5, tested by testPlainNativeTransferHasItsOwnPermission and testSelectorZeroCannotBeUsedToCallAFunction.",
+      "doc": "docs/smart-wallet-review.md",
+      "function": "_checkSession",
+      "hash": "3ad4986c7151b70e"
+    },
+    {
+      "detector": "encode-packed-collision",
+      "contract": "ArcOriginals",
+      "severity": "High",
+      "reason": "False positive: abi.encodePacked joins the base URI and the decimal token id into the string tokenURI returns; the result is never hashed or compared, so a collision between argument boundaries has no effect. Slither reports this in some runs and not in others on identical input (5 of 12 runs observed with Slither 0.11.6), so the entry may match nothing in a given run.",
+      "doc": "docs/phase5.md",
+      "function": "tokenURI",
+      "hash": "74115d399ddb1bc7"
     }
   ]
 }

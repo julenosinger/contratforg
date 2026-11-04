@@ -1,0 +1,1 @@
+function _call(address target, uint256 value, bytes calldata data) private returns (bytes memory result) { if (data.length != 0 && target.code.length == 0) revert NotAContract(target); bool ok; (ok, result) = target.call{value: value}(data); if (!ok) { if (result.length == 0) revert CallFailed(); assembly ("memory-safe") { revert(add(result, 32), mload(result)) } } }

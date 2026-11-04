@@ -8,7 +8,8 @@
     "test:swap": "npm run dump && cd solidity && forge test",
     "test:portable": "npm run dump && cd solidity && forge test",
     "build:zip": "node ../scripts/build-zip.mjs",
-    "dump": "node dump-swap-sources.mjs && node dump-portable-sources.mjs"
+    "dump": "node dump-swap-sources.mjs && node dump-portable-sources.mjs",
+    "test:slither-pin": "node slither-pin.mjs"
   },
   "devDependencies": {
     "ethers": "5.7.2",

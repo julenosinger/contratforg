@@ -1,0 +1,1 @@
+function fund() external { require(msg.sender == buyer, "only buyer"); require(!funded, "already funded"); funded = true; deadline = block.timestamp + 14 days; emit Funded(amount); require(token.transferFrom(buyer, address(this), amount), "transferFrom failed"); }

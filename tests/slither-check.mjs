@@ -1,6 +1,13 @@
 // Runs Slither over every distinct contract the generators produce and applies the written triage.
 //
-//   node slither-check.mjs [--out DIR] [--triage FILE] [--skip-dump] [--list]
+//   node slither-check.mjs [--out DIR] [--triage FILE] [--skip-dump] [--list] [--files a.sol,b.sol]
+//   node slither-check.mjs --rehash <entry id> [--confirm] [--reuse]   (re-pin ONE triage entry to the current code; see docs/ci.md)
+//
+// Every triage entry is pinned to the code it was written for: it carries the hash of the normalised source of the
+// function it covers (comments, whitespace and address literals ignored, so the stamp and the network label do not
+// matter). If the function changes, the entry stops covering the finding and the run fails, naming the entry, until a
+// person has read the justification again and re-pinned that one entry. The normalised text of the pinned function is
+// kept in .github/slither-snapshots/ so that a re-pin can show the difference.
 //
 // Inputs: tests/golden/*/*.sol (single-network output, four networks, Arc Mainnet included) and the portable-mode
 // sources written by dump-portable-sources.mjs. Files that are identical once the network label is ignored are
@@ -20,20 +27,28 @@ const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[
 const outDir = path.resolve(opt('--out', path.join(here, 'slither-out')));
 const triagePath = path.resolve(opt('--triage', path.join(repo, '.github/slither-triage.json')));
 const SEVERE = ['High', 'Medium'];
+const snapDir = path.join(repo, '.github/slither-snapshots');
+const REHASH = opt('--rehash', '');
+const CONFIRM = args.includes('--confirm');
+const FILES = opt('--files', '');
+const REUSE = args.includes('--reuse');   // use the reports of the previous run instead of running Slither again (for several --rehash in a row)
 
 /* ---------- 1. collect the sources and drop duplicates ---------- */
-if (!args.includes('--skip-dump')) {
+if (!args.includes('--skip-dump') && !FILES) {
   const r = spawnSync('node', ['dump-portable-sources.mjs'], { cwd: here, stdio: ['ignore', 'ignore', 'inherit'] });
   if (r.status !== 0) { console.error('dump-portable-sources.mjs failed'); process.exit(2); }
 }
 const candidates = [];
+if (FILES) {
+  for (const f of FILES.split(',').filter(Boolean)) candidates.push({ origin: 'custom', name: path.basename(f).replace(/\.sol$/, ''), file: path.resolve(f) });
+}
 const goldenDir = path.join(here, 'golden');
 // Arc Mainnet first, so it is the copy that stays when another network produced identical code.
-for (const net of fs.readdirSync(goldenDir).sort((a, b) => (b === 'arcMain') - (a === 'arcMain') || a.localeCompare(b)))
+for (const net of (FILES ? [] : fs.readdirSync(goldenDir)).sort((a, b) => (b === 'arcMain') - (a === 'arcMain') || a.localeCompare(b)))
   for (const f of fs.readdirSync(path.join(goldenDir, net)).filter((x) => x.endsWith('.sol')).sort())
     candidates.push({ origin: 'golden-' + net, name: f.replace(/\.sol$/, ''), file: path.join(goldenDir, net, f) });
 const portableDir = path.join(here, 'solidity/src/portable');
-if (fs.existsSync(portableDir))
+if (!FILES && fs.existsSync(portableDir))
   for (const f of fs.readdirSync(portableDir).filter((x) => x.endsWith('.sol')).sort())
     candidates.push({ origin: 'portable', name: f.replace(/\.sol$/, ''), file: path.join(portableDir, f) });
 
@@ -47,10 +62,10 @@ for (const c of candidates) {
 }
 console.log(`sources: ${candidates.length}, distinct: ${distinct.length}, duplicates skipped: ${duplicates.length}`);
 if (args.includes('--list')) { distinct.forEach((c) => console.log('  ' + c.origin + '/' + c.name)); process.exit(0); }
-if (!distinct.some((c) => c.origin === 'golden-arcMain') || !distinct.some((c) => c.origin === 'portable')) { console.error('expected Arc Mainnet and portable sources'); process.exit(2); }
+if (!FILES && (!distinct.some((c) => c.origin === 'golden-arcMain') || !distinct.some((c) => c.origin === 'portable'))) { console.error('expected Arc Mainnet and portable sources'); process.exit(2); }
 
 /* ---------- 2. run Slither ---------- */
-fs.rmSync(outDir, { recursive: true, force: true });
+if (!REUSE) fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(path.join(outDir, 'src'), { recursive: true });
 fs.mkdirSync(path.join(outDir, 'json'), { recursive: true });
 const solc = process.env.SOLC || '';
@@ -63,7 +78,7 @@ for (const c of distinct) {
   const jsonPath = path.join(outDir, 'json', id + '.json');
   const a = [copy, '--json', jsonPath, '--disable-color'];
   if (solc) a.push('--solc', solc);
-  const r = spawnSync('slither', a, { encoding: 'utf8' });
+  const r = (REUSE && fs.existsSync(jsonPath)) ? { stderr: '' } : spawnSync('slither', a, { encoding: 'utf8' });
   if (!fs.existsSync(jsonPath)) { failedRuns++; console.error(`slither produced no report for ${id}\n${(r.stderr || '').slice(-600)}`); continue; }
   const rep = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
   if (!rep.success) { failedRuns++; console.error(`slither failed on ${id}: ${rep.error}`); continue; }
@@ -82,26 +97,86 @@ function functionOf(d) {
   for (const e of d.elements || []) { if (e.type === 'function') return e.name; const f = e.type_specific_fields; if (f && f.parent && f.parent.type === 'function') return f.parent.name; }
   return '';
 }
+/* the source of the function a finding is about, normalised: no comments, one space between tokens, address literals replaced */
+function mappingOf(d) {
+  for (const e of d.elements || []) {
+    if (e.type === 'function' && e.source_mapping) return e.source_mapping;
+    const f = e.type_specific_fields;
+    if (f && f.parent && f.parent.type === 'function' && f.parent.source_mapping) return f.parent.source_mapping;
+  }
+  return null;
+}
+function normaliseCode(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ').replace(/0x[0-9a-fA-F]{40}\b/g, 'ADDR').replace(/\s+/g, ' ').trim();
+}
+function pinOf(d) {
+  const m = mappingOf(d);
+  if (!m || !m.filename_absolute || !fs.existsSync(m.filename_absolute)) return null;
+  const buf = fs.readFileSync(m.filename_absolute);
+  const text = normaliseCode(buf.subarray(m.start, m.start + m.length).toString('utf8'));
+  return { text, hash: crypto.createHash('sha256').update(text).digest('hex').slice(0, 16) };
+}
 function summarise(d) {
-  return { detector: d.check, impact: d.impact, confidence: d.confidence, contract: contractOf(d), fn: functionOf(d), text: (d.description || '').split('\n')[0].trim() };
+  const pin = pinOf(d);
+  return { detector: d.check, impact: d.impact, confidence: d.confidence, contract: contractOf(d), fn: functionOf(d), text: (d.description || '').split('\n')[0].trim(), pin };
 }
 if (failedRuns) { console.error(`${failedRuns} Slither run(s) failed`); process.exit(2); }
 
 /* ---------- 3. triage ---------- */
 const triage = fs.existsSync(triagePath) ? JSON.parse(fs.readFileSync(triagePath, 'utf8')) : { entries: [] };
+const ids = new Set();
+const entryId = (e) => e.id || (e.detector + '@' + e.contract + '.' + (e.function || ''));
 for (const e of triage.entries) {
   if (!e.detector || !e.contract || !e.reason || e.reason.length < 20) { console.error('triage entry without detector, contract or a written reason:', JSON.stringify(e)); process.exit(2); }
   if (e.doc && !fs.existsSync(path.join(repo, e.doc))) { console.error('triage entry points to a document that does not exist:', e.doc); process.exit(2); }
   if (e.contract === '*' && !e.generic) { console.error('a "*" contract entry must say generic:true and justify it:', e.detector); process.exit(2); }
+  if (!e.function) { console.error('triage entry without a function (entries are pinned to the code of one function):', entryId(e)); process.exit(2); }
+  if (ids.has(entryId(e))) { console.error('two triage entries have the same id:', entryId(e)); process.exit(2); }
+  ids.add(entryId(e));
 }
+const snapFile = (e) => path.join(snapDir, entryId(e).replace(/[^A-Za-z0-9_.@-]/g, '_') + '.txt');
 const used = new Set();
-const matches = (e, f) => e.detector === f.detector && (e.contract === '*' || e.contract === f.contract) && (!e.function || e.function === f.fn);
-const rows = {};
+const pinsOf = (e) => (Array.isArray(e.hash) ? e.hash : e.hash ? [e.hash] : []);
+const matches = (e, f) => e.detector === f.detector && (e.contract === '*' || e.contract === f.contract) && (e.function === f.fn);
+const rows = {}; const changed = new Map();   // entry -> list of {source, hash}
 for (const f of findings) {
   const entry = triage.entries.find((e) => matches(e, f));
-  f.triaged = !!entry; if (entry) used.add(entry);
+  f.triaged = false;
+  if (entry) {
+    used.add(entry);
+    if (!f.pin) f.pinProblem = 'no source mapping';
+    else if (!pinsOf(entry).includes(f.pin.hash)) { f.pinProblem = 'the code changed'; if (!changed.has(entry)) changed.set(entry, []); changed.get(entry).push({ source: f.source, hash: f.pin.hash, text: f.pin.text }); }
+    else f.triaged = true;
+  }
   rows[f.impact] = rows[f.impact] || { total: 0, triaged: 0, untriaged: 0 };
-  rows[f.impact].total++; rows[f.impact][entry ? 'triaged' : 'untriaged']++;
+  rows[f.impact].total++; rows[f.impact][f.triaged ? 'triaged' : 'untriaged']++;
+}
+
+/* ---------- 3b. re-pin ONE entry on request ---------- */
+if (REHASH) {
+  const e = triage.entries.find((x) => entryId(x) === REHASH);
+  if (!e) { console.error('no triage entry with the id', REHASH, '\nids:\n  ' + [...ids].join('\n  ')); process.exit(2); }
+  const hits = findings.filter((f) => matches(e, f) && f.pin);
+  if (!hits.length) { console.error('Slither did not report this finding in the analysed code, so there is nothing to pin:', REHASH); process.exit(2); }
+  const newHashes = [...new Set(hits.map((f) => f.pin.hash))];
+  const newText = hits[0].pin.text;
+  const oldText = fs.existsSync(snapFile(e)) ? fs.readFileSync(snapFile(e), 'utf8') : '';
+  console.log('\nentry     : ' + REHASH + '  [' + e.severity + ']');
+  console.log('detector  : ' + e.detector + '\nfunction  : ' + e.contract + '.' + e.function);
+  console.log('reason    : ' + e.reason + (e.doc ? '\ndocument  : ' + e.doc : ''));
+  console.log('old pin   : ' + (pinsOf(e).join(', ') || '(none)') + '\nnew pin   : ' + newHashes.join(', '));
+  if (newHashes.length > 1) console.log('note      : the function differs between analysed files; all variants are pinned');
+  if (oldText !== newText) {
+    const tmpA = path.join(outDir, 'old.txt'), tmpB = path.join(outDir, 'new.txt');
+    fs.writeFileSync(tmpA, oldText.replace(/ ([;{}])/g, '$1\n').replace(/([;{}]) /g, '$1\n') + '\n'); fs.writeFileSync(tmpB, newText.replace(/ ([;{}])/g, '$1\n').replace(/([;{}]) /g, '$1\n') + '\n');
+    console.log('\ndifference in the normalised function (one statement per line):\n' + (spawnSync('diff', ['-u', tmpA, tmpB], { encoding: 'utf8' }).stdout || '(no snapshot to compare with)').split('\n').slice(2).join('\n'));
+  } else console.log('\nthe normalised function is the same as the stored snapshot');
+  if (!CONFIRM) { console.log('\nNothing was written. Read the reason above against the new code; if it still holds, run again with --confirm.'); process.exit(0); }
+  e.hash = newHashes.length === 1 ? newHashes[0] : newHashes;
+  fs.mkdirSync(snapDir, { recursive: true }); fs.writeFileSync(snapFile(e), newText + '\n');
+  fs.writeFileSync(triagePath, JSON.stringify(triage, null, 2) + '\n');
+  console.log('\nre-pinned ' + REHASH + ' (triage file and snapshot written). Review the diff and commit both.');
+  process.exit(0);
 }
 const untriaged = findings.filter((f) => SEVERE.includes(f.impact) && !f.triaged);
 const unique = (list) => [...new Map(list.map((f) => [f.detector + '|' + f.contract + '|' + f.fn, f])).values()];
@@ -117,6 +192,10 @@ if (stale.length) console.log('\ntriage entries that matched nothing (consider r
 
 fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify({ analysed: distinct.map((c) => c.origin + '/' + c.name), duplicates: duplicates.map((d) => d.origin + '/' + d.name + ' = ' + d.sameAs), counts: rows, untriaged: unique(untriaged), findings }, null, 1));
 console.log(`\nreport: ${path.relative(process.cwd(), outDir)}/summary.json (+ one JSON per contract in json/)`);
+if (changed.size) {
+  console.error('\nFAIL: the code behind these triage entries changed, so the entries no longer cover their findings.\nRead each justification again against the new code, then re-pin that one entry:');
+  for (const [e, list] of changed) console.error(`  ${entryId(e)}  (${e.contract}.${e.function}, first seen in ${list[0].source})\n      reason: ${e.reason}\n      pinned: ${pinsOf(e).join(', ') || '(none)'}  now: ${[...new Set(list.map((x) => x.hash))].join(', ')}\n      node slither-check.mjs --rehash '${entryId(e)}' --confirm`);
+}
 if (untriaged.length) {
   console.error(`\nFAIL: ${unique(untriaged).length} High/Medium finding(s) are not in ${path.relative(repo, triagePath)}:`);
   for (const f of unique(untriaged)) console.error(`  [${f.impact}] ${f.detector} in ${f.contract}${f.fn ? '.' + f.fn : ''} (first seen in ${f.source})\n      ${f.text.slice(0, 160)}`);

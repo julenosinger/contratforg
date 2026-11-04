@@ -1,0 +1,1 @@
+function tokenURI(uint256 tokenId) external view returns (string memory) { ownerOf(tokenId); return string(abi.encodePacked(baseURI, _toString(tokenId))); }

@@ -1,0 +1,1 @@
+function stake(uint256 amount) external nonReentrant { require(amount > 0, "zero amount"); _accrue(msg.sender); uint256 received = _pull(stakingToken, amount); Position storage pos = positions[msg.sender]; pos.amount += received; pos.stakedAt = block.timestamp; totalStaked += received; emit Staked(msg.sender, received); }
