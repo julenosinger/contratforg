@@ -22,7 +22,7 @@
       "detector": "arbitrary-send-eth",
       "contract": "ArcSmartWallet",
       "severity": "High",
-      "reason": "By design: this is the wallet's purpose. Only the owner, or a session key limited to an allow-list, a daily limit and a blocked-selector list, reaches _call.",
+      "reason": "By design: this is the wallet's purpose. Only the owner, or a session key limited to an allow-list, a daily limit and a list of blocked token-moving selectors, reaches _call. WEAK ASSUMPTION: the blocked-selector list is a denylist of known functions, so the owner must never allow-list a contract that can move the wallet's assets (docs/smart-wallet-review.md); see docs/phase4.md.",
       "doc": "docs/smart-wallet-review.md",
       "function": "_call"
     },
@@ -62,7 +62,7 @@
       "detector": "divide-before-multiply",
       "contract": "ArcSwapAMM",
       "severity": "Medium",
-      "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (same quote as the Uniswap V2 router); the loss is below one unit and the fuzz tests show add/remove never returns more than was put in.",
+      "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (the quote of the Uniswap V2 router), and the share count is rounded down again. The depositor can lose a few units of the smallest denomination, never gain: the fuzz tests (Gen.t.sol, Lp.t.sol, Factory.t.sol invariants) show add/remove never returns more than was put in. The amount of the loss is not bounded by a proof here.",
       "doc": "docs/swap-amm-review.md",
       "function": "addLiquidity"
     },
@@ -102,7 +102,7 @@
       "detector": "divide-before-multiply",
       "contract": "ArcSwapAMMPair",
       "severity": "Medium",
-      "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (same quote as the Uniswap V2 router); the loss is below one unit and the fuzz tests show add/remove never returns more than was put in.",
+      "reason": "Intended rounding: the optimal amount is rounded down in favour of the pool (the quote of the Uniswap V2 router), and the share count is rounded down again. The depositor can lose a few units of the smallest denomination, never gain: the fuzz tests (Gen.t.sol, Lp.t.sol, Factory.t.sol invariants) show add/remove never returns more than was put in. The amount of the loss is not bounded by a proof here.",
       "doc": "docs/swap-amm-review.md",
       "function": "addLiquidity"
     },
@@ -126,7 +126,7 @@
       "detector": "divide-before-multiply",
       "contract": "ArcSwapAMM",
       "severity": "Medium",
-      "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. Covered by the order-book unit tests.",
+      "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. WEAK EVIDENCE: the order book (experimental) has unit tests only (testFillCannotBeFree), no fuzz test of the rounding; see docs/phase4.md.",
       "doc": "docs/generators-review.md",
       "function": "fillOrder"
     },
@@ -150,7 +150,7 @@
       "detector": "divide-before-multiply",
       "contract": "Orderbook",
       "severity": "Medium",
-      "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. Covered by the order-book unit tests.",
+      "reason": "Intended rounding: the price is rounded up so a tiny fill is never free, and the fee is taken from that rounded amount. WEAK EVIDENCE: the order book (experimental) has unit tests only (testFillCannotBeFree), no fuzz test of the rounding; see docs/phase4.md.",
       "doc": "docs/generators-review.md",
       "function": "fillOrder"
     },
