@@ -67,6 +67,7 @@ contract NftFuzzTest is Base {
     }
     /// Only the owner, the approved address or an operator can move a token; everybody else is refused.
     function testFuzzTransferNeedsAuthorisation(address caller, address to, uint8 how) public {
+        if (caller == address(0)) return;   // no transaction can have msg.sender == address(0); the check would treat it as the 'approved' address when none is set (docs/phase4.md)
         uint256 id = _mintTo(a);
         address operator = address(0x0BE7); address approved = address(0xA77);
         if (how % 3 == 1) { vm.prank(a); nft.approve(approved, id); }

@@ -74,5 +74,7 @@ for name,f,old,new,test in M:
         print('CAUGHT (timeout) '+name)
     finally:
         subprocess.run(['git','checkout','--',f],cwd=REPO)
+# the Foundry mutations leave mutated generated sources behind (tests/solidity/src is not versioned): regenerate them
+subprocess.run(['npm','run','dump'],cwd=REPO+'/tests',capture_output=True)
 print('uncaught mutations:',bad)
 sys.exit(1 if bad else 0)
