@@ -1,6 +1,6 @@
 # Mainnet gate (phase 2)
 
-Status as of 2026-11-02. Nothing here is an audit: no template has had an independent audit, and the
+Status as of 2026-11-04 (phase 4: AMM with factory, NFT and MultiSend promoted to `reviewed`; the DAO stays `experimental`). Nothing here is an audit: no template has had an independent audit, and the
 generator version is stamped in every contract as `// ContractForge v3.1.0 | maturity: <level> | NOT AUDITED`.
 
 ## 1. Maturity of every template
@@ -14,10 +14,12 @@ against the files in this repository, so a wrong "reviewed" fails the test run.
 | AMM, single pool (`swap-amm-single`) | reviewed | `docs/swap-amm-review.md` + `Gen.t.sol` with fuzz tests. A pool is only as safe as its two tokens |
 | Treasury (`treasury`) | reviewed | `docs/generators-review.md` + `Hardening.t.sol` with fuzz tests |
 | Vault (`vault`) | reviewed | `docs/generators-review.md` + `Hardening.t.sol` with fuzz tests |
-| AMM with factory (`swap-amm-factory`) | experimental | same pool code as the single pool, but the permissionless factory has no fuzz or invariant tests of its own |
+| AMM with factory (`swap-amm-factory`) | reviewed | `docs/swap-amm-review.md` (phase 4 section) + `Factory.t.sol` with unit, fuzz and invariant tests. Anyone can create a pair; a dishonest token only hurts its own pair |
 | Order book (`swap-orderbook`) | experimental | unit tests only |
-| DAO (`dao`) | experimental | reviewed, but its Foundry suite has no fuzz or invariant tests; governance has known limits (guardian cancel, no vote escrow) |
-| Staking (`staking`), Escrow (`escrow`), Vesting (`vesting`), Subscription (`paywall`), NFT (`erc721`), MultiSend (`multisend`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |
+| DAO (`dao`) | experimental | `docs/dao-review.md` + `Dao.t.sol` with fuzz and invariants, **but a relevant finding is open**: the admin can cancel any proposal and can never be replaced or removed; the constructor accepts a zero voting period |
+| NFT (`erc721`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Nft.t.sol` with fuzz and invariant tests, including a payment token that calls back |
+| MultiSend (`multisend`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Multisend.t.sol`: the contract never holds funds and value is conserved |
+| Staking (`staking`), Escrow (`escrow`), Vesting (`vesting`), Subscription (`paywall`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |
 | ERC-20 (`erc20`) | experimental | no review document of its own, no dedicated suite |
 | CCTP V1 form (`crosschain`) | experimental | no review document, no dedicated suite |
 | CCTP V2 bridge helper (`bridge`) | experimental | unit tests only, no review document |
@@ -28,7 +30,7 @@ No template is `audited`.
 
 ### Rule
 
-A template is `reviewed` only if all three hold, and the test run verifies the first two:
+A template is `reviewed` only if all three hold, and the test run verifies the first two. "Relevant" means: the finding can defeat the purpose of the contract for someone who uses it as documented, and the generator could remove it. A limit that comes from the design of the whole category (for example that a permissionless AMM lists any token) is documented as a residual risk instead, and an `experimental` template says in its review which finding blocks it:
 
 1. a review document for it exists in `docs/`;
 2. a dedicated Foundry suite in `tests/solidity/test/` exists **and** contains fuzz (`testFuzz*`) or invariant tests;

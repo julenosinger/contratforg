@@ -28,7 +28,7 @@ ok(!Object.values(M).some((e) => e.level === 'audited'), 'no template is audited
 
 /* classification rule, checked against real files */
 const reviewed = Object.entries(M).filter(([, e]) => e.level === 'reviewed').map(([k]) => k).sort();
-eq(reviewed, ['smartwallet', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
+eq(reviewed, ['erc721', 'multisend', 'smartwallet', 'swap-amm-factory', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
 for (const k of reviewed) {
   const e = M[k];
   const docPath = path.join(repo, 'docs', e.doc || '__missing__');
@@ -40,8 +40,18 @@ for (const k of reviewed) {
     ok(/function\s+testFuzz\w*\s*\(|function\s+invariant\w*\s*\(/.test(src), `${k}: ${e.suite} has fuzz or invariant tests`);
   }
 }
+/* an experimental entry that names a document or a suite must name real files (the DAO does) */
+for (const [k, e] of Object.entries(M).filter(([, x]) => x.level === 'experimental')) {
+  if (e.doc) ok(fs.existsSync(path.join(repo, 'docs', e.doc)), `${k}: the document ${e.doc} exists`);
+  if (e.suite) ok(fs.existsSync(path.join(repo, 'tests/solidity/test', e.suite)), `${k}: the suite ${e.suite} exists`);
+}
+/* the DAO has a suite with fuzz and invariants but stays experimental because of an open finding written in its review */
+{
+  const dao = fs.readFileSync(path.join(repo, 'docs/dao-review.md'), 'utf8');
+  ok(M.dao.level === 'experimental' && /\*\*Open\*\*/.test(dao), 'dao: experimental while docs/dao-review.md lists an open finding');
+}
 /* templates that must stay experimental by evidence in the repo */
-for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderbook', 'dao', 'swap-amm-factory', 'escrow', 'vesting', 'paywall', 'erc721', 'staking', 'multisend']) {
+for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderbook', 'dao', 'escrow', 'vesting', 'paywall', 'staking']) {
   eq(M[k].level, 'experimental', `${k} stays experimental`);
 }
 
