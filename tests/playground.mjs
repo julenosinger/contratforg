@@ -68,7 +68,7 @@ ev("activeNetwork = 'testlocal';");
 /* ---- picking a deployment ---- */
 const sel = doc.getElementById('pg_deployments');
 ok(sel.querySelectorAll('option').length === 2, 'the deployments list has the entry');
-sel.value = '0'; sel.dispatchEvent(new w.Event('change'));
+sel.value = '0'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
 eq(val('pg_address'), probe.address, 'the address is filled in');
 eq(ev('pgTarget'), 'testlocal', 'the contract network is taken from the history entry');
 ok(doc.querySelectorAll('#pg_functions .fn-card').length >= 10, 'function cards are rendered');
@@ -198,9 +198,9 @@ r = await call('put', 1, ['4']);
 ok(/Connect your wallet/.test(r), 'writes ask for a wallet: ' + r);
 
 /* ---- search, filters, events ---- */
-set('pg_search', 'put'); doc.getElementById('pg_search').dispatchEvent(new w.Event('input'));
+set('pg_search', 'put'); doc.getElementById('pg_search').dispatchEvent(new w.Event('input', { bubbles: true }));
 eq(doc.querySelectorAll('#pg_functions .fn-card').length, 3, 'search finds put, put and the Put event');
-set('pg_search', ''); doc.getElementById('pg_search').dispatchEvent(new w.Event('input'));
+set('pg_search', ''); doc.getElementById('pg_search').dispatchEvent(new w.Event('input', { bubbles: true }));
 ev("filterFns('event', document.querySelector('#pg_filter [data-filter=event]'))");
 const iPutEv = abi.findIndex((x) => x.type === 'event' && x.name === 'Put');
 await ev('pgQueryEvents(' + iPutEv + ')');

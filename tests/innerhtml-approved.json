@@ -59,7 +59,7 @@
   },
   {
    "file": "app.js",
-   "hash": "21d0fc75e72b",
+   "hash": "7eb44222ed67",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "` <span class=\"hnet\">${escapeHtml(entry.network||'unknown')}</span> <span class=\"hname\">${escapeHtml(entry.nam"
@@ -129,10 +129,10 @@
   },
   {
    "file": "app.js",
-   "hash": "80125403927f",
+   "hash": "ca941866c376",
    "category": "E",
-   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
-   "excerpt": "hist.filter(h=>h && isAddr(h.address)).slice(0,6).map(h=>` <div class=\"pill\" onclick=\"document.getElementById("
+   "why": "Every outside value goes through escapeHtml, and the address is validated with isAddr before it is used; it appears only as a quoted argument of setAnalyticsAddress, which validates it again. Exercised by tests/xss.mjs.",
+   "excerpt": "hist.filter(h=>h && isAddr(h.address)).slice(0,6).map(h=>` <div class=\"pill\" data-onclick=\"setAnalyticsAddress('${escapeHtml(h.address)}')\">"
   },
   {
    "file": "app.js",
@@ -164,7 +164,7 @@
   },
   {
    "file": "lab.js",
-   "hash": "898db24ede7f",
+   "hash": "251e5ff6a732",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<div class=\"fn-group\">Constructor arguments</div>' + '<p class=\"lab-note\">Filled with test values where the l"
@@ -206,7 +206,7 @@
   },
   {
    "file": "multichain.js",
-   "hash": "d1cea2afdd42",
+   "hash": "8c4b1e954eec",
    "category": "C",
    "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
    "excerpt": "'<div class=\"mc-label\">Multichain mode</div><div class=\"mc-seg\" role=\"group\" aria-label=\"Multichain mode\">' + "
@@ -255,7 +255,7 @@
   },
   {
    "file": "ui.js",
-   "hash": "fd4f5b3157a6",
+   "hash": "ad8dbedf29ed",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<span class=\"nb-tag\">' + (main ? 'MAINNET' : 'TESTNET') + '</span>' + '<span class=\"nb-net\">' + escapeHtml(ne"
@@ -269,7 +269,7 @@
   },
   {
    "file": "ui.js",
-   "hash": "d371fe9e75d0",
+   "hash": "8c94983f336d",
    "category": "C",
    "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
    "excerpt": "rows.map(([e, i]) => { const net = NETWORKS[e.network] || { label: String(e.network || 'unknown'), explorer: '"
@@ -297,7 +297,7 @@
   },
   {
    "file": "ui.js",
-   "hash": "13fea11dce17",
+   "hash": "11cff45f418f",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<div class=\"cc-info\"><span class=\"cc-label\">Current contract</span><b>' + escapeHtml(pendingSource.name) + '."

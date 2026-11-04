@@ -250,7 +250,7 @@ function renderModeSelector(){
   const box = document.getElementById('mcSelector');
   if(!box) return;
   box.innerHTML = '<div class="mc-label">Multichain mode</div><div class="mc-seg" role="group" aria-label="Multichain mode">'
-    + Object.keys(MC_MODES).map(k=>'<button type="button" class="mc-btn'+(k===multichainMode?' active':'')+'" data-mode="'+k+'" aria-pressed="'+(k===multichainMode)+'" onclick="setMultichainMode(\''+k+'\')">'+MC_MODES[k].label+'</button>').join('')
+    + Object.keys(MC_MODES).map(k=>'<button type="button" class="mc-btn'+(k===multichainMode?' active':'')+'" data-mode="'+k+'" aria-pressed="'+(k===multichainMode)+'" data-onclick="setMultichainMode(\''+k+'\')">'+MC_MODES[k].label+'</button>').join('')
     + '</div><div class="mc-desc">'+escapeHtml(MC_MODES[multichainMode].desc)+'</div>';
 }
 

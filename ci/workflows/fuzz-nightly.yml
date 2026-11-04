@@ -1,0 +1,74 @@
+# Longer fuzz and invariant runs than the push/PR job can afford. The counts come from environment variables so they can be raised without
+# touching foundry.toml (which keeps the fast settings for every push). Failures are kept as an artifact: the logs and the counterexamples Foundry saved.
+name: Nightly fuzz
+
+on:
+  workflow_dispatch:
+    inputs:
+      fuzz_runs:
+        description: 'Fuzz runs per test'
+        default: '20000'
+      invariant_runs:
+        description: 'Invariant runs per test'
+        default: '1000'
+      invariant_depth:
+        description: 'Calls per invariant run'
+        default: '200'
+  schedule:
+    - cron: '41 3 * * *'   # every night 03:41 UTC
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: '24.22.1'
+  FOUNDRY_VERSION: 'v1.7.1'
+  FOUNDRY_OFFLINE: 'false'
+  FOUNDRY_FUZZ_RUNS: ${{ inputs.fuzz_runs || '20000' }}
+  FOUNDRY_INVARIANT_RUNS: ${{ inputs.invariant_runs || '1000' }}
+  FOUNDRY_INVARIANT_DEPTH: ${{ inputs.invariant_depth || '200' }}
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+      - name: Install the test dependencies
+        working-directory: tests
+        run: npm ci
+      - name: Fuzz and invariant tests with long runs
+        working-directory: tests
+        run: |
+          echo "fuzz runs $FOUNDRY_FUZZ_RUNS, invariant runs $FOUNDRY_INVARIANT_RUNS x depth $FOUNDRY_INVARIANT_DEPTH" | tee fuzz-nightly.log
+          npm run test:portable 2>&1 | tee -a fuzz-nightly.log
+      - name: Summary
+        if: always()
+        working-directory: tests
+        run: |
+          { echo '### Nightly fuzz'; echo; echo "fuzz runs $FOUNDRY_FUZZ_RUNS, invariant runs $FOUNDRY_INVARIANT_RUNS x depth $FOUNDRY_INVARIANT_DEPTH"; echo; echo '```'; grep -E 'test suites|FAIL' fuzz-nightly.log | sed 's/\x1b\[[0-9;]*m//g' | head -30; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the logs and the saved counterexamples
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-failures
+          path: |
+            tests/fuzz-nightly.log
+            tests/solidity/cache/fuzz
+            tests/solidity/cache/invariant
+          if-no-files-found: ignore
+          retention-days: 30

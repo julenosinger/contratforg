@@ -25,7 +25,7 @@ const doc = w.document;
 const text = (id) => doc.getElementById(id).textContent;
 const A = (i) => ev('LAB.accounts[' + i + '].addr');
 const fnIdx = (name, n) => ev('LAB.contract.abi.findIndex(x => x.name === "' + name + '"' + (n == null ? '' : ' && x.inputs.length === ' + n) + ')');
-const setAct = (i) => { doc.getElementById('lab_acting').value = String(i); doc.getElementById('lab_acting').dispatchEvent(new w.Event('change')); };
+const setAct = (i) => { doc.getElementById('lab_acting').value = String(i); doc.getElementById('lab_acting').dispatchEvent(new w.Event('change', { bubbles: true })); };
 async function call(name, args = [], opt = {}) {
   const i = fnIdx(name, args.length);
   args.forEach((v, k) => { doc.getElementById('lab_arg_' + i + '_' + k).value = v; });

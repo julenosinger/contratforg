@@ -548,8 +548,8 @@ function renderSimpleForm(id){
         </div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('erc20')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('erc20')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='erc721'){
     html=`
@@ -562,8 +562,8 @@ function renderSimpleForm(id){
         <div class="field full"><label>Base URI</label><input id="s_baseuri" value="https://metadata.example.com/token/"/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('erc721')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('erc721')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='escrow'){
     html=`
@@ -577,8 +577,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Refund timeout (days)</label><input id="s_timeout" type="number" value="14"/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('escrow')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('escrow')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='vesting'){
     html=`
@@ -591,8 +591,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Cliff (days)</label><input id="s_cliff" type="number" value="90"/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('vesting')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('vesting')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='paywall'){
     html=`
@@ -604,8 +604,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Payment beneficiary</label><input id="s_beneficiary" placeholder="0x..."/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('paywall')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('paywall')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='dao'){
     html=`
@@ -618,8 +618,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Proposal threshold (tokens)</label><input id="s_threshold" type="number" value="1000"/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('dao')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('dao')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='smartwallet'){
     html=`
@@ -631,8 +631,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Daily spend limit for session keys (<span id="s_limit_unit">${net.gasSymbol}</span>)</label><input id="s_spendlimit" type="number" min="0" step="any" value="${net.walletDailyDefault}" placeholder="e.g. ${net.walletDailyDefault}"/></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('smartwallet')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('smartwallet')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   } else if(id==='staking'){
     html=`
@@ -645,8 +645,8 @@ function renderSimpleForm(id){
         <div class="field"><label>Emergency exit fee (bps)</label><input id="s_exitfee" type="number" value="100"/><div class="hint">100 bps = 1% penalty for early exit</div></div>
       </div>
       <div class="btnrow">
-        <button class="btn btn-primary" onclick="genSimple('staking')">Generate contract</button>
-        <button class="btn btn-ghost" onclick="deployFromBuffer('simple')">Deploy now</button>
+        <button class="btn btn-primary" data-onclick="genSimple('staking')">Generate contract</button>
+        <button class="btn btn-ghost" data-onclick="deployFromBuffer('simple')">Deploy now</button>
       </div>`;
   }
   panel.innerHTML = html;
@@ -2939,9 +2939,9 @@ function renderHistory(){
       <span class="haddr" title="${escapeHtml(entry.address)}">${entry.address.slice(0,10)}…${entry.address.slice(-6)}</span>
       <span class="htime">${ago}</span>
       <div class="hbtns">
-        ${explorerUrl?`<button class="hbtn" onclick="window.open('${escapeHtml(explorerUrl)}','_blank','noopener')">Explorer ↗</button>`:''}
-        <button class="hbtn" onclick="loadHistoryIntoPlayground(${i})">Playground</button>
-        <button class="hbtn" onclick="deleteHistoryEntry(${i})" style="color:#E08A6B;">✕</button>
+        ${explorerUrl?`<button class="hbtn" data-onclick="openExternal('${escapeHtml(explorerUrl)}')">Explorer ↗</button>`:''}
+        <button class="hbtn" data-onclick="loadHistoryIntoPlayground(${i})">Playground</button>
+        <button class="hbtn" data-onclick="deleteHistoryEntry(${i})" style="color:#E08A6B;">✕</button>
       </div>`;
     container.appendChild(row);
   });
@@ -4344,7 +4344,7 @@ function setNLExample(key){
   const ta=document.getElementById('nl_prompt');
   if(ta && NL_EXAMPLES[key]) ta.value=NL_EXAMPLES[key];
   document.querySelectorAll('#nl_examples .pill').forEach(p=>p.classList.remove('active'));
-  document.querySelector(`#nl_examples .pill[onclick*="${key}"]`)?.classList.add('active');
+  document.querySelector(`#nl_examples .pill[data-onclick*="${key}"]`)?.classList.add('active');
 }
 
 async function generateFromNL(){
@@ -4467,12 +4467,22 @@ async function loadAnalytics(){
 
 function refreshAnalytics(){ loadAnalytics(); }
 
+/* the two helpers below replace what used to be written inline in onclick attributes */
+function openExternal(url){
+  if(!/^https:\/\//.test(String(url))) return;                     // links come from NETWORKS (explorers) and are https
+  window.open(url, '_blank', 'noopener');
+}
+function setAnalyticsAddress(addr){
+  if(!isAddr(addr)) return;
+  const el = document.getElementById('an_address'); if(el) el.value = addr;
+}
+
 function renderAnalyticsHistoryPills(){
   const hist=loadDeployHistory();
   const pills=document.getElementById('an_history_pills');
   if(!pills) return;
   pills.innerHTML=hist.filter(h=>h && isAddr(h.address)).slice(0,6).map(h=>`
-    <div class="pill" onclick="document.getElementById('an_address').value='${escapeHtml(h.address)}'">${escapeHtml(h.name)} (${escapeHtml(h.network)})</div>`).join('');
+    <div class="pill" data-onclick="setAnalyticsAddress('${escapeHtml(h.address)}')">${escapeHtml(h.name)} (${escapeHtml(h.network)})</div>`).join('');
 }
 
 /* ======================================================================

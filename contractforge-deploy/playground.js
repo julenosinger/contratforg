@@ -264,9 +264,9 @@ function pgBuildCards(opts){
       const outs = item.outputs || [];
       const outStr = outs.length ? '→ ' + outs.map(o => o.type + (o.name ? ' ' + o.name : '')).join(', ') : '';
       let buttons = '';
-      if(isEvent) buttons = '<button class="btn btn-ghost" style="padding:9px 16px;font-size:11px;" onclick="' + handlers.events + '(' + idx + ')">Recent events</button>';
-      else buttons = '<button class="btn btn-primary" style="padding:9px 16px;font-size:11px;" onclick="' + handlers.call + '(' + idx + ')">' + (isRead ? 'Call' : 'Send tx') + '</button>'
-        + (isRead && handlers.watch ? '<button class="btn btn-ghost" style="padding:9px 16px;font-size:11px;" onclick="' + handlers.watch + '(' + idx + ')">Watch</button>' : '');
+      if(isEvent) buttons = '<button class="btn btn-ghost" style="padding:9px 16px;font-size:11px;" data-onclick="' + handlers.events + '(' + idx + ')">Recent events</button>';
+      else buttons = '<button class="btn btn-primary" style="padding:9px 16px;font-size:11px;" data-onclick="' + handlers.call + '(' + idx + ')">' + (isRead ? 'Call' : 'Send tx') + '</button>'
+        + (isRead && handlers.watch ? '<button class="btn btn-ghost" style="padding:9px 16px;font-size:11px;" data-onclick="' + handlers.watch + '(' + idx + ')">Watch</button>' : '');
       card.innerHTML = '<h4>' + escapeHtml(item.name || item.type) + ' <span class="fn-out">' + escapeHtml(outStr) + '</span>'
         + '<span class="fn-kind fn-kind-' + kind + '">' + kind + '</span></h4>'
         + '<div class="fn-inputs">' + inputsHtml + '</div>'
@@ -321,7 +321,7 @@ async function pgRenderContext(){
   else {
     let cid = null; try{ cid = await signer.getChainId(); }catch(_){ /* ignore */ }
     if(cid === n.chainIdDec) walletLine = '<span class="pgc-ok">Wallet is on ' + escapeHtml(n.label) + ' ✓</span>';
-    else walletLine = '<span class="pgc-warn">Your wallet is on another network.</span> <button type="button" class="hbtn" onclick="pgSwitchWallet()">Switch wallet to ' + escapeHtml(n.label) + '</button>';
+    else walletLine = '<span class="pgc-warn">Your wallet is on another network.</span> <button type="button" class="hbtn" data-onclick="pgSwitchWallet()">Switch wallet to ' + escapeHtml(n.label) + '</button>';
   }
   el.style.display = 'block';
   el.className = 'pg-context' + (n.isMainnet ? ' pgc-main' : '');

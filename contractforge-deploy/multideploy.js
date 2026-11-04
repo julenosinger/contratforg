@@ -176,11 +176,11 @@ function renderMultiDeployPanel(){
     html += '<div class="md-table-wrap"><table class="md-table"><thead><tr><th>Network</th>'
       + pendingCtorArgs.map(a => '<th>'+escapeHtml(a.param.replace(/_$/, ''))+'</th>').join('')+'</tr></thead><tbody>'
       + sel.map(k => '<tr><td>'+escapeHtml(NETWORKS[k].label)+'</td>'
-        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" data-type="'+escapeHtml(a.type)+'"'+(a.allowZero?' data-allowzero="1"':'')+' value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
+        + pendingCtorArgs.map((a, i) => { const id = 'md_'+k+'_'+i; const v = (id in mdState.edits) ? mdState.edits[id] : ctorArgValue(a, k); return '<td><input id="'+id+'" data-type="'+escapeHtml(a.type)+'"'+(a.allowZero?' data-allowzero="1"':'')+' value="'+escapeHtml(v)+'" placeholder="'+(v?'':'required')+'" class="'+(v?'':'md-missing')+'" data-oninput="mdEdit(this.id,this.value)" /></td>'; }).join('')
         + '</tr>').join('')
       + '</tbody></table></div>';
   }
-  html += '<div class="btnrow"><button class="btn btn-primary" id="mdDeployBtn" data-label="Deploy to '+sel.length+' network'+(sel.length===1?'':'s')+'" onclick="multiDeploy()" '+(mdState.running?'disabled':'')+'>'+(mdState.running?'Deploying…':'Deploy to '+sel.length+' network'+(sel.length===1?'':'s'))+'</button></div>'
+  html += '<div class="btnrow"><button class="btn btn-primary" id="mdDeployBtn" data-label="Deploy to '+sel.length+' network'+(sel.length===1?'':'s')+'" data-onclick="multiDeploy()" '+(mdState.running?'disabled':'')+'>'+(mdState.running?'Deploying…':'Deploy to '+sel.length+' network'+(sel.length===1?'':'s'))+'</button></div>'
     + '<div class="hint">Compiles once, then for each network: switches your wallet, fills that network\'s addresses, and deploys. Each network asks for your confirmation in the wallet.</div>';
   box.style.display = 'block';
   box.innerHTML = html;

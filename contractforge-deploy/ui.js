@@ -34,7 +34,7 @@ function renderNetBanner(){
     + '<span class="nb-net">' + escapeHtml(net.label) + '</span>'
     + '<span class="nb-sep">·</span><span class="nb-chain">chain ' + escapeHtml(net.chainIdDec) + '</span>'
     + mode
-    + '<button type="button" class="nb-change" id="netChangeBtn" aria-expanded="' + (uiNetPanelOpen() ? 'true' : 'false') + '" aria-controls="netPanel" onclick="toggleNetPanel()">Change network</button>'
+    + '<button type="button" class="nb-change" id="netChangeBtn" aria-expanded="' + (uiNetPanelOpen() ? 'true' : 'false') + '" aria-controls="netPanel" data-onclick="toggleNetPanel()">Change network</button>'
     + '<span class="nb-note">' + (main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.') + '</span>';
   if(typeof renderHome === 'function') renderHome();
 }
@@ -75,7 +75,7 @@ function renderHome(){
         const url = net.explorer ? net.explorer + '/address/' + e.address : '';
         return '<div class="home-recent-row"><div class="hr-main"><b>' + escapeHtml(e.name || 'Contract') + '</b><span>' + escapeHtml(net.label) + (net.isMainnet ? ' <span class="md-live">LIVE</span>' : '') + ' · ' + escapeHtml(typeof timeAgo === 'function' ? timeAgo(e.timestamp) : '') + '</span></div>'
           + '<code title="' + escapeHtml(e.address) + '">' + escapeHtml(e.address.slice(0, 10) + '…' + e.address.slice(-6)) + '</code>'
-          + '<div class="hr-actions"><button type="button" class="btn btn-ghost" onclick="loadHistoryIntoPlayground(' + i + ')">Open in Playground</button>'
+          + '<div class="hr-actions"><button type="button" class="btn btn-ghost" data-onclick="loadHistoryIntoPlayground(' + i + ')">Open in Playground</button>'
           + (/^https:\/\//.test(url) ? '<a class="btn btn-ghost" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">Explorer</a>' : '') + '</div></div>';
       }).join('');
     }
@@ -185,12 +185,12 @@ function renderCurrentContract(){
     + matChip + draftChip + '<span>' + lines + ' lines</span>' + modeChip
     + (nArgs ? '<span class="cc-chip warn">' + nArgs + ' constructor argument' + (nArgs === 1 ? '' : 's') + ' to review</span>' : '')
     + '</div><div class="cc-actions">'
-    + '<button type="button" class="btn btn-ghost" onclick="ccTest()"' + dis + '>Test</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="ccAudit()">Audit</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="copySource()"' + dis + '>Copy</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="downloadSource()"' + dis + '>Download</button>'
-    + '<button type="button" class="btn btn-ghost" onclick="ccDiscard()">Discard</button>'
-    + '<button type="button" class="btn btn-primary" onclick="ccPublish()"' + dis + '>Publish</button></div>'
+    + '<button type="button" class="btn btn-ghost" data-onclick="ccTest()"' + dis + '>Test</button>'
+    + '<button type="button" class="btn btn-ghost" data-onclick="ccAudit()">Audit</button>'
+    + '<button type="button" class="btn btn-ghost" data-onclick="copySource()"' + dis + '>Copy</button>'
+    + '<button type="button" class="btn btn-ghost" data-onclick="downloadSource()"' + dis + '>Download</button>'
+    + '<button type="button" class="btn btn-ghost" data-onclick="ccDiscard()">Discard</button>'
+    + '<button type="button" class="btn btn-primary" data-onclick="ccPublish()"' + dis + '>Publish</button></div>'
     + (why ? '<div class="cc-why" role="alert">' + escapeHtml(why) + '</div>' : '');
   if(typeof reqApplyDraftState === 'function') reqApplyDraftState();
   uiMarkRequired();
@@ -247,8 +247,8 @@ function uiCollapseAdvanced(scope, ids){
 function uiCollapseSimpleForm(){
   const form = document.getElementById('simpleForm');
   if(!form) return;
-  const btn = form.querySelector('button[onclick^="genSimple("]');
-  const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute('onclick'));
+  const btn = form.querySelector('button[data-onclick^="genSimple("]');
+  const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute("data-onclick"));
   if(m && UI_ADV_SIMPLE[m[1]]) uiCollapseAdvanced(form, UI_ADV_SIMPLE[m[1]]);
   if(m) uiRestoreSimpleForm(m[1]);
   uiRefreshWalletUnit();
@@ -597,8 +597,8 @@ function uiSaveContract(){
 
 function uiCurrentSimpleTemplate(){
   const form = document.getElementById('simpleForm');
-  const btn = form && form.querySelector('button[onclick^="genSimple("]');
-  const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute('onclick'));
+  const btn = form && form.querySelector('button[data-onclick^="genSimple("]');
+  const m = btn && /genSimple\('(\w+)'\)/.exec(btn.getAttribute("data-onclick"));
   return m ? m[1] : '';
 }
 

@@ -73,7 +73,7 @@
     <div class="mc-box" id="mcSelector"></div>
     <div class="tier-widget">
       <div class="tier-label">Appearance</div>
-      <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀ Light mode</button>
+      <button class="theme-btn" id="themeBtn" data-onclick="toggleTheme()">☀ Light mode</button>
       <button class="theme-btn" id="resetSavedBtn" type="button" style="margin-top:8px;">Reset saved data</button>
     </div>
   </aside>
@@ -89,8 +89,8 @@
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <span class="badge" id="balanceBadge">— USDC</span>
-          <button class="btn btn-ghost" id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
-          <button class="btn btn-ghost" onclick="connectWalletConnect()" style="font-size:11px;padding:9px 14px;">
+          <button class="btn btn-ghost" id="connectBtn" data-onclick="connectWallet()">Connect Wallet</button>
+          <button class="btn btn-ghost" data-onclick="connectWalletConnect()" style="font-size:11px;padding:9px 14px;">
             <span style="color:#3B99FC;font-weight:700;">WC</span> WalletConnect
           </button>
         </div>
@@ -206,8 +206,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="genSwap()">Generate contract</button>
-          <button class="btn btn-ghost" onclick="deployFromBuffer('swap')">Deploy now</button>
+          <button class="btn btn-primary" data-onclick="genSwap()">Generate contract</button>
+          <button class="btn btn-ghost" data-onclick="deployFromBuffer('swap')">Deploy now</button>
         </div>
       </div>
       <div class="codepanel" id="swapCode" style="display:none;"></div>
@@ -243,8 +243,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="genTreasury()">Generate contract</button>
-          <button class="btn btn-ghost" onclick="deployFromBuffer('treasury')">Deploy now</button>
+          <button class="btn btn-primary" data-onclick="genTreasury()">Generate contract</button>
+          <button class="btn btn-ghost" data-onclick="deployFromBuffer('treasury')">Deploy now</button>
         </div>
       </div>
       <div class="codepanel" id="treasuryCode" style="display:none;"></div>
@@ -284,8 +284,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="genVault()">Generate contract</button>
-          <button class="btn btn-ghost" onclick="deployFromBuffer('vault')">Deploy now</button>
+          <button class="btn btn-primary" data-onclick="genVault()">Generate contract</button>
+          <button class="btn btn-ghost" data-onclick="deployFromBuffer('vault')">Deploy now</button>
         </div>
       </div>
       <div class="codepanel" id="vaultCode" style="display:none;"></div>
@@ -322,8 +322,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="genMultisend()">Generate contract</button>
-          <button class="btn btn-ghost" onclick="deployFromBuffer('multisend')">Deploy now</button>
+          <button class="btn btn-primary" data-onclick="genMultisend()">Generate contract</button>
+          <button class="btn btn-ghost" data-onclick="deployFromBuffer('multisend')">Deploy now</button>
         </div>
       </div>
       <div class="codepanel" id="multisendCode" style="display:none;"></div>
@@ -367,8 +367,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="genCrosschain()">Generate contract</button>
-          <button class="btn btn-ghost" onclick="deployFromBuffer('crosschain')">Deploy now</button>
+          <button class="btn btn-primary" data-onclick="genCrosschain()">Generate contract</button>
+          <button class="btn btn-ghost" data-onclick="deployFromBuffer('crosschain')">Deploy now</button>
         </div>
       </div>
       <div class="codepanel" id="crosschainCode" style="display:none;"></div>
@@ -401,9 +401,9 @@
         <div class="mc-panel" id="ctorArgsPanel" style="display:none;"></div>
         <div class="req-reason" id="draftReason" role="alert" style="display:none;"></div>
         <div class="btnrow">
-          <button class="btn btn-primary" id="btnCompileDeploy" onclick="compileAndDeploy()">Compile and deploy</button>
-          <button class="btn btn-ghost" id="btnDownloadSol" onclick="downloadSource()">Download .sol</button>
-          <button class="btn btn-ghost" id="btnCopySol" onclick="copySource()">Copy code</button>
+          <button class="btn btn-primary" id="btnCompileDeploy" data-onclick="compileAndDeploy()">Compile and deploy</button>
+          <button class="btn btn-ghost" id="btnDownloadSol" data-onclick="downloadSource()">Download .sol</button>
+          <button class="btn btn-ghost" id="btnCopySol" data-onclick="copySource()">Copy code</button>
         </div>
         <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
         <div class="deploy-result" id="deployResult" style="display:none;" aria-live="polite"></div>
@@ -441,8 +441,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" id="runAuditBtn" onclick="runAudit()">Run AI Audit</button>
-          <button class="btn btn-ghost" onclick="downloadAuditReport()">Download Report</button>
+          <button class="btn btn-primary" id="runAuditBtn" data-onclick="runAudit()">Run AI Audit</button>
+          <button class="btn btn-ghost" data-onclick="downloadAuditReport()">Download Report</button>
         </div>
         <div id="auditResults" style="margin-top:22px;display:none;">
           <div class="audit-score" id="auditScoreBox">
@@ -467,7 +467,7 @@
         <div class="field-grid" style="margin-bottom:14px;">
           <div class="field full">
             <label>Your deployed contracts</label>
-            <select id="pg_deployments" onchange="pgSelectDeployment()"><option value="">No deployments yet (section 07)</option></select>
+            <select id="pg_deployments" data-onchange="pgSelectDeployment()"><option value="">No deployments yet (section 07)</option></select>
           </div>
           <div class="field">
             <label>Contract address</label>
@@ -475,7 +475,7 @@
           </div>
           <div class="field">
             <label>ABI source</label>
-            <select id="pg_abisrc" onchange="onAbiSrcChange()">
+            <select id="pg_abisrc" data-onchange="onAbiSrcChange()">
               <option value="last">Use last compiled ABI</option>
               <option value="custom">Paste custom ABI</option>
               <option value="history">Load from deploy history</option>
@@ -487,16 +487,16 @@
           </div>
         </div>
         <div class="btnrow" style="margin-bottom:14px;">
-          <button class="btn btn-primary" onclick="loadPlayground()">Load contract</button>
-          <button class="btn btn-ghost" onclick="subscribeEvents()">Subscribe to Events</button>
+          <button class="btn btn-primary" data-onclick="loadPlayground()">Load contract</button>
+          <button class="btn btn-ghost" data-onclick="subscribeEvents()">Subscribe to Events</button>
         </div>
         <div id="pg_context" class="pg-context" style="display:none;" role="status"></div>
         <div class="pg-toolbar">
           <div class="pill-row" id="pg_filter">
-            <div class="pill active" data-filter="all" onclick="filterFns('all',this)">All</div>
-            <div class="pill" data-filter="read" onclick="filterFns('read',this)">Read</div>
-            <div class="pill" data-filter="write" onclick="filterFns('write',this)">Write</div>
-            <div class="pill" data-filter="event" onclick="filterFns('event',this)">Events</div>
+            <div class="pill active" data-filter="all" data-onclick="filterFns('all',this)">All</div>
+            <div class="pill" data-filter="read" data-onclick="filterFns('read',this)">Read</div>
+            <div class="pill" data-filter="write" data-onclick="filterFns('write',this)">Write</div>
+            <div class="pill" data-filter="event" data-onclick="filterFns('event',this)">Events</div>
           </div>
           <input id="pg_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
         </div>
@@ -518,15 +518,15 @@
         <div class="lab-bar">
           <span id="labStatus" class="lab-status" role="status">Not started</span>
           <div class="btnrow" style="margin:0;">
-            <button class="btn btn-primary" onclick="labLoadContract()">Load current contract</button>
-            <button class="btn btn-ghost" onclick="labSmoke()">Quick check</button>
+            <button class="btn btn-primary" data-onclick="labLoadContract()">Load current contract</button>
+            <button class="btn btn-ghost" data-onclick="labSmoke()">Quick check</button>
           </div>
         </div>
         <div id="labContract" class="lab-note" style="margin-bottom:12px;"></div>
         <div id="labArgs" style="display:none;margin-bottom:14px;"></div>
         <div class="lab-card" style="margin-bottom:14px;">
           <h4>Acting as</h4>
-          <div class="lab-actrow"><select id="lab_acting" onchange="labSelectAccount()" aria-label="Acting account"></select><code id="lab_acting_addr" class="lab-addr"></code></div>
+          <div class="lab-actrow"><select id="lab_acting" data-onchange="labSelectAccount()" aria-label="Acting account"></select><code id="lab_acting_addr" class="lab-addr"></code></div>
           <div id="lab_balances" class="lab-balances"><span class="lab-note">Balances appear once the contract is loaded.</span></div>
         </div>
         <div class="lab-grid">
@@ -534,19 +534,19 @@
             <h4>Time</h4>
             <div id="lab_time" class="lab-time">Not started</div>
             <div class="btnrow" style="margin:8px 0;flex-wrap:wrap;">
-              <button class="btn btn-ghost lab-mini" onclick="labAdvance(3600)">+1 hour</button>
-              <button class="btn btn-ghost lab-mini" onclick="labAdvance(86400)">+1 day</button>
-              <button class="btn btn-ghost lab-mini" onclick="labAdvance(604800)">+7 days</button>
-              <button class="btn btn-ghost lab-mini" onclick="labAdvance(2592000)">+30 days</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labAdvance(3600)">+1 hour</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labAdvance(86400)">+1 day</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labAdvance(604800)">+7 days</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labAdvance(2592000)">+30 days</button>
             </div>
             <div class="lab-inline">
               <input id="lab_time_n" type="number" min="1" value="1" aria-label="Amount of time" />
               <select id="lab_time_unit" aria-label="Unit"><option value="60">minutes</option><option value="3600">hours</option><option value="86400" selected>days</option></select>
-              <button class="btn btn-ghost lab-mini" onclick="labAdvanceCustom()">Move time</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labAdvanceCustom()">Move time</button>
             </div>
             <div class="lab-inline" style="margin-top:6px;">
               <input id="lab_mine_n" type="number" min="1" value="10" aria-label="Blocks" />
-              <button class="btn btn-ghost lab-mini" onclick="labMine()">Mine blocks</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labMine()">Mine blocks</button>
             </div>
           </div>
           <div class="lab-card">
@@ -554,10 +554,10 @@
             <div class="lab-inline">
               <select id="lab_token" aria-label="Token"><option value="usdc">USDC</option><option value="eurc">EURC</option></select>
               <input id="lab_token_amt" value="1000" aria-label="Amount" />
-              <button class="btn btn-ghost lab-mini" onclick="labMint()">Mint to acting account</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labMint()">Mint to acting account</button>
             </div>
             <div class="lab-inline" style="margin-top:10px;">
-              <button class="btn btn-ghost lab-mini" onclick="labApprove()">Approve the contract to spend it</button>
+              <button class="btn btn-ghost lab-mini" data-onclick="labApprove()">Approve the contract to spend it</button>
               <label class="lab-check"><input type="checkbox" id="lab_approve_all" /> for all test accounts</label>
             </div>
             <p class="lab-note" style="margin-top:8px;">Contracts that hard-code the real USDC or EURC address work unchanged: the test tokens are placed at those addresses.</p>
@@ -565,10 +565,10 @@
         </div>
         <div class="pg-toolbar">
           <div class="pill-row" id="lab_filter">
-            <div class="pill active" data-filter="all" onclick="labFilter('all',this)">All</div>
-            <div class="pill" data-filter="read" onclick="labFilter('read',this)">Read</div>
-            <div class="pill" data-filter="write" onclick="labFilter('write',this)">Write</div>
-            <div class="pill" data-filter="event" onclick="labFilter('event',this)">Events</div>
+            <div class="pill active" data-filter="all" data-onclick="labFilter('all',this)">All</div>
+            <div class="pill" data-filter="read" data-onclick="labFilter('read',this)">Read</div>
+            <div class="pill" data-filter="write" data-onclick="labFilter('write',this)">Write</div>
+            <div class="pill" data-filter="event" data-onclick="labFilter('event',this)">Events</div>
           </div>
           <input id="lab_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
         </div>
@@ -588,8 +588,8 @@
           All deployments are stored locally in your browser. Click any address to open it in the block explorer, or load its ABI directly into the Playground.
         </p>
         <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-ghost" onclick="clearHistory()">Clear All</button>
-          <button class="btn btn-ghost" onclick="exportHistory()">Export JSON</button>
+          <button class="btn btn-ghost" data-onclick="clearHistory()">Clear All</button>
+          <button class="btn btn-ghost" data-onclick="exportHistory()">Export JSON</button>
         </div>
         <div id="historyList"></div>
       </div>
@@ -613,7 +613,7 @@
           </div>
         </div>
         <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-primary" onclick="estimateGas()">Estimate Gas</button>
+          <button class="btn btn-primary" data-onclick="estimateGas()">Estimate Gas</button>
         </div>
         <div class="gas-meter" id="gasMeter" style="display:none;">
           <div class="gas-card"><div class="gval" id="g_units">—</div><div class="glabel">Gas units</div><div class="gsub" id="g_unitssub">estimated</div></div>
@@ -659,8 +659,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="verifyContract()">Submit Verification</button>
-          <button class="btn btn-ghost" onclick="checkVerificationStatus()">Check Status</button>
+          <button class="btn btn-primary" data-onclick="verifyContract()">Submit Verification</button>
+          <button class="btn btn-ghost" data-onclick="checkVerificationStatus()">Check Status</button>
         </div>
         <div class="console" id="verifyLog" style="margin-top:14px;">
           <div class="line"><span class="t">[boot]</span><span class="msg">Deploy a contract first, then submit verification.</span></div>
@@ -681,8 +681,8 @@
           <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;">Encodes the current contract config into the URL hash — share this link to reproduce the exact setup.</div>
           <input id="shareUrl" readonly placeholder="Click 'Generate URL' to encode current config" />
           <div class="btnrow" style="margin-top:10px;">
-            <button class="btn btn-primary" onclick="generateShareUrl()">Generate URL</button>
-            <button class="btn btn-ghost" onclick="copyShareUrl()">Copy URL</button>
+            <button class="btn btn-primary" data-onclick="generateShareUrl()">Generate URL</button>
+            <button class="btn btn-ghost" data-onclick="copyShareUrl()">Copy URL</button>
           </div>
         </div>
 
@@ -699,8 +699,8 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" onclick="exportArtifact()">Download</button>
-          <button class="btn btn-ghost" onclick="generateQR()">QR Code</button>
+          <button class="btn btn-primary" data-onclick="exportArtifact()">Download</button>
+          <button class="btn btn-ghost" data-onclick="generateQR()">QR Code</button>
         </div>
         <div id="qrBox" style="margin-top:16px;display:none;text-align:center;"></div>
       </div>
@@ -724,17 +724,17 @@
         <div class="wizard-panel active" id="wp-0">
           <p style="font-family:var(--mono);font-size:12px;color:#92A199;margin-bottom:14px;">What are you trying to build?</p>
           <div class="grid" style="gap:12px;">
-            <div class="tcard" onclick="wizardPick('token',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('token',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Launch a token</h3><p style="font-size:12px;">ERC-20, NFT, or multi-token</p></div>
-            <div class="tcard" onclick="wizardPick('payment',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('payment',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Handle payments</h3><p style="font-size:12px;">Escrow, subscription, vesting</p></div>
-            <div class="tcard" onclick="wizardPick('defi',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('defi',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Build DeFi</h3><p style="font-size:12px;">Swap, vault, staking, lending</p></div>
-            <div class="tcard" onclick="wizardPick('org',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('org',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Govern an org</h3><p style="font-size:12px;">DAO, treasury, multisig</p></div>
-            <div class="tcard" onclick="wizardPick('bridge',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('bridge',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Move value cross-chain</h3><p style="font-size:12px;">CCTP payments, crosschain escrow</p></div>
-            <div class="tcard" onclick="wizardPick('wallet',this)" style="padding:16px;cursor:pointer;">
+            <div class="tcard" data-onclick="wizardPick('wallet',this)" style="padding:16px;cursor:pointer;">
               <h3 style="font-size:16px;">Smart wallet</h3><p style="font-size:12px;">Guardian recovery and session keys</p></div>
           </div>
         </div>
@@ -761,14 +761,14 @@
             </div>
           </div>
           <div class="btnrow">
-            <button class="btn btn-primary" onclick="wizardGenerate()">Generate &amp; go to editor →</button>
+            <button class="btn btn-primary" data-onclick="wizardGenerate()">Generate &amp; go to editor →</button>
           </div>
         </div>
 
         <div class="wizard-nav">
-          <button class="btn btn-ghost" id="wz-back" onclick="wizardBack()" style="display:none;">← Back</button>
+          <button class="btn btn-ghost" id="wz-back" data-onclick="wizardBack()" style="display:none;">← Back</button>
           <span></span>
-          <button class="btn btn-ghost" id="wz-next" onclick="wizardNext()" style="display:none;">Next →</button>
+          <button class="btn btn-ghost" id="wz-next" data-onclick="wizardNext()" style="display:none;">Next →</button>
         </div>
       </div>
     </section>
@@ -805,23 +805,23 @@
           <textarea class="nl-editor" id="nl_prompt" placeholder="Example: Create a subscription contract where users pay 10 USDC per month. If they don't renew within 3 days of expiry, access is revoked. The owner can pause the contract. Include events for subscriptions and cancellations."></textarea>
         </div>
         <div class="pill-row" id="nl_examples">
-          <div class="pill" onclick="setNLExample('escrow')">Escrow with arbiter</div>
-          <div class="pill" onclick="setNLExample('dao')">Voting DAO</div>
-          <div class="pill" onclick="setNLExample('nft')">NFT drop with allowlist</div>
-          <div class="pill" onclick="setNLExample('amm')">Minimal AMM</div>
-          <div class="pill" onclick="setNLExample('subscription')">Subscription</div>
-          <div class="pill" onclick="setNLExample('staking')">Staking rewards</div>
+          <div class="pill" data-onclick="setNLExample('escrow')">Escrow with arbiter</div>
+          <div class="pill" data-onclick="setNLExample('dao')">Voting DAO</div>
+          <div class="pill" data-onclick="setNLExample('nft')">NFT drop with allowlist</div>
+          <div class="pill" data-onclick="setNLExample('amm')">Minimal AMM</div>
+          <div class="pill" data-onclick="setNLExample('subscription')">Subscription</div>
+          <div class="pill" data-onclick="setNLExample('staking')">Staking rewards</div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" id="nlGenBtn" onclick="generateFromNL()">Generate Solidity</button>
-          <button class="btn btn-ghost" onclick="useNLContract()">Use this contract →</button>
+          <button class="btn btn-primary" id="nlGenBtn" data-onclick="generateFromNL()">Generate Solidity</button>
+          <button class="btn btn-ghost" data-onclick="useNLContract()">Use this contract →</button>
         </div>
         <div id="nl_output" style="display:none;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px;">
             <span style="font-family:var(--mono);font-size:11px;color:#7E8C86;" id="nl_filename">contract.sol</span>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" onclick="copyNLContract()">Copy</button>
-              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" onclick="auditNLContract()">Audit →</button>
+              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" data-onclick="copyNLContract()">Copy</button>
+              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" data-onclick="auditNLContract()">Audit →</button>
             </div>
           </div>
           <div class="nl-preview" id="nl_code"></div>
@@ -848,8 +848,8 @@
         </div>
         <div class="pill-row" id="an_history_pills" style="margin-bottom:14px;"></div>
         <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-primary" onclick="loadAnalytics()">Load Analytics</button>
-          <button class="btn btn-ghost" onclick="refreshAnalytics()">Refresh</button>
+          <button class="btn btn-primary" data-onclick="loadAnalytics()">Load Analytics</button>
+          <button class="btn btn-ghost" data-onclick="refreshAnalytics()">Refresh</button>
         </div>
         <div id="analyticsData" style="display:none;">
           <div class="analytics-grid" id="an_kpis"></div>
@@ -896,9 +896,9 @@
           </div>
         </div>
         <div class="btnrow">
-          <button class="btn btn-primary" id="genTestsBtn" onclick="generateTests()">Generate Tests</button>
-          <button class="btn btn-ghost" onclick="downloadTests()">Download</button>
-          <button class="btn btn-ghost" onclick="copyTests()">Copy</button>
+          <button class="btn btn-primary" id="genTestsBtn" data-onclick="generateTests()">Generate Tests</button>
+          <button class="btn btn-ghost" data-onclick="downloadTests()">Download</button>
+          <button class="btn btn-ghost" data-onclick="copyTests()">Copy</button>
         </div>
         <div id="testOutput" style="display:none;margin-top:14px;">
           <div id="testCards"></div>
@@ -923,6 +923,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js" integrity="sha512-FDcVY+g7vc5CXANbrTSg1K5qLyriCsGDYCE02Li1tXEYdNQPvLPHNE+rT2Mjei8N7fZbe0WLhw27j2SrGRpdMg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="handlers.js"></script>
 <script src="app.js"></script>
 <script src="multichain.js"></script>
 <script src="multideploy.js"></script>

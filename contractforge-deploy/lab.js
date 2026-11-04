@@ -320,7 +320,7 @@ function labRenderCtorForm(){
   box.innerHTML = '<div class="fn-group">Constructor arguments</div>'
     + '<p class="lab-note">Filled with test values where the lab can supply them (test USDC, EURC, the CCTP stand-ins). Anything left empty needs a value.</p>'
     + inputs.map((inp, i) => pgInputHtml('lab', 'ctor', i, inp, ctx)).join('')
-    + '<div class="btnrow" style="margin-top:10px;"><button class="btn btn-primary" onclick="labDeployWithArgs()">Deploy in the lab</button></div>';
+    + '<div class="btnrow" style="margin-top:10px;"><button class="btn btn-primary" data-onclick="labDeployWithArgs()">Deploy in the lab</button></div>';
   inputs.forEach((inp, i) => { const el = document.getElementById('lab_arg_ctor_' + i); if(el) el.value = labCtorDefault(inp, i); });
 }
 
