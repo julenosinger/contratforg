@@ -21,10 +21,41 @@ M=[
  ('required: the regex second layer never matches','contractforge-deploy/required.js',"const REQ_PLACEHOLDER_IN_CODE = /0x0{34,36}(dEaD|bEEF|cAfE)/i;","const REQ_PLACEHOLDER_IN_CODE = /(?!)/;",'ui.mjs'),
  ('required: a draft is never blocked','contractforge-deploy/required.js',"  if(p.length) return 'Draft: ' + p.join('; ') + '.';","  if(false) return '';",'ui.mjs'),
  ('wallet: the old default of 100 returns','contractforge-deploy/app.js',"const spendlimit= g('s_spendlimit').trim()||net.walletDailyDefault;","const spendlimit= g('s_spendlimit').trim()||'100';",'ui.mjs'),
+ # ---- phase 4: the NFT mint, the new events, the factory, the DAO and MultiSend (detected by the Foundry suites)
+ ('nft: mint pays before it records the token (checks-effects-interactions undone)','contractforge-deploy/app.js',
+  """        tokenId = ++totalSupply;
+        _owners[tokenId] = msg.sender;
+        _balances[msg.sender] += 1;
+        emit Transfer(address(0), msg.sender, tokenId);
+        emit Minted(msg.sender, tokenId);
+        if (mintPrice > 0) {
+            require(IERC20(usdc).transferFrom(msg.sender, owner, mintPrice), "USDC payment failed");
+        }
+""","""        if (mintPrice > 0) {
+            require(IERC20(usdc).transferFrom(msg.sender, owner, mintPrice), "USDC payment failed");
+        }
+        tokenId = ++totalSupply;
+        _owners[tokenId] = msg.sender;
+        _balances[msg.sender] += 1;
+        emit Transfer(address(0), msg.sender, tokenId);
+        emit Minted(msg.sender, tokenId);
+""",'forge'),
+ ('nft: mint loses its reentrancy guard','contractforge-deploy/app.js',"function mint() external nonReentrant returns (uint256 tokenId) {","function mint() external returns (uint256 tokenId) {",'forge'),
+ ('nft: setMintPrice stops emitting its event','contractforge-deploy/app.js',"        emit MintPriceUpdated(mintPrice, newPrice);\n","",'forge'),
+ ('subscription: setPrice stops emitting its event','contractforge-deploy/app.js',"        emit PriceUpdated(pricePerPeriod, newPrice);\n","",'forge'),
+ ('vault: setDepositCap stops emitting its event','contractforge-deploy/app.js',"        emit DepositCapUpdated(depositCap, newCap);\n","",'forge'),
+ ('factory: createPair accepts a second pair for the same tokens','contractforge-deploy/app.js','        require(getPair[tokenX][tokenY] == address(0), "pair exists");\n',"",'forge'),
+ ('dao: an executed proposal can be executed again','contractforge-deploy/app.js','        require(block.timestamp >= p.eta, "timelock active");\n        p.executed = true;\n','        require(block.timestamp >= p.eta, "timelock active");\n','forge'),
+ ('dao: an account can vote twice','contractforge-deploy/app.js','        require(!p.hasVoted[msg.sender], "already voted");\n',"",'forge'),
+ ('multisend: a token without code is accepted','contractforge-deploy/app.js','        require(token.code.length > 0, "token is not a contract");\n',"",'forge'),
+ ('multisend: native payments lose their gas cap','contractforge-deploy/app.js',"{value: amounts[i], gas: NATIVE_TRANSFER_GAS}","{value: amounts[i]}",'forge'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
     M=[('self-test: a comment edit nobody tests','contractforge-deploy/maturity.js',"   Maturity of every generator, and the mainnet gate.","   Maturity of every generator, and the mainnet gate (edited by the self-test).",'maturity.mjs')]
+if '--only' in sys.argv:
+    key = sys.argv[sys.argv.index('--only') + 1]          # e.g. --only forge   or   --only 'nft:'
+    M = [m for m in M if key in m[0] or key == m[4]]
 bad=0
 for name,f,old,new,test in M:
     path=REPO+'/'+f
@@ -33,8 +64,10 @@ for name,f,old,new,test in M:
         print('SKIP (pattern count %d): %s'%(s.count(old),name)); bad+=1; continue
     open(path,'w',encoding='utf-8').write(s.replace(old,new))
     try:
-        r=subprocess.run(['node',test],cwd=REPO+'/tests',capture_output=True,text=True,timeout=250)
-        failed = r.returncode!=0
+        cmd = ['npm','run','test:portable'] if test == 'forge' else ['node',test]    # 'forge' regenerates every source and runs the Foundry suite
+        r=subprocess.run(cmd,cwd=REPO+'/tests',capture_output=True,text=True,timeout=250)
+        out = (r.stdout or '') + (r.stderr or '')
+        failed = r.returncode!=0 and (test != 'forge' or '[FAIL' in out)    # for Foundry a compile error does not count: a test has to fail
         print(('CAUGHT   ' if failed else 'NOT CAUGHT ')+name+'  ['+test+']')
         if not failed: bad+=1
     except subprocess.TimeoutExpired:
