@@ -3348,6 +3348,7 @@ function genSimpleDAO(){
   const daoProblems = isPortable() ? reqProblems([{ label:'Governance token', value:tokenRaw }]) : reqProblems([{ label:'Governance token', value:tokenRaw, required:true }]);
   const quorum = g('s_quorum')||'4';
   const voting = g('s_voting')||'45818';
+  if(!/^\d+$/.test(voting.trim()) || Number(voting) < 1){ alert('The voting period must be a whole number of blocks, at least 1.'); return; }
   const delay  = g('s_delay')||'172800';
   const thresh = g('s_threshold')||'1000';
   let code = `// SPDX-License-Identifier: MIT
@@ -3365,7 +3366,10 @@ interface IERC20Votes {
 /// @notice Token-weighted voting. Quorum: ${quorum}% (of 'for' votes), Voting period: ${voting} blocks, Timelock: ${delay}s, then 14 days to execute.
 /// @dev The token must keep voting checkpoints (ERC20Votes style) and holders must delegate (even to themselves).
 ///      Proposing needs voting power held in the previous block, so borrowed tokens cannot open proposals.
-///      The admin (deployer) can cancel any proposal that has not been executed: treat it as a guardian key.
+///      The admin (the deployer at first) is a guardian: it can cancel any proposal that has not been executed. The admin can be
+///      handed over in two steps (transferAdmin, then acceptAdmin by the new admin) and can give the power up for good with
+///      renounceAdmin(); after a renounce nobody but a proposal's own proposer can cancel it, and the power cannot come back.
+///      The voting period must be at least one block (a period of zero would make every proposal impossible to pass).
 contract ${name} {
     IERC20Votes public token = IERC20Votes(${token});
     uint256 public constant QUORUM_NUMERATOR   = ${quorum};
@@ -3375,6 +3379,8 @@ contract ${name} {
     /// @notice A queued proposal can only be executed within this window after its timelock ends.
     uint256 public constant GRACE_PERIOD = 14 days;
     address public admin;
+    /// @notice The account offered the admin role; it has no powers until it calls acceptAdmin().
+    address public pendingAdmin;
 
     enum ProposalState { Pending, Active, Defeated, Succeeded, Queued, Executed, Cancelled, Expired }
 
@@ -3402,10 +3408,38 @@ contract ${name} {
     event ProposalQueued(uint256 indexed id, uint256 eta);
     event ProposalExecuted(uint256 indexed id);
     event ProposalCancelled(uint256 indexed id);
+    event AdminTransferStarted(address indexed previousAdmin, address indexed newAdmin);
+    event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
+    event AdminRenounced(address indexed previousAdmin);
 
     modifier onlyAdmin() { require(msg.sender == admin, "not admin"); _; }
 
-    constructor() { admin = msg.sender; }
+    constructor() {
+        require(VOTING_PERIOD >= 1, "voting period must be at least 1 block");
+        admin = msg.sender;
+    }
+
+    /// @notice Offer the admin role to newAdmin (replaces an earlier offer). Nothing changes until newAdmin accepts.
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        require(newAdmin != address(0), "new admin is the zero address");
+        pendingAdmin = newAdmin;
+        emit AdminTransferStarted(admin, newAdmin);
+    }
+
+    /// @notice Take over the admin role after being offered it by transferAdmin().
+    function acceptAdmin() external {
+        require(msg.sender == pendingAdmin && msg.sender != address(0), "not pending admin");
+        emit AdminTransferred(admin, msg.sender);
+        admin = msg.sender;
+        pendingAdmin = address(0);
+    }
+
+    /// @notice Give up the admin role for good: afterwards only a proposal's own proposer can cancel it. IRREVERSIBLE.
+    function renounceAdmin() external onlyAdmin {
+        emit AdminRenounced(admin);
+        admin = address(0);
+        pendingAdmin = address(0);
+    }
 
     function propose(address[] calldata targets, uint256[] calldata values, bytes[] calldata calldatas, string calldata description) external returns (uint256 id) {
         require(token.getPastVotes(msg.sender, block.number - 1) >= PROPOSAL_THRESHOLD, "below threshold");
@@ -3455,7 +3489,7 @@ contract ${name} {
 
     function cancel(uint256 id) external {
         Proposal storage p = _proposals[id];
-        require(msg.sender == p.proposer || msg.sender == admin, "not authorised");
+        require(msg.sender == p.proposer || (admin != address(0) && msg.sender == admin), "not authorised");
         require(!p.executed, "already executed");
         p.cancelled = true;
         emit ProposalCancelled(id);
@@ -3476,6 +3510,28 @@ contract ${name} {
     }
 
     function proposalsLength() external view returns (uint256) { return _proposals.length; }
+
+    /// @notice Everything about a proposal except its votes and its actions.
+    function proposalCore(uint256 id) external view returns (address proposer, uint256 voteStart, uint256 voteEnd, uint256 eta, bool executed, bool cancelled, ProposalState currentState) {
+        Proposal storage p = _proposals[id];
+        return (p.proposer, p.voteStart, p.voteEnd, p.eta, p.executed, p.cancelled, state(id));
+    }
+
+    /// @notice The tally so far.
+    function proposalVotes(uint256 id) external view returns (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes) {
+        Proposal storage p = _proposals[id];
+        return (p.forVotes, p.againstVotes, p.abstainVotes);
+    }
+
+    /// @notice The calls the proposal will make when it is executed.
+    function proposalActions(uint256 id) external view returns (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) {
+        Proposal storage p = _proposals[id];
+        return (p.targets, p.values, p.calldatas);
+    }
+
+    function proposalDescription(uint256 id) external view returns (string memory) { return _proposals[id].description; }
+
+    function hasVoted(uint256 id, address account) external view returns (bool) { return _proposals[id].hasVoted[account]; }
 }`;
   code = portabilize(code, [
     { kind:'addr', name:'token', type:'IERC20Votes', value:token, param:'token_', hint:'static', userSet:true, argValue:tokenRaw },

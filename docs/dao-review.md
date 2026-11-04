@@ -24,9 +24,9 @@ reaches votes, queueing, execution, cancellation, defeat and expiry.
 |---|---|---|---|
 | 1 | Proposal threshold used the live balance (flash-borrowed tokens could open proposals) | High | Fixed (power in the previous block) |
 | 2 | A queued proposal never expired | Medium | Fixed (14-day grace window, state `Expired`) |
-| 3 | **The admin can cancel any proposal and can never be changed or removed.** One key (the deployer) keeps a veto over every proposal for the life of the contract; if it is compromised it can censor all governance forever, and if it is lost the veto cannot be given up. Proposals cannot change it because the contract has no way to call itself on the admin | High for a contract called a DAO (liveness and censorship, not theft) | **Open** |
-| 4 | The constructor accepts a voting period of 0, which makes every proposal impossible to vote on and therefore always defeated | Low (deployment mistake) | Open (test documents it) |
-| 5 | No getter for a proposal's tally, targets or description (only events and `state()`), which makes monitoring and front ends depend on logs | Low | Open |
+| 3 | The admin could cancel any proposal and could never be changed or removed (one permanent veto key) | High (design) | **Fixed in phase 5 (2026-11-04)**: `transferAdmin` / `acceptAdmin` (two steps, a pending admin has no powers, never to zero) and an irreversible `renounceAdmin()`; after a renounce only a proposal's own proposer can cancel. Tests: unit + invariants (the admin changes only through the two steps; never zero without a renounce; after a renounce nothing is vetoable). The guardian role itself remains while an admin exists: it is now a choice the operator can end |
+| 4 | The constructor accepted a voting period of 0 (every proposal impossible to vote on) | Low | **Fixed in phase 5**: `require(VOTING_PERIOD >= 1)`; the generator and the form also refuse it |
+| 5 | No getter for a proposal's tally, actions or description | Low | **Fixed in phase 5**: `proposalCore`, `proposalVotes`, `proposalActions`, `proposalDescription`, `hasVoted` (additive ABI change) |
 | 6 | Quorum counts *for* votes only and abstentions do not count | Info | By design, documented |
 | 7 | No vote escrow: tokens that are delegated before the snapshot count in full, so a holder can vote with borrowed tokens that stay through the snapshot block | Medium (design) | Open, by design |
 | 8 | Slither: `calls-loop`, `timestamp`, `low-level-calls` in `execute` | Info | Reported only, by design |
@@ -35,11 +35,14 @@ reaches votes, queueing, execution, cancellation, defeat and expiry.
 The vote token is trusted (a token with a broken checkpoint can break voting); proposal actions run with the DAO's authority;
 execution failure of any action fails the whole proposal.
 
-## Decision on the level
-**`dao` stays `experimental`.** The rule in `docs/mainnet-gate.md` needs "no relevant finding still open". Finding 3 is relevant: it
-defeats the purpose of a DAO (a single permanent key can veto everything and cannot be rotated or renounced), and the generator
-could remove it. Finding 7 is a design limit shared with plain Governor-style contracts. Findings 4 and 5 are small. The suite
-requirement is now met; the open-finding requirement is not.
+## Decision on the level (updated 2026-11-04, phase 5)
+**`dao` is promoted to `reviewed`.** The rule in `docs/mainnet-gate.md` needs a review document, a dedicated suite with fuzz or invariant tests,
+and no relevant finding still open. Findings 3, 4 and 5 are fixed and tested (the previous reason for keeping it experimental was exactly
+finding 3). What stays open does not defeat the purpose of the contract for someone using it as documented: finding 7 (no vote escrow) is a
+design limit shared with plain Governor-style contracts, finding 6 is by design, and while an admin exists it is a guardian who can veto;
+the operator can end that with `renounceAdmin()` or hand it to a multisig with the two-step transfer. The label means "reviewed
+internally, NOT audited", and the level reason says that the default deployment keeps a guardian key.
 
-What would make it promotable: let the admin be replaced or give up the veto (for example `renounceAdmin()` and admin rotation
-through governance), refuse a zero voting period in the constructor, add a getter for proposal data, and re-run this review.
+ABI change (additive): new functions `transferAdmin`, `acceptAdmin`, `renounceAdmin`, `pendingAdmin`, `proposalCore`, `proposalVotes`,
+`proposalActions`, `proposalDescription`, `hasVoted`; new events `AdminTransferStarted`, `AdminTransferred`, `AdminRenounced`; the constructor now
+reverts for a voting period of 0. Existing functions and events keep their signatures; contracts already deployed are not affected.

@@ -28,7 +28,7 @@ ok(!Object.values(M).some((e) => e.level === 'audited'), 'no template is audited
 
 /* classification rule, checked against real files */
 const reviewed = Object.entries(M).filter(([, e]) => e.level === 'reviewed').map(([k]) => k).sort();
-eq(reviewed, ['erc721', 'multisend', 'smartwallet', 'swap-amm-factory', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
+eq(reviewed, ['dao', 'erc721', 'multisend', 'smartwallet', 'swap-amm-factory', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
 for (const k of reviewed) {
   const e = M[k];
   const docPath = path.join(repo, 'docs', e.doc || '__missing__');
@@ -45,13 +45,14 @@ for (const [k, e] of Object.entries(M).filter(([, x]) => x.level === 'experiment
   if (e.doc) ok(fs.existsSync(path.join(repo, 'docs', e.doc)), `${k}: the document ${e.doc} exists`);
   if (e.suite) ok(fs.existsSync(path.join(repo, 'tests/solidity/test', e.suite)), `${k}: the suite ${e.suite} exists`);
 }
-/* the DAO has a suite with fuzz and invariants but stays experimental because of an open finding written in its review */
+/* the DAO is reviewed only because its High finding (a permanent admin veto) is fixed in its review */
 {
   const dao = fs.readFileSync(path.join(repo, 'docs/dao-review.md'), 'utf8');
-  ok(M.dao.level === 'experimental' && /\*\*Open\*\*/.test(dao), 'dao: experimental while docs/dao-review.md lists an open finding');
+  ok(M.dao.level === 'reviewed' && /promoted to `reviewed`/.test(dao), 'dao: reviewed, and docs/dao-review.md records the promotion');
+  ok(!dao.split('\n').some((l) => /^\| \d+ \|/.test(l) && /\| High/.test(l) && /\*\*Open\*\*/.test(l)), 'dao: no High finding is open in docs/dao-review.md');
 }
 /* templates that must stay experimental by evidence in the repo */
-for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderbook', 'dao', 'escrow', 'vesting', 'paywall', 'staking']) {
+for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderbook', 'escrow', 'vesting', 'paywall', 'staking']) {
   eq(M[k].level, 'experimental', `${k} stays experimental`);
 }
 

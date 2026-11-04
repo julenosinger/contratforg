@@ -16,7 +16,7 @@ against the files in this repository, so a wrong "reviewed" fails the test run.
 | Vault (`vault`) | reviewed | `docs/generators-review.md` + `Hardening.t.sol` with fuzz tests |
 | AMM with factory (`swap-amm-factory`) | reviewed | `docs/swap-amm-review.md` (phase 4 section) + `Factory.t.sol` with unit, fuzz and invariant tests. Anyone can create a pair; a dishonest token only hurts its own pair |
 | Order book (`swap-orderbook`) | experimental | unit tests only |
-| DAO (`dao`) | experimental | `docs/dao-review.md` + `Dao.t.sol` with fuzz and invariants, **but a relevant finding is open**: the admin can cancel any proposal and can never be replaced or removed; the constructor accepts a zero voting period |
+| DAO (`dao`) | **reviewed** (phase 5, 2026-11-04) | `docs/dao-review.md` + `Dao.t.sol` with fuzz and invariants. The permanent admin veto, the zero voting period and the missing getters are fixed (two-step admin transfer, irreversible `renounceAdmin()`, minimum period of one block, proposal getters). Residual: a guardian can veto while an admin exists, no vote escrow. NOT audited |
 | NFT (`erc721`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Nft.t.sol` with fuzz and invariant tests, including a payment token that calls back |
 | MultiSend (`multisend`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Multisend.t.sol`: the contract never holds funds and value is conserved |
 | Staking (`staking`), Escrow (`escrow`), Vesting (`vesting`), Subscription (`paywall`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |

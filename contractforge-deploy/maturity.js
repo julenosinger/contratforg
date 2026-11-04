@@ -31,7 +31,7 @@ const MATURITY = {
   'vault':             { level: 'reviewed', reason: 'Documented review and a Foundry suite with fuzz tests.', doc: 'generators-review.md', suite: 'Hardening.t.sol' },
   'swap-amm-factory':  { level: 'reviewed', reason: 'Documented review and a Foundry suite with unit, fuzz and invariant tests. Anyone can create a pair, and a dishonest token can only hurt its own pair: the operator decides which tokens to list.', doc: 'swap-amm-review.md', suite: 'Factory.t.sol' },
   'swap-orderbook':    { level: 'experimental', reason: 'No fuzz or invariant tests for the order book.', doc: 'generators-review.md' },
-  'dao':               { level: 'experimental', reason: 'Fuzz and invariant tests exist, but the admin can cancel any proposal and can never be replaced or removed (a permanent single-key veto), and the constructor accepts a zero voting period. See docs/dao-review.md.', doc: 'dao-review.md', suite: 'Dao.t.sol' },
+  'dao':               { level: 'reviewed', reason: 'Reviewed internally (docs/dao-review.md) with unit, fuzz and invariant tests. The admin is a guardian who can cancel proposals until it renounces or hands over the role (two-step transfer, renounceAdmin); there is no vote escrow. NOT audited.', doc: 'dao-review.md', suite: 'Dao.t.sol' },
   'staking':           { level: 'experimental', reason: 'Second-pass review only; unit tests, no fuzz or invariant tests.', doc: 'generators-review.md' },
   'escrow':            { level: 'experimental', reason: 'Second-pass review only; unit tests, no fuzz or invariant tests.', doc: 'generators-review.md' },
   'vesting':           { level: 'experimental', reason: 'Second-pass review only; unit tests, no fuzz or invariant tests.', doc: 'generators-review.md' },

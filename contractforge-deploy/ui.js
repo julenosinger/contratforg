@@ -443,6 +443,7 @@ const UI_RANGES = { // id -> [min, max, label]
   s_exitfee: [0, 9999, 'Fee in basis points, 0 to 9999'],
   s_royalty: [0, 10000, 'Royalty in basis points, 0 to 10000'],
   s_quorum: [0, 100, 'Percentage, 0 to 100'],
+  s_voting: [1, 4294967295, 'A whole number of blocks, at least 1'],
   tre_threshold: [1, 1000, 'At least 1 approval']
 };
 const UI_ADDR = /^0x[0-9a-fA-F]{40}$/;

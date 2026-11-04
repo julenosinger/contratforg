@@ -2,8 +2,10 @@
 pragma solidity ^0.8.24;
 // The DAO (dao): unit, fuzz and invariant tests over propose / vote / queue / execute / cancel, with a vote token that
 // keeps real checkpoints. Known limits, stated in docs/dao-review.md: the admin (guardian) can cancel any proposal, there
-// is no vote escrow (tokens delegated before a proposal's snapshot count in full), and the contract has no getter for a
-// proposal's tally, so the tally is checked through the state machine (state()) and through independent ghost counters.
+// is no vote escrow (tokens delegated before a proposal's snapshot count in full). Phase 5 added: a two-step admin transfer,
+// an irreversible renounceAdmin(), a minimum voting period of one block and the proposal getters (the tally is still also
+// checked through the state machine and through independent ghost counters). The new calls go through IDaoPhase5 so that
+// these tests compile, and fail at run time, against the previous generator output (red-green).
 import "../src/portable/Dao.sol" as DaoSrc;
 
 interface Vm {
@@ -11,6 +13,20 @@ interface Vm {
     function roll(uint256) external;
     function warp(uint256) external;
     function expectRevert(bytes calldata) external;
+    function expectEmit(bool, bool, bool, bool) external;
+    function expectRevert() external;
+}
+
+interface IDaoPhase5 {
+    function transferAdmin(address) external;
+    function acceptAdmin() external;
+    function renounceAdmin() external;
+    function pendingAdmin() external view returns (address);
+    function proposalCore(uint256) external view returns (address proposer, uint256 voteStart, uint256 voteEnd, uint256 eta, bool executed, bool cancelled, uint8 st);
+    function proposalVotes(uint256) external view returns (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes);
+    function proposalActions(uint256) external view returns (address[] memory targets, uint256[] memory values, bytes[] memory calldatas);
+    function proposalDescription(uint256) external view returns (string memory);
+    function hasVoted(uint256, address) external view returns (bool);
 }
 
 /// An ERC20Votes-like token: checkpoints per account and for the total supply; a lookup at or after the current block
@@ -124,13 +140,72 @@ contract DaoTest is Base {
         uint256 id = _propose(); vm.roll(block.number + 2); vm.prank(whale); dao.castVote(id, 1); vm.prank(bob); dao.castVote(id, 0); vm.roll(block.number + PERIOD + 1);
         require(_st(id) == S.Defeated, "for == against is defeated");
     }
-    /// With a voting period of zero nobody can vote, so nothing can ever pass (a deployment mistake the contract does not refuse).
-    function testAZeroVotingPeriodMakesEveryProposalDefeated() public {
-        DaoSrc.ArcDAO d0 = new DaoSrc.ArcDAO(address(tok), 0); (address[] memory t, uint256[] memory v, bytes[] memory d) = _inc();
-        vm.prank(whale); uint256 id = d0.propose(t, v, d, "x"); vm.roll(block.number + 2);
-        vm.prank(whale); vm.expectRevert(bytes("not in voting period")); d0.castVote(id, 1);
-        require(S(uint8(d0.state(id))) == S.Defeated, "defeated");
+    /// A voting period of zero would make every proposal impossible to pass: the constructor refuses it.
+    function testAZeroVotingPeriodIsRefused() public {
+        vm.expectRevert(bytes("voting period must be at least 1 block")); new DaoSrc.ArcDAO(address(tok), 0);
+        new DaoSrc.ArcDAO(address(tok), 1);   // the smallest valid period
     }
+
+    /* ----- admin: two-step transfer and irreversible renounce (phase 5) ----- */
+    event AdminTransferStarted(address indexed previousAdmin, address indexed newAdmin);
+    event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
+    event AdminRenounced(address indexed previousAdmin);
+
+    function testAdminTransferIsTwoStepAndTheNewAdminTakesOver() public {
+        IDaoPhase5 d = IDaoPhase5(address(dao)); uint256 id = _propose();
+        vm.expectEmit(true, true, false, true); emit AdminTransferStarted(address(this), bob); d.transferAdmin(bob);
+        require(dao.admin() == address(this) && d.pendingAdmin() == bob, "nothing changes until the new admin accepts");
+        vm.prank(bob); vm.expectRevert(bytes("not authorised")); dao.cancel(id);          // a pending admin has no powers
+        vm.prank(carol); vm.expectRevert(bytes("not pending admin")); d.acceptAdmin();
+        vm.expectEmit(true, true, false, true); emit AdminTransferred(address(this), bob); vm.prank(bob); d.acceptAdmin();
+        require(dao.admin() == bob && d.pendingAdmin() == address(0), "bob is the admin");
+        vm.expectRevert(bytes("not authorised")); dao.cancel(id);                           // the old admin lost the power
+        vm.prank(bob); dao.cancel(id); require(_st(id) == S.Cancelled, "the new admin cancels");
+        vm.prank(bob); vm.expectRevert(bytes("not pending admin")); d.acceptAdmin();        // cannot accept twice
+    }
+    function testOnlyTheAdminStartsATransferAndNeverToZero() public {
+        IDaoPhase5 d = IDaoPhase5(address(dao));
+        vm.prank(carol); vm.expectRevert(bytes("not admin")); d.transferAdmin(carol);
+        vm.expectRevert(bytes("new admin is the zero address")); d.transferAdmin(address(0));
+        d.transferAdmin(bob); d.transferAdmin(carol);                                       // a second call replaces the pending admin
+        vm.prank(bob); vm.expectRevert(bytes("not pending admin")); d.acceptAdmin();
+        vm.prank(carol); d.acceptAdmin(); require(dao.admin() == carol, "carol");
+    }
+    function testRenounceIsIrreversibleAndLeavesNoOneAbleToVeto() public {
+        IDaoPhase5 d = IDaoPhase5(address(dao)); uint256 id = _propose();
+        d.transferAdmin(bob);                                                                // a pending transfer is dropped by the renounce
+        vm.prank(carol); vm.expectRevert(bytes("not admin")); d.renounceAdmin();
+        vm.expectEmit(true, false, false, true); emit AdminRenounced(address(this)); d.renounceAdmin();
+        require(dao.admin() == address(0) && d.pendingAdmin() == address(0), "no admin, no pending admin");
+        vm.expectRevert(bytes("not authorised")); dao.cancel(id);                           // the old admin
+        vm.prank(bob); vm.expectRevert(bytes("not authorised")); dao.cancel(id);            // the dropped pending admin
+        vm.prank(bob); vm.expectRevert(bytes("not pending admin")); d.acceptAdmin();
+        vm.expectRevert(bytes("not admin")); d.transferAdmin(bob);
+        vm.expectRevert(bytes("not admin")); d.renounceAdmin();
+        vm.prank(whale); dao.cancel(id); require(_st(id) == S.Cancelled, "the proposer can still cancel their own proposal");
+        // a proposal nobody cancels still runs its course
+        uint256 id2 = _passed(); dao.queue(id2); vm.warp(block.timestamp + TL + 1); dao.execute(id2); require(ctr.n() == 1, "executed");
+    }
+    function testProposalGettersReturnWhatHappened() public {
+        IDaoPhase5 d = IDaoPhase5(address(dao)); uint256 id = _propose(); vm.roll(block.number + 2);
+        vm.prank(whale); dao.castVote(id, 1); tok.setVotes(bob, 300e18);
+        { (address proposer, uint256 vs, uint256 ve, uint256 eta, bool ex, bool ca, uint8 st) = d.proposalCore(id);
+          require(proposer == whale && vs == 102 && ve == vs + PERIOD && eta == 0 && !ex && !ca && st == uint8(S.Active), "core"); }
+        { (uint256 f, uint256 ag, uint256 ab) = d.proposalVotes(id); require(f == 5000e18 && ag == 0 && ab == 0, "votes"); }
+        { (address[] memory t, uint256[] memory v, bytes[] memory c) = d.proposalActions(id);
+          require(t.length == 1 && t[0] == address(ctr) && v[0] == 0 && keccak256(c[0]) == keccak256(abi.encodeCall(Counter.inc, ())), "actions"); }
+        require(keccak256(bytes(d.proposalDescription(id))) == keccak256(bytes("inc")), "description");
+        require(d.hasVoted(id, whale) && !d.hasVoted(id, bob), "hasVoted");
+        vm.roll(block.number + PERIOD); dao.queue(id);
+        { (, , , uint256 eta2, , , uint8 st2) = d.proposalCore(id); require(eta2 != 0 && st2 == uint8(S.Queued), "queued"); }
+        vm.warp(block.timestamp + TL + 1); dao.execute(id);
+        { (, , , , bool ex3, , uint8 st3) = d.proposalCore(id); require(ex3 && st3 == uint8(S.Executed), "executed"); }
+    }
+    function testGettersRevertForAnUnknownProposal() public {
+        vm.expectRevert(); IDaoPhase5(address(dao)).proposalCore(99);
+        vm.expectRevert(); IDaoPhase5(address(dao)).proposalVotes(99);
+    }
+
     function testProposeNeedsMatchingArrays() public {
         address[] memory t = new address[](1); uint256[] memory v = new uint256[](2); bytes[] memory d = new bytes[](1);
         vm.prank(whale); vm.expectRevert(bytes("length mismatch")); dao.propose(t, v, d, "x");
@@ -198,13 +273,17 @@ contract DaoHandler is Base {
     uint256[] public ids; mapping(uint256 => uint256) public voteStart; mapping(uint256 => uint256) public supplyAtStart;
     mapping(uint256 => uint256) public ghostFor; mapping(uint256 => uint256) public ghostAgainst;
     mapping(uint256 => mapping(address => uint8)) public votesBy; mapping(uint256 => uint256) public executions;
-    mapping(uint256 => bool) public cancelled; mapping(uint256 => bool) public queued; mapping(uint256 => uint256) public etaOf;
+    mapping(uint256 => address) public proposerOf; mapping(uint256 => bool) public cancelled; mapping(uint256 => bool) public queued; mapping(uint256 => uint256) public etaOf;
     bool public executedOutsideWindow; bool public votedOutsideWindow; bool public weightWrong; bool public votedTwice;
     uint256 public successfulExecutions; uint256 public proposalsMade; uint256 public votesCast;
+    // admin ghost state (phase 5): what the admin must be, given only the calls this handler saw succeed
+    address public curAdmin; address public expectedAdmin; address public pendingExpected; bool public renounced; bool public vetoAfterRenounce;
+    uint256 public adminCalls;
 
     constructor() {
         vm.roll(100); tok = new CkptVotes(); ctr = new Counter(); dao = new DaoSrc.ArcDAO(address(tok), PERIOD);
         for (uint256 i = 0; i < 4; i++) tok.setVotes(actors[i], 2000e18 * (i + 1));
+        curAdmin = address(this); expectedAdmin = address(this);
         vm.roll(101);
     }
     function idCount() external view returns (uint256) { return ids.length; }
@@ -217,7 +296,7 @@ contract DaoHandler is Base {
         address[] memory t = new address[](1); uint256[] memory v = new uint256[](1); bytes[] memory d = new bytes[](1); t[0] = address(ctr); d[0] = abi.encodeCall(Counter.inc, ());
         vm.prank(actors[a % 4]);
         try dao.propose(t, v, d, "p") returns (uint256 id) {
-            ids.push(id); voteStart[id] = block.number + 1; proposalsMade++;
+            ids.push(id); proposerOf[id] = actors[a % 4]; voteStart[id] = block.number + 1; proposalsMade++;
         } catch {}
     }
     function vote(uint8 which, uint8 a, uint8 support) external {
@@ -248,10 +327,36 @@ contract DaoHandler is Base {
             if (ctr.n() != before + 1) weightWrong = true;
         } catch {}
     }
-    function cancel(uint8 which, uint8 byAdmin, uint8 a) external {
+    /// A proposer or a stranger cancels (the admin's cancels are in adminAct). After the renounce only the proposer can.
+    function cancel(uint8 which, uint8 byProposer, uint8 a) external {
         if (ids.length == 0) return; uint256 id = ids[which % ids.length];
-        if (byAdmin % 2 == 0) { try dao.cancel(id) { cancelled[id] = true; } catch {} }      // this handler deployed the DAO: it is the admin
-        else { vm.prank(actors[a % 4]); try dao.cancel(id) { cancelled[id] = true; } catch {} }
+        address who = byProposer % 2 == 0 ? proposerOf[id] : actors[a % 4];
+        vm.prank(who);
+        try dao.cancel(id) { cancelled[id] = true; if (renounced && who != proposerOf[id]) vetoAfterRenounce = true; } catch {}
+    }
+    /// accepting works only for the account that was offered the role; anything else succeeding is a violation
+    function _accept(address target) internal {
+        vm.prank(target);
+        try IDaoPhase5(address(dao)).acceptAdmin() {
+            if (target != pendingExpected || pendingExpected == address(0)) vetoAfterRenounce = true;
+            else { expectedAdmin = target; curAdmin = target; pendingExpected = address(0); }
+        } catch {}
+    }
+    /// op 0: start a transfer; 1: accept it; 2: renounce; 3: the admin cancels; 4: a stranger tries to take over (accept without being pending)
+    function adminAct(uint8 op, uint8 who, uint8 which) external {
+        adminCalls++; address target = actors[who % 4]; op = op % 5;
+        if (op == 0) {
+            vm.prank(curAdmin); try IDaoPhase5(address(dao)).transferAdmin(target) { pendingExpected = target; } catch {}
+        } else if (op == 1) {
+            _accept(target);
+        } else if (op == 2) {
+            vm.prank(curAdmin); try IDaoPhase5(address(dao)).renounceAdmin() { renounced = true; expectedAdmin = address(0); pendingExpected = address(0); curAdmin = address(0xdead); } catch {}
+        } else if (op == 3) {
+            if (ids.length == 0) return; uint256 id = ids[which % ids.length];
+            vm.prank(curAdmin); try dao.cancel(id) { cancelled[id] = true; if (renounced && curAdmin != proposerOf[id]) vetoAfterRenounce = true; } catch {}
+        } else {
+            _accept(actors[(who + 1) % 4]);   // usually not the pending admin: that must fail
+        }
     }
 }
 
@@ -261,9 +366,9 @@ contract DaoInvariantTest {
     function setUp() public { h = new DaoHandler(); }
     function targetContracts() public view returns (address[] memory t) { t = new address[](1); t[0] = address(h); }
     function targetSelectors() public view returns (FuzzSelector[] memory s) {
-        s = new FuzzSelector[](1); bytes4[] memory sel = new bytes4[](8);
+        s = new FuzzSelector[](1); bytes4[] memory sel = new bytes4[](9);
         sel[0] = DaoHandler.setPower.selector; sel[1] = DaoHandler.advance.selector; sel[2] = DaoHandler.bigWarp.selector; sel[3] = DaoHandler.propose.selector;
-        sel[4] = DaoHandler.vote.selector; sel[5] = DaoHandler.queue.selector; sel[6] = DaoHandler.execute.selector; sel[7] = DaoHandler.cancel.selector;
+        sel[4] = DaoHandler.vote.selector; sel[5] = DaoHandler.queue.selector; sel[6] = DaoHandler.execute.selector; sel[7] = DaoHandler.cancel.selector; sel[8] = DaoHandler.adminAct.selector;
         s[0] = FuzzSelector(address(h), sel);
     }
 
@@ -301,5 +406,15 @@ contract DaoInvariantTest {
             if (st == 3 || st == 4 || st == 7) require(passes, "advanced although it did not meet the rule");
         }
     }
+    /// The admin only ever changes through transferAdmin + acceptAdmin by the named account, or to zero through renounceAdmin.
+    function invariant_theAdminOnlyChangesThroughTheTwoSteps() public view {
+        require(h.dao().admin() == h.expectedAdmin(), "the admin changed some other way");
+        require(IDaoPhase5(address(h.dao())).pendingAdmin() == h.pendingExpected(), "the pending admin changed some other way");
+    }
+    /// There is never "no admin" unless someone renounced explicitly.
+    function invariant_neverWithoutAnAdminUnlessRenounced() public view { require(h.dao().admin() != address(0) || h.renounced(), "admin is zero without a renounce"); }
+    /// After a renounce nobody but the proposer cancels, and nobody accepts an admin transfer they were not offered.
+    function invariant_afterTheRenounceNothingIsVetoable() public view { require(!h.vetoAfterRenounce(), "a non-proposer cancelled after the renounce, or an unoffered transfer was accepted"); }
+
     function invariant_zzTheHandlerIsActive() public view { require(h.idCount() <= 400, "setup"); }
 }
