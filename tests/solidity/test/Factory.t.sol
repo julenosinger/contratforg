@@ -74,7 +74,7 @@ abstract contract Base {
 
 /* ============================== unit + fuzz ============================== */
 contract FactoryUnitTest is Base {
-    event PairCreated(address token0, address token1, address pair);
+    event PairCreated(address indexed token0, address indexed token1, address pair);   // token0 and token1 indexed since phase 5
     FacSrc.ArcSwapAMMFactory f; Tok[5] toks;
 
     function setUp() public {
@@ -110,7 +110,7 @@ contract FactoryUnitTest is Base {
     }
     function testCreatePairEmitsPairCreated() public {
         address a = address(toks[0]); address b = address(toks[1]); (address lo, address hi) = a < b ? (a, b) : (b, a);
-        vm.expectEmit(false, false, false, true); emit PairCreated(lo, hi, _predict(1));
+        vm.expectEmit(true, true, false, true); emit PairCreated(lo, hi, _predict(1));
         f.createPair(a, b);
     }
     function testAllPairsLengthCounts() public {

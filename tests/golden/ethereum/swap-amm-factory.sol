@@ -257,7 +257,7 @@ contract ArcSwapAMMFactory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
-    event PairCreated(address token0, address token1, address pair);
+    event PairCreated(address indexed token0, address indexed token1, address pair);
 
     function createPair(address tokenX, address tokenY) external returns (address pair) {
         require(tokenX != tokenY, "identical tokens");

@@ -97,3 +97,10 @@ mutated swap fee breaks the invariants, so they have teeth. The earlier suites (
 
 **Decision:** nothing relevant is open, the suite has fuzz and invariants, so `swap-amm-factory` is promoted to **reviewed** (internal
 review, not an independent audit).
+
+### `PairCreated` now indexes the tokens (phase 5, 2026-11-04)
+`event PairCreated(address indexed token0, address indexed token1, address pair)`. The event signature is the same, so topic 0 is unchanged, but the
+log now has **three topics** (`token0`, `token1` are topics 1 and 2) and its data is only the pair address (32 bytes); before, all three addresses were in
+the data. A decoder written for the old layout reads `token0` and `token1` from the data and gets the wrong values or fails; regenerate the ABI. The gain: a
+client can ask a node for "all pairs that contain token X" with a topic filter instead of scanning every log. Contracts already deployed keep the old event.
+

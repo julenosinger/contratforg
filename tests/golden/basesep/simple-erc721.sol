@@ -35,6 +35,7 @@ contract ArcOriginals {
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
     event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event BaseURIUpdated(string oldURI, string newURI);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -145,7 +146,10 @@ contract ArcOriginals {
         emit MintPriceUpdated(mintPrice, newPrice);
         mintPrice = newPrice;
     }
-    function setBaseURI(string calldata uri) external onlyOwner { baseURI = uri; }
+    function setBaseURI(string calldata uri) external onlyOwner {
+        emit BaseURIUpdated(baseURI, uri);
+        baseURI = uri;
+    }
 
     function _toString(uint256 value) internal pure returns (string memory) {
         if (value == 0) return "0";

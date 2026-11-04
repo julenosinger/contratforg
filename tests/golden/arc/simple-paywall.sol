@@ -19,6 +19,7 @@ contract ArcSubscription {
 
     event Subscribed(address indexed user, uint256 until);
     event PriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event BeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -53,6 +54,7 @@ contract ArcSubscription {
     }
     function setBeneficiary(address newBeneficiary) external onlyOwner {
         require(newBeneficiary != address(0), "zero beneficiary");
+        emit BeneficiaryUpdated(beneficiary, newBeneficiary);
         beneficiary = newBeneficiary;
     }
 }

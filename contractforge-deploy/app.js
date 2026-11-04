@@ -799,6 +799,7 @@ contract ${name} {
     event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
     event Minted(address indexed to, uint256 indexed tokenId);
     event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event BaseURIUpdated(string oldURI, string newURI);
     event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -909,7 +910,10 @@ contract ${name} {
         emit MintPriceUpdated(mintPrice, newPrice);
         mintPrice = newPrice;
     }
-    function setBaseURI(string calldata uri) external onlyOwner { baseURI = uri; }
+    function setBaseURI(string calldata uri) external onlyOwner {
+        emit BaseURIUpdated(baseURI, uri);
+        baseURI = uri;
+    }
 
     function _toString(uint256 value) internal pure returns (string memory) {
         if (value == 0) return "0";
@@ -1109,6 +1113,7 @@ contract ${name} {
 
     event Subscribed(address indexed user, uint256 until);
     event PriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event BeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -1143,6 +1148,7 @@ contract ${name} {
     }
     function setBeneficiary(address newBeneficiary) external onlyOwner {
         require(newBeneficiary != address(0), "zero beneficiary");
+        emit BeneficiaryUpdated(beneficiary, newBeneficiary);
         beneficiary = newBeneficiary;
     }
 }`;
@@ -1487,7 +1493,7 @@ contract ${name}Factory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
-    event PairCreated(address token0, address token1, address pair);
+    event PairCreated(address indexed token0, address indexed token1, address pair);
 
     function createPair(address tokenX, address tokenY) external returns (address pair) {
         require(tokenX != tokenY, "identical tokens");
