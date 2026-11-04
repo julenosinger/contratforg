@@ -34,8 +34,8 @@ contract ArcSmartWallet {
     error LengthMismatch();
     error InvalidSessionKey();
     error InvalidDuration();
-    error InvalidTargets();
-    error TargetNotAllowed(address target);
+    error InvalidPermissions();
+    error CallNotAllowed(address target, bytes4 selector);
     error ForbiddenTarget();
     error ForbiddenCall(bytes4 selector);
     error InvalidCalldata();
@@ -61,7 +61,11 @@ contract ArcSmartWallet {
     uint256 public constant DAILY_LIMIT = 100000000000000000000;
     /// @notice The longest a session key may stay valid, fixed when this wallet is generated (never more than 30 days).
     uint256 public constant MAX_SESSION_DURATION = 24 hours;
-    uint256 public constant MAX_SESSION_TARGETS = 16;
+    /// @notice Most (target, function) pairs one session key can be granted.
+    uint256 public constant MAX_SESSION_PERMISSIONS = 32;
+
+    /// @notice One thing a session key may do: call function selector on target. selector 0x00000000 means "send plain native currency to target" (a call with no data).
+    struct Permission { address target; bytes4 selector; }
 
     /// @notice Session key => expiry timestamp (0 = not a session key).
     mapping(address => uint256) public sessionKeys;
@@ -69,7 +73,7 @@ contract ArcSmartWallet {
     uint256 private _versionCounter;
     mapping(address => uint256) private _sessionVersion;    // unique id of the current grant of a key
     mapping(address => uint256) private _sessionGen;        // generation the key was granted in
-    mapping(address => mapping(address => uint256)) private _allowedAt; // key => target => grant version
+    mapping(bytes32 => uint256) private _permAt;            // keccak(key, target, selector) => grant version (one storage slot per pair)
 
     uint256 private _spendAvailable;                        // daily-limit bucket
     uint256 private _lastRefill;
@@ -87,7 +91,7 @@ contract ArcSmartWallet {
 
     event Received(address indexed from, uint256 value);
     event Executed(address indexed target, uint256 value, bytes4 selector);
-    event SessionKeyAdded(address indexed key, uint256 expiry, address[] targets);
+    event SessionKeyAdded(address indexed key, uint256 expiry, Permission[] permissions);
     event SessionKeyRevoked(address indexed key);
     event RecoveryInitiated(address indexed guardian, address indexed newOwner, uint256 activationTime);
     event RecoveryCancelled(address indexed cancelledBy, address indexed newOwner);
@@ -165,28 +169,32 @@ contract ArcSmartWallet {
 
     // ----------------------------------------------------------- session keys
 
-    /// @notice Approve a session key for validForHours (at most MAX_SESSION_DURATION) and a list of contracts it may call.
-    ///         Adding a key again replaces its allowlist and expiry.
-    function addSessionKey(address key, uint256 validForHours, address[] calldata targets) external onlyOwner {
+    /// @notice Approve a session key for validForHours (at most MAX_SESSION_DURATION) and the exact (contract, function) pairs it may call.
+    ///         Plain native currency to a contract needs its own pair with selector 0x00000000. A pair whose function is on the
+    ///         blocked list (token transfers and approvals, see _isBlockedSelector) is refused. Adding a key again replaces its
+    ///         pairs and expiry; revokeSessionKey removes everything.
+    function addSessionKey(address key, uint256 validForHours, Permission[] calldata permissions) external onlyOwner {
         if (key == address(0) || key == owner || key == guardian || key == pendingOwner || key == recoveryCandidate || key == address(this)) {
             revert InvalidSessionKey();
         }
         if (validForHours == 0 || validForHours > MAX_SESSION_DURATION / 1 hours) {
             revert InvalidDuration();
         }
-        if (targets.length == 0 || targets.length > MAX_SESSION_TARGETS) revert InvalidTargets();
+        if (permissions.length == 0 || permissions.length > MAX_SESSION_PERMISSIONS) revert InvalidPermissions();
 
         uint256 version = ++_versionCounter;
         _sessionVersion[key] = version;
         _sessionGen[key] = sessionGeneration;
         uint256 expiry = block.timestamp + validForHours * 1 hours;
         sessionKeys[key] = expiry;
-        for (uint256 i = 0; i < targets.length; ++i) {
-            address t = targets[i];
-            if (t == address(0) || t == address(this) || t == key) revert InvalidTargets();
-            _allowedAt[key][t] = version;
+        for (uint256 i = 0; i < permissions.length; ++i) {
+            address t = permissions[i].target;
+            bytes4 sel = permissions[i].selector;
+            if (t == address(0) || t == address(this) || t == key) revert InvalidPermissions();
+            if (sel != bytes4(0) && _isBlockedSelector(sel)) revert ForbiddenCall(sel);
+            _permAt[_permKey(key, t, sel)] = version;
         }
-        emit SessionKeyAdded(key, expiry, targets);
+        emit SessionKeyAdded(key, expiry, permissions);
     }
 
     function revokeSessionKey(address key) external onlyOwner {
@@ -199,9 +207,14 @@ contract ArcSmartWallet {
         return sessionKeys[key] > block.timestamp && _sessionVersion[key] != 0 && _sessionGen[key] == sessionGeneration;
     }
 
-    function isTargetAllowed(address key, address target) external view returns (bool) {
+    /// @notice Whether key may call selector on target right now by grant (0x00000000 = plain native currency).
+    function isCallAllowed(address key, address target, bytes4 selector) external view returns (bool) {
         uint256 version = _sessionVersion[key];
-        return version != 0 && _allowedAt[key][target] == version;
+        return version != 0 && _permAt[_permKey(key, target, selector)] == version;
+    }
+
+    function _permKey(address key, address target, bytes4 selector) private pure returns (bytes32) {
+        return keccak256(abi.encode(key, target, selector));
     }
 
     /// @notice Native currency a session key could still spend right now.
@@ -219,15 +232,18 @@ contract ArcSmartWallet {
         _lastRefill = block.timestamp;
     }
 
+    /// @dev Order matters: the blocked list is checked first so that a blocked function is always reported as forbidden, then the
+    ///      exact (target, function) pair must have been granted to this key.
     function _checkSession(address key, address target, bytes calldata data) private view {
         if (!isValidSessionKey(key)) revert NotAuthorised();
         if (target == address(this)) revert ForbiddenTarget();
-        if (_allowedAt[key][target] != _sessionVersion[key]) revert TargetNotAllowed(target);
+        bytes4 selector;
         if (data.length != 0) {
             if (data.length < 4) revert InvalidCalldata();
-            bytes4 selector = bytes4(data[:4]);
-            if (_isBlockedSelector(selector)) revert ForbiddenCall(selector);
+            selector = bytes4(data[:4]);
+            if (selector == bytes4(0) || _isBlockedSelector(selector)) revert ForbiddenCall(selector);
         }
+        if (_permAt[_permKey(key, target, selector)] != _sessionVersion[key]) revert CallNotAllowed(target, selector);
     }
 
     /// @dev Functions a session key may never call, on any contract: ERC-20 transfer, transferFrom, approve,

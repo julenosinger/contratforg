@@ -25,7 +25,7 @@ const MATURITY_LEVELS = {
 /* One entry per generator. `suite` is the Foundry file that must exist (and contain fuzz or invariant tests)
    for a "reviewed" entry; tests/maturity.mjs checks every claim against the repository. */
 const MATURITY = {
-  'smartwallet':       { level: 'reviewed', reason: 'Documented review and a Foundry suite with fuzz tests.', doc: 'smart-wallet-review.md', suite: 'SmartWallet.t.sol' },
+  'smartwallet':       { level: 'reviewed', reason: 'Reviewed internally (docs/smart-wallet-review.md) with fuzz tests. Session keys may only call the exact (contract, function) pairs the owner grants; a blocked list of token-moving functions still applies on top. A granted pair is trusted: grant only functions that cannot move the wallet\'s assets. NOT audited.', doc: 'smart-wallet-review.md', suite: 'SmartWallet.t.sol' },
   'swap-amm-single':   { level: 'reviewed', reason: 'Documented review and Foundry suites with fuzz tests. A pool is only as safe as its two tokens.', doc: 'swap-amm-review.md', suite: 'Gen.t.sol' },
   'treasury':          { level: 'reviewed', reason: 'Documented review and a Foundry suite with fuzz tests.', doc: 'generators-review.md', suite: 'Hardening.t.sol' },
   'vault':             { level: 'reviewed', reason: 'Documented review and a Foundry suite with fuzz tests.', doc: 'generators-review.md', suite: 'Hardening.t.sol' },

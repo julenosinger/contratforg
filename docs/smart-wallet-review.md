@@ -49,3 +49,38 @@ Tests: `tests/solidity/test/SmartWallet.t.sol` (single and portable builds, with
 - One shared native limit for all session keys, as a refilling bucket (instead of a calendar day or one limit per key).
 - Default limit 100 whole units of the gas token (also 100 ETH on Ethereum); lower it for non-stablecoin networks.
 - The guardian cannot be removed, only replaced.
+
+## Phase 5 (2026-11-04): session keys are limited to exact (target, function) pairs
+
+The weakness named in "Residual risks" above (the allowlist was by contract, so any function of an allowlisted contract that was not on the
+blocked list was open to a session key) is fixed by changing the permission model. **This changes the ABI.**
+
+| Before | Now |
+|---|---|
+| `addSessionKey(key, hours, address[] targets)` | `addSessionKey(key, hours, Permission[] permissions)` with `struct Permission { address target; bytes4 selector; }` |
+| `isTargetAllowed(key, target)` | `isCallAllowed(key, target, selector)` |
+| `error TargetNotAllowed(address)`, `InvalidTargets()` | `error CallNotAllowed(address target, bytes4 selector)`, `InvalidPermissions()` |
+| `MAX_SESSION_TARGETS = 16` | `MAX_SESSION_PERMISSIONS = 32` |
+| `SessionKeyAdded(key, expiry, address[] targets)` | `SessionKeyAdded(key, expiry, Permission[] permissions)` (`SessionKeyRevoked` unchanged) |
+
+Rules, in the order they are checked for a session key: the key must be valid (granted, not expired, not revoked, owner unchanged); the target cannot be the
+wallet; a call with data needs its first four bytes, which must not be `0x00000000` and must not be on the blocked list (**the blocked list wins**, so a
+blocked function is always reported as `ForbiddenCall`); then the exact pair `(target, selector)` must have been granted. A plain native transfer
+(no data) is its own permission: the pair `(target, 0x00000000)`, and it is charged to the daily limit like before. A pair whose selector is on the
+blocked list is refused already when it is granted. Storage: one slot per pair (`keccak(key, target, selector) => grant version`), so granting 32 pairs
+costs 32 storage writes and a check costs one read; re-granting a key, revoking it, expiry and an owner change invalidate every pair at once through
+the grant version. In `executeBatch` the rule applies to every call and a refused call reverts the whole batch.
+
+Session keys are granted after deployment, so single, portable and multi-chain builds are identical here; the Playground and the Test Lab accept
+the pairs as JSON, for example `[["0xTARGET","0xa9059cbb"]]` (verified: they parse and validate `(address,bytes4)[]`).
+
+Tests (`SmartWallet.t.sol`, run against the single and the portable build): right target with the wrong function is refused; right function on the
+wrong target is refused; plain native needs its own pair; selector zero cannot call a function; the blocked list beats the allowlist (at grant and at call);
+revocation and expiry remove every pair and a re-grant does not bring old pairs back; batches apply the rule per call; the event carries the pairs;
+a fuzz test: whatever target, selector and bytes a key tries, a call only goes through if its exact pair was granted. Against the previous generator
+output 67 of the 135 tests in that file failed (the new signature does not exist there).
+
+Residual: a granted pair is trusted. If the owner grants a function that itself moves the wallet's tokens or ether elsewhere (for example a vault's
+`withdraw` with a receiver argument), a session key can do it. The blocked list is only the second line. The level stays `reviewed`: the finding that
+mattered is closed, the suite has fuzz tests, and this limit is the owner's explicit choice and is stated in the level reason.
+

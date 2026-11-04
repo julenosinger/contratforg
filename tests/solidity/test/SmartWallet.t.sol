@@ -28,8 +28,11 @@ interface IW {
     error LengthMismatch();
     error InvalidSessionKey();
     error InvalidDuration();
-    error InvalidTargets();
-    error TargetNotAllowed(address target);
+    error InvalidPermissions();
+    error CallNotAllowed(address target, bytes4 selector);
+    struct Permission { address target; bytes4 selector; }
+    event SessionKeyAdded(address indexed key, uint256 expiry, Permission[] permissions);
+    event SessionKeyRevoked(address indexed key);
     error ForbiddenTarget();
     error ForbiddenCall(bytes4 selector);
     error InvalidCalldata();
@@ -56,7 +59,8 @@ interface IW {
     function sessionGeneration() external view returns (uint256);
     function sessionKeys(address) external view returns (uint256);
     function isValidSessionKey(address) external view returns (bool);
-    function isTargetAllowed(address, address) external view returns (bool);
+    function isCallAllowed(address, address, bytes4) external view returns (bool);
+    function MAX_SESSION_PERMISSIONS() external view returns (uint256);
     function remainingDailyAllowance() external view returns (uint256);
     function recoveryDelay() external view returns (uint256);
     function recoveryCandidate() external view returns (address);
@@ -64,7 +68,7 @@ interface IW {
     function recoveryActivationTime() external view returns (uint256);
     function execute(address, uint256, bytes calldata) external returns (bytes memory);
     function executeBatch(address[] calldata, uint256[] calldata, bytes[] calldata) external;
-    function addSessionKey(address, uint256, address[] calldata) external;
+    function addSessionKey(address, uint256, Permission[] calldata) external;
     function revokeSessionKey(address) external;
     function initiateRecovery(address) external;
     function cancelRecovery() external;
@@ -152,8 +156,16 @@ abstract contract WalletBase {
 
     function _targets(address a) internal pure returns (address[] memory t) { t = new address[](1); t[0] = a; }
     function _two(address a, address b) internal pure returns (address[] memory t) { t = new address[](2); t[0] = a; t[1] = b; }
+    function _perm(address t, bytes4 s) internal pure returns (IW.Permission[] memory p) { p = new IW.Permission[](1); p[0] = IW.Permission(t, s); }
+    function _perm2(address t, bytes4 s1, bytes4 s2) internal pure returns (IW.Permission[] memory p) { p = new IW.Permission[](2); p[0] = IW.Permission(t, s1); p[1] = IW.Permission(t, s2); }
+    /// plain native currency plus every function the test contracts expose (what an allowlisted target meant before pairs)
+    function _perms(address a) internal pure returns (IW.Permission[] memory p) {
+        p = new IW.Permission[](7);
+        p[0] = IW.Permission(a, bytes4(0)); p[1] = IW.Permission(a, Sink.pay.selector); p[2] = IW.Permission(a, Sink.ping.selector); p[3] = IW.Permission(a, Tok.harmless.selector);
+        p[4] = IW.Permission(a, Sink.boom.selector); p[5] = IW.Permission(a, Reenter.attack.selector); p[6] = IW.Permission(a, Reenter.attackBatch.selector);
+    }
     function _addKey(address key, address target, uint256 hrs) internal {
-        vm.prank(OWNER); w.addSessionKey(key, hrs, _targets(target));
+        vm.prank(OWNER); w.addSessionKey(key, hrs, _perms(target));
     }
     function _pay() internal pure returns (bytes memory) { return abi.encodeCall(Sink.pay, ()); }
     function _spendAs(address key, uint256 amount) internal { vm.prank(key); w.execute(address(sink), amount, _pay()); }
@@ -302,9 +314,9 @@ abstract contract WalletBase {
     function testSessionKeyOnlyCallsItsAllowlist() public {
         _addKey(KEY, address(sink), 24);
         vm.prank(KEY); w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
-        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.TargetNotAllowed.selector, address(tok)));
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(tok), Tok.harmless.selector));
         w.execute(address(tok), 0, abi.encodeCall(Tok.harmless, ()));
-        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.TargetNotAllowed.selector, STRANGER));
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, STRANGER, bytes4(0)));
         w.execute(STRANGER, 1, "");                                       // not even plain native to an outsider
     }
 
@@ -382,51 +394,150 @@ abstract contract WalletBase {
         vm.prank(KEY); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
         _addKey(KEY2, address(sink), 24);
         vm.prank(OWNER); w.revokeSessionKey(KEY2);
-        require(!w.isValidSessionKey(KEY2) && !w.isTargetAllowed(KEY2, address(sink)), "revoked");
+        require(!w.isValidSessionKey(KEY2) && !w.isCallAllowed(KEY2, address(sink), Sink.pay.selector), "revoked");
         vm.prank(KEY2); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
     }
 
     function testSessionDurationIsCappedAtThirtyDays() public {
-        vm.prank(OWNER); w.addSessionKey(KEY, 720, _targets(address(sink)));                  // exactly 30 days
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidDuration.selector); w.addSessionKey(KEY2, 721, _targets(address(sink)));
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidDuration.selector); w.addSessionKey(KEY2, 0, _targets(address(sink)));
+        vm.prank(OWNER); w.addSessionKey(KEY, 720, _perms(address(sink)));                  // exactly 30 days
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidDuration.selector); w.addSessionKey(KEY2, 721, _perms(address(sink)));
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidDuration.selector); w.addSessionKey(KEY2, 0, _perms(address(sink)));
         require(w.sessionKeys(KEY) == block.timestamp + 30 days, "30 days");
     }
 
-    function testInvalidSessionKeysAndTargets() public {
-        address[] memory ok = _targets(address(sink));
+    function testInvalidSessionKeysAndPermissions() public {
+        IW.Permission[] memory ok = _perm(address(sink), Sink.pay.selector);
         address g = w.guardian();
         address[7] memory bad = [address(0), OWNER, g, address(w), w.pendingOwner(), address(0), address(0)];
         for (uint256 i; i < 4; ++i) {
             vm.prank(OWNER); vm.expectRevert(IW.InvalidSessionKey.selector); w.addSessionKey(bad[i], 24, ok);
         }
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidTargets.selector); w.addSessionKey(KEY, 24, new address[](0));
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidTargets.selector); w.addSessionKey(KEY, 24, _targets(address(0)));
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidTargets.selector); w.addSessionKey(KEY, 24, _targets(address(w)));
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidTargets.selector); w.addSessionKey(KEY, 24, _targets(KEY));
-        address[] memory many = new address[](17);
-        for (uint256 i; i < 17; ++i) many[i] = address(uint160(0x1000 + i));
-        vm.prank(OWNER); vm.expectRevert(IW.InvalidTargets.selector); w.addSessionKey(KEY, 24, many);
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidPermissions.selector); w.addSessionKey(KEY, 24, new IW.Permission[](0));
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidPermissions.selector); w.addSessionKey(KEY, 24, _perm(address(0), Sink.pay.selector));
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidPermissions.selector); w.addSessionKey(KEY, 24, _perm(address(w), Sink.pay.selector));
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidPermissions.selector); w.addSessionKey(KEY, 24, _perm(KEY, Sink.pay.selector));
+        uint256 max = w.MAX_SESSION_PERMISSIONS();
+        IW.Permission[] memory many = new IW.Permission[](max + 1);
+        for (uint256 i; i < max + 1; ++i) many[i] = IW.Permission(address(uint160(0x1000 + i)), bytes4(uint32(i + 1)));
+        vm.prank(OWNER); vm.expectRevert(IW.InvalidPermissions.selector); w.addSessionKey(KEY, 24, many);
+        IW.Permission[] memory exactly = new IW.Permission[](max);
+        for (uint256 i; i < max; ++i) exactly[i] = many[i];
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, exactly);                                       // exactly the maximum is fine
         vm.prank(STRANGER); vm.expectRevert(IW.NotOwner.selector); w.addSessionKey(KEY, 24, ok);
         vm.prank(STRANGER); vm.expectRevert(IW.NotOwner.selector); w.revokeSessionKey(KEY);
     }
 
-    function testReAddingAKeyReplacesItsAllowlist() public {
+    function testReAddingAKeyReplacesItsPermissions() public {
         _addKey(KEY, address(sink), 24);
-        require(w.isTargetAllowed(KEY, address(sink)), "allowed");
+        require(w.isCallAllowed(KEY, address(sink), Sink.pay.selector), "allowed");
         _addKey(KEY, address(tok), 24);
-        require(!w.isTargetAllowed(KEY, address(sink)) && w.isTargetAllowed(KEY, address(tok)), "old allowlist is gone");
-        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.TargetNotAllowed.selector, address(sink)));
+        require(!w.isCallAllowed(KEY, address(sink), Sink.pay.selector) && w.isCallAllowed(KEY, address(tok), Tok.harmless.selector), "old permissions are gone");
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), Sink.ping.selector));
         w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
     }
 
-    function testRevokedKeyDoesNotKeepOldTargetsWhenAddedAgain() public {
+    function testRevokedKeyDoesNotKeepOldPermissionsWhenAddedAgain() public {
         _addKey(KEY, address(sink), 24);
         vm.prank(OWNER); w.revokeSessionKey(KEY);
         _addKey(KEY, address(tok), 24);
-        require(!w.isTargetAllowed(KEY, address(sink)), "the sink was not re-allowed by accident");
+        require(!w.isCallAllowed(KEY, address(sink), Sink.pay.selector), "the sink was not re-allowed by accident");
     }
 
+    /* ------------------------------------------------ pairs (target, selector): phase 5 */
+
+    event SessionKeyAdded(address indexed key, uint256 expiry, IW.Permission[] permissions);
+    event SessionKeyRevoked(address indexed key);
+
+    function testRightTargetWrongSelectorIsRefused() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), Sink.pay.selector));
+        vm.prank(KEY); w.execute(address(sink), 0, _pay());                                          // the pair that was granted
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), Sink.ping.selector));
+        w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
+    }
+    function testRightSelectorWrongTargetIsRefused() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), Sink.pay.selector));
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(tok), Sink.pay.selector));
+        w.execute(address(tok), 0, _pay());
+    }
+    function testPlainNativeTransferHasItsOwnPermission() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), Sink.pay.selector));          // a function, but not plain native
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), bytes4(0)));
+        w.execute(address(sink), 1, "");
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), bytes4(0)));                  // now only plain native, to a contract that accepts it
+        vm.prank(OWNER); w.addSessionKey(KEY2, 24, _perm(STRANGER, bytes4(0)));
+        uint256 before = w.remainingDailyAllowance();
+        vm.prank(KEY2); w.execute(STRANGER, 1, "");
+        require(w.remainingDailyAllowance() < before, "plain native is charged to the daily limit");
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), Sink.pay.selector));
+        w.execute(address(sink), 0, _pay());
+        vm.prank(KEY2); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, STRANGER, Sink.pay.selector));
+        w.execute(STRANGER, 0, _pay());
+    }
+    function testSelectorZeroCannotBeUsedToCallAFunction() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), bytes4(0)));
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.ForbiddenCall.selector, bytes4(0)));
+        w.execute(address(sink), 0, hex"00000000");
+    }
+    function testTheDenylistBeatsTheAllowlist() public {
+        // a pair whose selector moves tokens is refused when it is granted ...
+        bytes4 transferSel = 0xa9059cbb;
+        vm.prank(OWNER); vm.expectRevert(abi.encodeWithSelector(IW.ForbiddenCall.selector, transferSel));
+        w.addSessionKey(KEY, 24, _perm(address(tok), transferSel));
+        // ... and a call is refused as a forbidden call, not as "not allowed", even when its target is allowed for another function
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(tok), Tok.harmless.selector));
+        vm.prank(KEY); w.execute(address(tok), 0, abi.encodeCall(Tok.harmless, ()));
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.ForbiddenCall.selector, transferSel));
+        w.execute(address(tok), 0, abi.encodeWithSelector(transferSel, STRANGER, 1));
+    }
+    function testRevocationRemovesEveryPermission() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm2(address(sink), Sink.pay.selector, Sink.ping.selector));
+        vm.expectEmit(true, false, false, true); emit SessionKeyRevoked(KEY);
+        vm.prank(OWNER); w.revokeSessionKey(KEY);
+        vm.prank(KEY); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 0, _pay());
+        vm.prank(KEY); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), Sink.pay.selector));          // granted again with ONE pair
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), Sink.ping.selector));
+        w.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));                                  // the old second pair did not come back
+    }
+    function testExpiryEndsEveryPermission() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 1, _perm2(address(sink), Sink.pay.selector, bytes4(0)));
+        vm.prank(KEY); w.execute(address(sink), 0, _pay());
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.prank(KEY); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 0, _pay());
+        vm.prank(KEY); vm.expectRevert(IW.NotAuthorised.selector); w.execute(address(sink), 1, "");
+    }
+    function testBatchAppliesTheRuleToEveryCall() public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm(address(sink), Sink.pay.selector));
+        address[] memory t = new address[](2); uint256[] memory v = new uint256[](2); bytes[] memory d = new bytes[](2);
+        t[0] = address(sink); t[1] = address(sink); d[0] = _pay(); d[1] = _pay();
+        uint256 c0 = sink.count(); vm.prank(KEY); w.executeBatch(t, v, d); require(sink.count() == c0 + 2, "two allowed calls ran");
+        d[1] = abi.encodeCall(Sink.ping, ());                                                         // the second call is not allowed
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), Sink.ping.selector));
+        w.executeBatch(t, v, d);
+        require(sink.count() == c0 + 2, "nothing of the refused batch ran");
+        d[1] = ""; v[1] = 1;                                                                          // plain native without its permission
+        vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.CallNotAllowed.selector, address(sink), bytes4(0)));
+        w.executeBatch(t, v, d);
+    }
+    function testSessionKeyAddedEmitsThePermissions() public {
+        IW.Permission[] memory p = _perm2(address(sink), Sink.pay.selector, bytes4(0));
+        vm.expectEmit(true, false, false, true); emit SessionKeyAdded(KEY, block.timestamp + 5 hours, p);
+        vm.prank(OWNER); w.addSessionKey(KEY, 5, p);
+        require(w.isCallAllowed(KEY, address(sink), Sink.pay.selector) && w.isCallAllowed(KEY, address(sink), bytes4(0)), "granted");
+        require(!w.isCallAllowed(KEY, address(sink), Sink.ping.selector) && !w.isCallAllowed(KEY, address(tok), Sink.pay.selector), "nothing else");
+    }
+    /// Whatever target, selector and arguments a session key tries, a call goes through only if (target, selector) was granted
+    /// (or it is a plain native transfer to a target granted with selector 0) and the selector is not on the denylist.
+    function testFuzzNothingOutsideTheAllowlistPasses(address target, bytes4 sel, bytes calldata rest, uint8 value) public {
+        vm.prank(OWNER); w.addSessionKey(KEY, 24, _perm2(address(sink), Sink.pay.selector, Sink.ping.selector));
+        bytes memory data = abi.encodePacked(sel, rest);
+        vm.prank(KEY);
+        try w.execute(target, uint256(value) % 2, data) {
+            require(target == address(sink) && (sel == Sink.pay.selector || sel == Sink.ping.selector), "a call outside the allowlist went through");
+        } catch {}
+        vm.prank(KEY);
+        try w.execute(target, uint256(value) % 2 + 1, "") { revert("plain native went through without a permission"); } catch {}
+    }
     function testSessionKeysStopWorkingWhenTheOwnerChanges() public {
         _addKey(KEY, address(sink), 24);
         vm.prank(OWNER); w.transferOwnership(NEWOWNER);
@@ -628,7 +739,7 @@ abstract contract WalletBase {
         bytes32 h = keccak256("hello");
         uint256 sessionPk = 0x5E55;
         address sessionKey = vm.addr(sessionPk);
-        vm.prank(OWNER); w.addSessionKey(sessionKey, 24, _targets(address(sink)));
+        vm.prank(OWNER); w.addSessionKey(sessionKey, 24, _perms(address(sink)));
         require(w.isValidSignature(h, _sig(sessionPk, h)) == 0xffffffff, "session key cannot sign for the wallet");
     }
 
@@ -692,7 +803,7 @@ contract PortableWalletTest is WalletBase {
     function testAZeroLimitMeansSessionKeysCannotSendNative() public {
         vm.prank(OWNER); IW z = IW(address(new PortableSrc.ArcSmartWallet(0)));
         vm.deal(address(z), 5 ether);
-        vm.prank(OWNER); z.addSessionKey(KEY, 24, _targets(address(sink)));
+        vm.prank(OWNER); z.addSessionKey(KEY, 24, _perms(address(sink)));
         vm.prank(KEY); vm.expectRevert(abi.encodeWithSelector(IW.DailyLimitExceeded.selector, 1, 0));
         z.execute(address(sink), 1, _pay());
         vm.prank(KEY); z.execute(address(sink), 0, abi.encodeCall(Sink.ping, ()));       // calls without value are fine

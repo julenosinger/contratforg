@@ -228,6 +228,18 @@ eq((BigInt(await bal('usdc', A(0))) - before2).toString(), '3000000', 'three min
 await Promise.all([ev('labRefreshBalances()'), ev('labAdvance(60)'), ev('labRefreshBalances()')]);
 ok(/UTC/.test(text('lab_time')), 'the lab stays healthy after overlapping requests');
 
+/* session-key permissions are (address, bytes4) pairs: the Playground and the Lab parse them from JSON (phase 5) */
+{
+  const comps = JSON.stringify([{ type: 'address', name: 'target' }, { type: 'bytes4', name: 'selector' }]);
+  const A = '0x00000000000000000000000000000000000a11ce', B = '0x0000000000000000000000000000000000000b0b';
+  const good = ev(`pgCoerce('tuple[]', '[["${A}","0xa9059cbb"],{"target":"${B}","selector":"0x00000000"}]', ${comps}, 'permissions')`);
+  eq(JSON.stringify(good), JSON.stringify([[A, '0xa9059cbb'], [B, '0x00000000']]), 'permissions: pairs as arrays or objects are parsed');
+  for (const bad of [`[["${A}","0x12"]]`, '[["nope","0x12345678"]]']) {
+    let msg = ''; try { ev(`pgCoerce('tuple[]', '${bad}', ${comps}, 'permissions')`); } catch (e) { msg = String(e.message); }
+    ok(/selector|address/.test(msg), 'permissions: a bad pair is refused with a clear message', msg);
+  }
+}
+
 ok(app.pageErrors.length === 0, 'no page errors: ' + app.pageErrors.join(' | '));
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
