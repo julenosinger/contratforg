@@ -49,3 +49,33 @@ Still true: the admin can cancel any proposal (a guardian key), only "for" votes
 
 Known limits (by design): token addresses and parties are the values you enter, so check them before deploying; the order-book and
 multisend contracts assume plain tokens such as USDC; the bridge only burns, the mint on the other chain is completed with Circle's attestation.
+
+## Phase 4 (2026-11-04): ERC-721 and MultiSend reviewed for promotion
+
+Both templates now have a dedicated Foundry suite with fuzz tests and invariants, so they were reviewed against the rule in
+`docs/mainnet-gate.md`. This is an internal review, not an audit by a third party.
+
+### ERC-721 collection (`erc721`, `ArcOriginals`)
+- **Reviewed:** the full contract (mint, approvals, operators, safe transfers, ERC-165 and ERC-2981, price and base URI setters), the
+  second-pass review, and `tests/solidity/test/Nft.t.sol` (supply stops at `MAX_SUPPLY`, ids are sequential, transfers need the
+  owner, the approved address or an operator, approvals are cleared by transfers, safe transfers check the receiver, no self-approval
+  or transfer to zero, ERC-165 ids; invariants over a five-token collection and a second one with a payment token that calls `mint()` back).
+- **Findings:** `mint` paid before updating state and had no guard (**fixed in phase 4**: checks-effects-interactions plus `nonReentrant`,
+  tested red then green); `setMintPrice` emitted no event (**fixed in phase 4**); `setBaseURI` still emits no event (**open, Low**);
+  the default base URI is an example domain that the owner must replace (**by design**, documented in the form).
+- **Residual risks:** the contract is hand-written, not OpenZeppelin; the owner is the deployer and cannot be rotated; royalties are
+  only signalled (ERC-2981), not enforced; the payment token is trusted to behave like USDC.
+- **Decision:** nothing relevant is open, suite requirement met: **reviewed**.
+
+### MultiSend (`multisend`, `ArcMultiSend`)
+- **Reviewed:** the token and native batch functions, the gas cap per native payment, the refund of change, and
+  `tests/solidity/test/Multisend.t.sol` (fuzzed conservation of value for token and native batches, atomicity, limits, a rejecting
+  recipient, a gas-burning recipient, a re-entering recipient; invariants that the contract never holds funds and that the total held
+  by the sender, the contract and the recipients never changes).
+- **Findings:** tokens were pulled into the contract first (**fixed earlier**: each payment goes straight from the sender); a
+  non-contract token silently "succeeded" and a gas-burning recipient could consume the transaction (**fixed earlier**: code check and
+  `NATIVE_TRANSFER_GAS`); the batch is atomic, so one failing recipient reverts everything (**by design**, documented).
+- **Residual risks:** a recipient that needs more than 200,000 gas to receive native currency cannot be paid; fee-on-transfer tokens
+  deliver less than listed; native currency forced into the contract by other means stays there; scale differs between native
+  (18 decimals) and USDC (6) on Arc.
+- **Decision:** nothing relevant is open, suite requirement met: **reviewed**.

@@ -60,3 +60,40 @@ Function signatures changed: `addLiquidity`, `removeLiquidity` and the swap func
 Still true: USDC and EURC are issuer-controlled and can freeze the pool address; x*y=k is not a stablecoin curve; revert messages are strings. Use Arc Testnet first and get an independent audit before real funds.
 
 Tests: `tests/` compiles every generator, and `npm run test:swap` runs 18 Foundry tests (including fuzzing) on the generated swap contracts.
+
+## Phase 4 (2026-11-04): the factory and its pairs, reviewed for promotion
+
+Scope: `ArcSwapAMMFactory` and `ArcSwapAMMPair` as produced by the "AMM with factory" option (`swap-amm-factory`). The pair is
+the same template as the single pool, so everything above still applies to it. What is new is the factory and the fact that
+anyone can create a pair for any two tokens.
+
+**What was reviewed**
+- The factory code: `createPair` sorts the tokens, refuses identical, zero-address and non-contract tokens and refuses a second
+  pair for the same two tokens in either order; `getPair` is filled both ways; `allPairs` and `PairCreated` are consistent. It is
+  permissionless on purpose and has no owner, fee switch or upgrade path.
+- The pair as deployed by the factory, against honest tokens and against hostile ones.
+- Two earlier external-style reviews (solidity and functional) of the factory file, and Slither on every generated variant.
+
+**Tests** (`tests/solidity/test/Factory.t.sol`, 21 tests, fuzz 256 runs, invariants 64 runs x 100 calls): the registry stays
+canonical for random creation orders; only contracts can be tokens; invariants over three pairs and three accounts (a swap never
+lowers k, reserves never exceed balances, shares of the accounts plus the locked minimum equal `totalShares`, a funded pair never
+has an empty side); and hostile tokens (fee-on-transfer, sender surcharge, `false` return, no return value, re-entering). A
+mutated swap fee breaks the invariants, so they have teeth. The earlier suites (`Gen.t.sol`, `Lp.t.sol`) keep covering the pair math.
+
+**Findings and their state**
+| Finding | State |
+|---|---|
+| Outgoing transfers could deliver less than the minimum / debit the pool more than recorded | Fixed earlier (recipient and pool deltas are checked); tested |
+| LP shares were not an ERC-20 | Fixed earlier |
+| Pair creation squatting: anyone can create the pair first | By design (same as Uniswap V2); the pair has no privileged party, and the first depositor only sets a price that arbitrage corrects |
+| Slither: `reentrancy-balance`, `incorrect-equality`, `divide-before-multiply` on the pair | Triaged with reasons in `.github/slither-triage.json` (guarded by `nonReentrant`, intended rounding, exact-delta checks) |
+
+**Residual risks (not defects of the contract, and stated in the level reason)**
+- A dishonest token (one that lies about balances, rebases or is later paused) can drain or freeze **its own pair**; the tests show
+  that other pairs of the factory are not touched. The operator or front end must decide which tokens to list.
+- No router, no native-currency pool, no multi-hop and no price oracle; the output always goes to the caller.
+- Issuer-controlled tokens (USDC, EURC) can freeze the pair address.
+- x*y=k is not a stablecoin curve. No owner and no upgrade path: a bug cannot be fixed after deployment.
+
+**Decision:** nothing relevant is open, the suite has fuzz and invariants, so `swap-amm-factory` is promoted to **reviewed** (internal
+review, not an independent audit).
