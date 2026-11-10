@@ -1,4 +1,4 @@
-// The page under the real Content-Security-Policy, in a real browser (Chromium through playwright-core): no violation, no console error, and the
+// The page under the real Content-Security-Policy, in a real browser (Chromium through playwright): no violation, no console error, and the
 // main flow works with the policy in force: navigate with the data-on* handlers, switch to Arc Mainnet, generate an escrow, pass the experimental
 // gate, compile it with solc (WebAssembly in a worker), reach the mainnet deploy summary, then compile and run it in the Test Lab (WebAssembly + the EVM bundle).
 //   CHROME=/path/to/chrome node csp-browser.mjs        (otherwise playwright's own browser is used)
@@ -15,7 +15,7 @@ const ok = (c, m, d) => { if (c) pass++; else { fail++; console.log('FAIL', m, d
 const skip = (why) => { if (process.env.REQUIRE_BROWSER === '1') { console.error('FAIL: ' + why + ' (REQUIRE_BROWSER=1)'); process.exit(1); } console.log('NOT tested in a real browser: ' + why); process.exit(0); };
 
 let chromium;
-try { ({ chromium } = await import('playwright-core')); } catch (_) { skip('playwright-core is not installed'); }
+try { ({ chromium } = await import('playwright')); } catch (_) { skip('playwright is not installed'); }
 
 /* the page, served with the headers of _headers (the policy the host would send) */
 const headers = {};

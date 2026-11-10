@@ -50,12 +50,21 @@ jobs:
       - name: Install test dependencies
         run: npm ci
         working-directory: tests
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: tests
       - name: Run the Node test suites
         run: npm test
         working-directory: tests
         env:
           # the ABI playground tests need anvil (installed above); a missing anvil must fail the job, not skip the tests
           REQUIRE_ANVIL: '1'
+      - name: CSP under a real browser
+        run: node csp-browser.mjs
+        working-directory: tests
+        env:
+          # the CSP browser test needs Chromium (installed above); a missing browser must fail the job, not skip the test
+          REQUIRE_BROWSER: '1'
       - name: Golden files are up to date
         run: |
           node golden.mjs --update

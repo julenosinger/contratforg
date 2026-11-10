@@ -1,11 +1,11 @@
 # Workflows do GitHub Actions
 
-Os três workflows ficam aqui, e **não** em `.github/workflows/`, porque o Arc Studio não tem permissão para criar
+Os quatro workflows ficam aqui, e **não** em `.github/workflows/`, porque o Arc Studio não tem permissão para criar
 ou alterar arquivos nessa pasta (o GitHub recusa o push). Para ativá-los, copie-os você mesmo:
 
 **Pelo site do GitHub** (não precisa de nada além da sua conta): em *Add file → Create new file*, digite
-`.github/workflows/ci.yml`, cole o conteúdo de `ci/workflows/ci.yml` e faça o commit; repita para `mutation.yml` e
-`release.yml`.
+`.github/workflows/ci.yml`, cole o conteúdo de `ci/workflows/ci.yml` e faça o commit; repita para `fuzz-nightly.yml`,
+`mutation.yml` e `release.yml`.
 
 **Pelo seu computador**, com um token que tenha o escopo `workflow` (ou SSH):
 
