@@ -42,11 +42,23 @@ ok(names.includes('functions/api/ai.js'), 'the Pages Function is under functions
 ok(!names.some((n) => n.startsWith('contractforge-deploy/')), 'no wrapping folder');
 ok(!names.includes('wrangler.toml') && !names.some((n) => /(^|\/)\./.test(n) || n.endsWith('.map')), 'no wrangler.toml, dotfiles or source maps');
 
-/* the same bytes as the source tree */
+/* the same bytes as the source tree (recursive, including vendor/) */
 const deploy = path.join(repo, 'contractforge-deploy');
-const want = fs.readdirSync(deploy).filter((f) => f !== 'wrangler.toml' && fs.statSync(path.join(deploy, f)).isFile());
-ok(want.every((f) => entries[f] && entries[f].data.equals(fs.readFileSync(path.join(deploy, f)))), 'every deploy file is in the zip with identical content');
+const skip = (rel) => rel === 'wrangler.toml' || rel.endsWith('.map') || rel.endsWith('.DS_Store') || rel.split('/').some((p) => p.startsWith('.'));
+const collect = (dir, prefix, into) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    const rel = prefix ? prefix + '/' + e.name : e.name;
+    if (e.isDirectory()) collect(path.join(dir, e.name), rel, into);
+    else if (e.isFile() && !skip(rel)) into.push(rel);
+  }
+};
+const want = [];
+collect(deploy, '', want);
+ok(want.every((f) => entries[f] && entries[f].data.equals(fs.readFileSync(path.join(deploy, f)))), 'every deploy file (including vendor/) is in the zip with identical content');
 ok(names.filter((n) => !n.startsWith('functions/')).length === want.length, 'nothing else from the deploy folder is added');
+const manifest = JSON.parse(fs.readFileSync(path.join(deploy, 'vendor/MANIFEST.json'), 'utf8'));
+ok(entries['vendor/' + manifest.solc.file] && entries['vendor/' + manifest.solc.file].data.equals(fs.readFileSync(path.join(deploy, 'vendor', manifest.solc.file))), 'the vendor compiler is in the zip');
+ok(entries['vendor/' + manifest.ethers.file] && entries['vendor/' + manifest.ethers.file].data.equals(fs.readFileSync(path.join(deploy, 'vendor', manifest.ethers.file))), 'the vendor ethers build is in the zip');
 ok(entries['functions/api/ai.js'] && entries['functions/api/ai.js'].data.equals(fs.readFileSync(path.join(repo, 'functions/api/ai.js'))), 'the function in the zip is the one in the repository');
 
 /* it is not versioned */

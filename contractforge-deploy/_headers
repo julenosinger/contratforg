@@ -3,11 +3,14 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://binaries.soliditylang.org https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; font-src 'self'; connect-src 'self' https://api.etherscan.io https://api.polygonscan.com https://api.basescan.org https://api.arbiscan.io https://api-optimistic.etherscan.io https://api.snowtrace.io https://api.bscscan.com https://api-sepolia.etherscan.io https://api-amoy.polygonscan.com https://api-sepolia.basescan.org https://api-sepolia.arbiscan.io https://api-sepolia-optimistic.etherscan.io https://api.coingecko.com https://eth.llamarpc.com https://polygon.llamarpc.com https://mainnet.base.org https://arb1.arbitrum.io https://mainnet.optimism.io https://api.avax.network https://bsc-dataseed.binance.org https://rpc.chain.robinhood.com https://rpc.mainnet.arc.io https://rpc.testnet.arc.io https://rpc.testnet.chain.robinhood.com https://rpc.sepolia.org https://rpc-amoy.polygon.technology https://sepolia.base.org https://sepolia-rollup.arbitrum.io https://sepolia.optimism.io; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.qrserver.com; font-src 'self'; connect-src 'self' https://api.etherscan.io https://api.polygonscan.com https://api.basescan.org https://api.arbiscan.io https://api-optimistic.etherscan.io https://api.snowtrace.io https://api.bscscan.com https://api-sepolia.etherscan.io https://api-amoy.polygonscan.com https://api-sepolia.basescan.org https://api-sepolia.arbiscan.io https://api-sepolia-optimistic.etherscan.io https://api.coingecko.com https://eth.llamarpc.com https://polygon.llamarpc.com https://mainnet.base.org https://arb1.arbitrum.io https://mainnet.optimism.io https://api.avax.network https://bsc-dataseed.binance.org https://rpc.chain.robinhood.com https://rpc.mainnet.arc.io https://rpc.testnet.arc.io https://rpc.testnet.chain.robinhood.com https://rpc.sepolia.org https://rpc-amoy.polygon.technology https://sepolia.base.org https://sepolia-rollup.arbitrum.io https://sepolia.optimism.io; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';
   Cache-Control: public, max-age=300, stale-while-revalidate=60
 
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
+
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /_headers
   Cache-Control: no-cache

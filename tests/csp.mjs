@@ -100,7 +100,8 @@ const N = Object.values(w.eval('JSON.parse(JSON.stringify(NETWORKS))'));
 const origins = (k) => [...new Set(N.map((n) => n[k]).filter(Boolean).map((u) => new URL(u).origin))];
 for (const o of [...origins('rpc'), ...origins('explorerApi'), 'https://api.coingecko.com']) ok(P['connect-src'].includes(o), 'connect-src has ' + o);
 ok(P['img-src'].includes('https://api.qrserver.com'), 'img-src has the QR service');
-for (const o of ['https://cdnjs.cloudflare.com', 'https://binaries.soliditylang.org', 'https://cdn.jsdelivr.net']) ok(P['script-src'].includes(o), 'script-src has ' + o);
+ok(JSON.stringify(P['script-src']) === JSON.stringify(["'self'", "'wasm-unsafe-eval'"]), "script-src is 'self' + 'wasm-unsafe-eval' (no external host)", JSON.stringify(P['script-src']));
+ok(JSON.stringify(P['worker-src']) === JSON.stringify(["'self'"]), "worker-src is 'self'", JSON.stringify(P['worker-src']));
 const everything = sources.map((s) => s[1]).join('\n') + fs.readFileSync(path.join(dir, 'solc-worker.js'), 'utf8');
 for (const [d, vals] of Object.entries(P)) for (const v of vals.filter((x) => x.startsWith('https://'))) {
   const used = everything.includes(v) || N.some((n) => Object.values(n).some((x) => typeof x === 'string' && x.startsWith(v)));
