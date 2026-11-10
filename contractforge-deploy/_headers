@@ -9,6 +9,11 @@
 /index.html
   Cache-Control: no-cache, no-store, must-revalidate
 
+# The manifest has a fixed name and must never be served stale: after a compiler change, a cached
+# manifest would make the worker see an old hash and refuse to run until the cache is cleared.
+/vendor/MANIFEST.json
+  Cache-Control: no-cache, must-revalidate
+
 /vendor/*
   Cache-Control: public, max-age=31536000, immutable
 

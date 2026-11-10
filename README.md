@@ -48,6 +48,19 @@ python3 -m http.server 8080      # abra http://localhost:8080
 Sem a função `/api/ai` (ou sem `ANTHROPIC_API_KEY`) os recursos de IA avisam que não estão configurados ou disponíveis. Para testá-los localmente use
 `vercel dev` ou `wrangler pages dev` (não foram testados neste repositório) com `ANTHROPIC_API_KEY` definida.
 
+## Verifique o compilador
+
+O compilador é auto-hospedado e fixado, e o resumo de deploy mostra a versão, o sha256 do compilador e o keccak256 do
+bytecode de criação. Para conferir esses três valores fora do app:
+
+```
+node scripts/verify-deploy-hash.mjs <contrato.sol>
+```
+
+O sha256 esperado do solc vendido está em `contractforge-deploy/vendor/MANIFEST.json` (`solc.sha256`); para o build
+fixado `0.8.24+commit.e11b9ed9` ele é `fb59b825b7d57f9de89cd9de2415b12aab1fcc7eb2573fd2bf5c9b969eacf4d9`. Detalhes do
+modelo de ameaça e de como atualizar o compilador: [docs/supply-chain.md](docs/supply-chain.md).
+
 ## Testes
 
 Requer Node 24 (o CI usa 24.22.1) e, para os testes que usam um nó local, o Foundry (`anvil`, `forge`).

@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Checks the ContractForge generators. 'npm test' compiles every generator in every multichain mode, compares single-network output with tests/golden, runs the multichain behaviour tests, and checks navigation, the network banner, keyboard access, the mainnet maturity gate, required address fields, the per-network wallet limit, the maturity table against the repository (maturity.mjs) and the AI proxy (ai-proxy.mjs). 'npm run test:swap' and 'npm run test:portable' regenerate every Solidity source the Foundry tests import (npm run dump) and then run the whole Foundry suite (need Foundry); they are the same run under two names. Run from this folder after 'npm install'.",
   "scripts": {
-    "test": "node compile-generators.mjs && node golden.mjs && node maturity.mjs && node ai-proxy.mjs && node multichain.mjs && node ui.mjs && node xss.mjs && node innerhtml-lint.mjs && node csp.mjs && node playground.mjs && node lab.mjs && node solc-loader.mjs && node vendor.mjs && node reproducible-bytecode.mjs && node zip.mjs",
+    "test": "node compile-generators.mjs && node golden.mjs && node maturity.mjs && node ai-proxy.mjs && node multichain.mjs && node ui.mjs && node xss.mjs && node innerhtml-lint.mjs && node csp.mjs && node playground.mjs && node lab.mjs && node solc-loader.mjs && node vendor.mjs && node reproducible-bytecode.mjs && node native-solc-bytecode.mjs && node headers.mjs && node zip.mjs",
     "test:swap": "npm run dump && cd solidity && forge test",
     "test:portable": "npm run dump && cd solidity && forge test",
     "build:zip": "node ../scripts/build-zip.mjs",

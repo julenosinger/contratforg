@@ -143,6 +143,12 @@ jobs:
           solc-select use "${SOLC_VERSION}"
           solc --version
           slither --version
+      - name: Native solc oracle (bytecode must match the vendored compiler)
+        run: node native-solc-bytecode.mjs
+        working-directory: tests
+        env:
+          # solc-select installed above provides the native binary; a missing one must fail, not skip the check
+          REQUIRE_NATIVE_SOLC: '1'
       - name: Slither on every distinct generated contract
         run: node slither-check.mjs 2>&1 | tee "$RUNNER_TEMP/slither.log"
         working-directory: tests
