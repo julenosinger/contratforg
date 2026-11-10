@@ -1,0 +1,14 @@
+{
+  "solc": {
+    "version": "0.8.24+commit.e11b9ed9",
+    "file": "solc/soljson-v0.8.24+commit.e11b9ed9.js",
+    "size": 8875313,
+    "sha256": "fb59b825b7d57f9de89cd9de2415b12aab1fcc7eb2573fd2bf5c9b969eacf4d9"
+  },
+  "ethers": {
+    "version": "5.7.2",
+    "file": "ethers/ethers-5.7.2.umd.min.js",
+    "size": 760171,
+    "sha256": "a66293a6a2bb4dee061a68612be0be3c5c0ab7e4068ab8d98a4a357baf664c73"
+  }
+}
