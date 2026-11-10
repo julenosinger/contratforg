@@ -62,6 +62,9 @@ M=[
  ('subscription: setBeneficiary stops emitting its event','contractforge-deploy/app.js',"        emit BeneficiaryUpdated(beneficiary, newBeneficiary);\n","",'forge'),
  ('factory: PairCreated stops indexing the tokens','contractforge-deploy/app.js',"event PairCreated(address indexed token0, address indexed token1, address pair);","event PairCreated(address token0, address token1, address pair);",'forge'),
  ('slither pin: a changed function no longer breaks its pin','tests/slither-check.mjs',"else if (!pinsOf(entry).includes(f.pin.hash)) {","else if (false) {",'slither-pin.mjs'),
+ # ---- phase 5.5: the CSP and the innerHTML escape (detected by the Node suites)
+ ('csp: script-src regains unsafe-inline','vercel.json',"script-src 'self' https://cdnjs.cloudflare.com","script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",'csp.mjs'),
+ ('xss: an approved sink loses escapeHtml (contract bar name)','contractforge-deploy/ui.js',"Current contract</span><b>' + escapeHtml(pendingSource.name)","Current contract</span><b>' + pendingSource.name",'xss.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

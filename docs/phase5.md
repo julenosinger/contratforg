@@ -31,7 +31,10 @@ new guard and expect the Foundry suite to fail: the DAO admin handed over withou
 pending admin, a voting period of zero accepted again, a pending admin that can already cancel, an NFT ownership offered to
 the zero address, anyone able to accept the ownership, the wallet permission check ignoring the function, the blocked list
 stopping, a blocked function granted, each of the three new events removed, the `PairCreated` tokens unindexed, and the
-Slither pin no longer breaking on a changed function. Result at the end of phase 5: **uncaught mutations: 0**.
+Slither pin no longer breaking on a changed function. Phase 5.5 adds two more, detected by the Node suites: putting
+`'unsafe-inline'` back into `script-src` (caught by `csp.mjs`) and removing `escapeHtml` from an approved sink (caught by
+`xss.mjs`). Result at the end of phase 5: **uncaught mutations: 0** (the two phase-5.5 mutations were run and caught here;
+the Foundry ones need `forge`).
 
 ## 3. Promotion decision for the DAO, and the NFT rotation decision
 
