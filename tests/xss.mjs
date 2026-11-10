@@ -136,7 +136,7 @@ ev("pendingSource = { name:'', code:'' }; renderCurrentContract();");
 /* 11. dialogs and the result card: contract names, network labels, constructor arguments, facts and reasons */
 {
   const close = () => { for (const id of ['experimentalGate', 'deployConfirm', 'actionConfirm', 'switchConfirm']) doc.getElementById(id)?.remove(); };
-  ev(`uiExperimentalGate({ name: ${JSON.stringify(ALL)}, nets: [${JSON.stringify(ALL)}, 'Arc Mainnet'], reason: ${JSON.stringify(ALL)} })`);
+  ev(`uiExperimentalGate({ name: ${JSON.stringify(ALL)}, nets: [${JSON.stringify(ALL)}, 'Arc Mainnet'], info: { reason: ${JSON.stringify(ALL)} } })`);
   safe('experimental gate dialog'); close();
   ev(`uiConfirmMainnet(NETWORKS.arcMain, { args: [{ label: ${JSON.stringify(ALL)}, value: ${JSON.stringify(ALL)} }], facts: [[${JSON.stringify(ALL)}, ${JSON.stringify(ALL)}]], acks: [${JSON.stringify(ALL)}], maturity: { level: 'reviewed', reason: ${JSON.stringify(ALL)}, doc: ${JSON.stringify(ALL)} } })`);
   safe('mainnet confirmation dialog'); close();
@@ -146,6 +146,19 @@ ev("pendingSource = { name:'', code:'' }; renderCurrentContract();");
   safe('deploy result card');
   ev(`pendingCtorArgs = [{ param: ${JSON.stringify(ALL)}, type: ${JSON.stringify(ALL)}, hint: ${JSON.stringify(ALL)}, value: ${JSON.stringify(ALL)} }]; renderCtorArgs(); renderMultiDeployPanel();`);
   safe('constructor argument panels'); ev('pendingCtorArgs = []; renderCtorArgs(); renderMultiDeployPanel();');
+}
+
+/* 11b. the audit score and the QR code: two more sinks with attacker-influenced values that sections 5 and 6 do not cover */
+{
+  ev(`renderAuditReport(${JSON.stringify({ score: PAYLOADS[0], summary: ALL, findings: [] })})`);
+  safe('audit ring with a hostile score');
+  ok(/NaN/.test(doc.getElementById('auditRing').textContent), 'audit: a hostile score renders as NaN, not markup', doc.getElementById('auditRing').textContent.slice(0, 60));
+  ev(`pendingSource = { name: ${JSON.stringify(ALL)}, code: '// ' + ${JSON.stringify(ALL)}, template: 'erc20' }; generateShareUrl(); generateQR();`);
+  await tick();
+  const qr = doc.querySelector('#qrBox img');
+  ok(qr && /^https:\/\/api\.qrserver\.com\//.test(qr.getAttribute('src') || ''), 'QR: an image src was set');
+  ok(qr && !/[<>"'`]/.test(qr.getAttribute('src') || ''), 'QR: the URL is percent-encoded, no raw markup characters');
+  safe('QR box');
 }
 
 /* 12. the lint that guards the list: a new dynamic sink, or a changed approved one, fails; a plain literal does not */

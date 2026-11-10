@@ -72,9 +72,65 @@ After the sweep, `contractforge-deploy/` has **74 `innerHTML`-style sinks**: 26 
 48 are dynamic and pinned in `tests/innerhtml-approved.json`, each to a hash of the statement with a category and a written
 reason. The categories: **E** — every untrusted value goes through `escapeHtml` (or is passed as a text node); **C** — only
 program constants (NETWORKS, template tables, numbers it computed); **N** — only numbers, or values validated as an address
-or hex. `xss.mjs` drives the E sinks with hostile payloads (`<img onerror>`, `<script>`, `<svg onload>`, attribute breakouts,
-`javascript:` URLs) and asserts nothing becomes markup or runs. Changing an approved statement (for example a new
-interpolation) changes its hash and fails the lint until it is reviewed again.
+or hex. As of this phase the split is **33 E / 12 C / 3 N**. `xss.mjs` drives the E sinks with hostile payloads
+(`<img onerror>`, `<script>`, `<svg onload>`, attribute breakouts, `javascript:` URLs) and asserts nothing becomes markup or
+runs. Changing an approved statement (for example a new interpolation) changes its hash and fails the lint until it is
+reviewed again. One entry (`ui.js:73`, the home "recent deployments" rows) was recategorised `C` → `E` in this phase: it
+interpolates localStorage history (`e.name`, `e.address`, `e.network`, `e.timestamp`) which it escapes, so the "only
+constants" reason was wrong. The statement and its hash are unchanged.
+
+The 48 approved dynamic sinks, case by case (`xss.mjs` covers every E sink and section 11b the hostile score and the QR URL):
+
+| file:line | interpolated values | why it is safe |
+|---|---|---|
+| app.js:223 | `net.label`, `net.isMainnet` | constant (NETWORKS table) |
+| app.js:342 | `addr` (wallet address), `net.label` | `escapeHtml` on the address slices; the label is constant |
+| app.js:477 | `msg` (RPC/wallet log) | `escapeHtml(msg)` |
+| app.js:517 | `t.name`, `t.desc`, `t.tags`, index | constant (SIMPLE_TEMPLATES) |
+| app.js:652 | the generated form | constant (template table + network defaults) |
+| app.js:2502 | `filename` | `escapeHtml(filename)` |
+| app.js:2826 | `score`, `color`, `cx/cy/r/dash` | number: `Math.max(0, Math.min(100, report.score\|\|0))` turns any hostile value into NaN |
+| app.js:2853 | `sev`, `f.title`, `f.description`, `f.recommendation`, `f.lineHint` | `sev` is enum-validated (`AUDIT_SEVERITIES`); the rest `escapeHtml` |
+| app.js:2936 | `entry.network`, `entry.name` (deploy history) | `escapeHtml` |
+| app.js:3001 | `msg` | `escapeHtml(msg)` |
+| app.js:3099 | `msg` | `escapeHtml(msg)` |
+| app.js:3303 | `qrUrl` | `encodeURIComponent(url)` inside a fixed `https://` URL, so no quote or angle survives |
+| app.js:4242 | `s.name`, `s.sub` | constant (WIZARD_SUBTYPES) |
+| app.js:4287 | `net.label` | constant (NETWORKS) |
+| app.js:4295 | `net.label` | constant (NETWORKS) |
+| app.js:4441 | `k.value`, `k.label`, `k.sub` | `escapeHtml`; the values are `toLocaleString`/`toFixed` numbers and constants |
+| app.js:4445 | `v`, `maxB` | numbers (event bucket counts) |
+| app.js:4446 | `i`, `lookback` | `lookback` is parsed to an integer; the rest is the index |
+| app.js:4484 | `h.address`, `h.name`, `h.network` (history pills) | `h.address` is `isAddr`-validated then `escapeHtml`; name and network `escapeHtml` |
+| app.js:4509 | `pendingSource.name`, `Number(testCount)` | `escapeHtml`; the count is `Number(...)\|\|0` |
+| lab.js:95 | `msg` | `escapeHtml(msg)` |
+| lab.js:246 | balances table | `escapeHtml`; balances are formatted numbers |
+| lab.js:287 | `LAB.txs` (fn, kind, by, args, result, gas, events) | `escapeHtml` |
+| lab.js:320 | constructor arguments | `escapeHtml` |
+| lab.js:561 | the lab panel html | `escapeHtml` on every outside value |
+| lab.js:567 | `LAB_NAMES`, index | constant (five fixed account names) |
+| maturity.js:125 | `matBadgeFor(card.dataset.id)` | constant template id; the badge text is `escapeHtml`-ed inside `matBadgeHtml` |
+| maturity.js:132 | `MAT_SECTION_TEMPLATE[sec]()` | constant (fixed section → template table) |
+| multichain.js:225 | `net.label`, ctor args | `escapeHtml` |
+| multichain.js:252 | `MC_MODES` | constant (mode table) |
+| multideploy.js:186 | the multi-deploy panel (labels, ctor args) | `escapeHtml` |
+| playground.js:270 | `item.name`, `item.type`, `outStr` (imported ABI) | `escapeHtml` |
+| playground.js:301 | `msg` | `escapeHtml(msg)` |
+| playground.js:328 | `n.label` | `escapeHtml` |
+| playground.js:419 | the playground panel html | `escapeHtml` |
+| playground.js:447 | call history | `escapeHtml` |
+| ui.js:33 | `net.label`, `net.chainIdDec`, `MC_MODES[..].label` | `escapeHtml` |
+| ui.js:61 | `pendingSource.name` | `escapeHtml` |
+| ui.js:73 | `e.name`, `e.address`, `net.label`, `timeAgo(e.timestamp)` (localStorage) | `escapeHtml`; `e.address` also `isAddr`-filtered |
+| ui.js:85 | `MC_MODES` | constant |
+| ui.js:90 | `n.label` (NETWORKS) | `escapeHtml` |
+| ui.js:128 | `all.length`, `main`, `GENERATOR_VERSION` | numbers and a constant |
+| ui.js:184 | `pendingSource.name` | `escapeHtml` |
+| ui.js:284 | `opts.name`, `opts.info.reason`, `opts.nets` (gate) | `escapeHtml` |
+| ui.js:338 | network label, ctor args | `escapeHtml` |
+| ui.js:384 | `opts.tag`, title, rows | `escapeHtml` |
+| ui.js:414 | network label | `escapeHtml` |
+| ui.js:553 | `uiDeployResults` | `escapeHtml` |
 
 ### CSP
 
@@ -109,7 +165,6 @@ inline handlers in the page or the markup the scripts build, every `data-on*` ca
 |---|---|---|---|
 | Medium (design) | `crosschain` (CCTP V1 form) | a fixed, non-rotatable `owner` (used only in `markResolved`) | two-step rotation like the NFT, or drop the owner and let only the burn's own sender mark it resolved; the template is experimental |
 | Info | `erc20`, `paywall`, `staking` | fixed owner/admin with no rotation (section 4) | the same two-step pattern as the NFT; they are experimental |
-| Info | innerHTML approval | `ui.js:73` was categorised `C` ("only program constants") while it actually interpolates localStorage history (`e.name`, `e.address`, `e.network`) — it escapes them, so it is an `E` sink | recategorise to `E` (done in this phase, item D) |
 | Info | solc and WalletConnect | loaded from `binaries.soliditylang.org` / `cdn.jsdelivr.net` without an `integrity` hash | pin and hash, or self-host |
 | Info | `connect-src` third-party RPCs | public RPC endpoints are trusted for balance, gas and logs | allow the user to set their own RPC, and keep the hosts explicit |
 
@@ -120,4 +175,4 @@ inline handlers in the page or the markup the scripts build, every `data-on*` ca
 3. **`style-src 'unsafe-inline'` stays.** Removing it means moving every inline `style` attribute (static and JS-built) to classes or a nonce; it is a UI refactor, not a security fix on its own.
 4. **Third-party script hosts stay** (ethers, solc, WalletConnect). The compiler and WalletConnect have no `integrity` hash; pinning them is listed above.
 5. **The CCTP V1 form's fixed owner** is recorded as a finding, not fixed (Solidity is out of scope for this phase).
-6. **`ui.js:73` was recategorised `C` → `E`** in the approved list; the statement and its hash are unchanged, only the category and the reason, because the statement already escaped every external value.
+6. **`ui.js:73` was recategorised `C` → `E`** in the approved list (done); the statement and its hash are unchanged, only the category and the reason, because the statement already escaped every external value. `xss.mjs` section 11 now also passes the `info` argument the experimental gate actually reads (the old call was missing it, so that check was passing vacuously).

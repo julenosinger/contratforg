@@ -270,8 +270,8 @@
   {
    "file": "ui.js",
    "hash": "8c94983f336d",
-   "category": "C",
-   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
+   "category": "E",
+   "why": "The deploy history rows come from localStorage, so e.name, e.address, e.network and e.timestamp are all outside data; each one goes through escapeHtml (and e.address is filtered with isAddr first). The rest is markup literals. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "rows.map(([e, i]) => { const net = NETWORKS[e.network] || { label: String(e.network || 'unknown'), explorer: '"
   },
   {
