@@ -29,7 +29,7 @@ Foundry about 3 s once solc is cached; Slither 31 s for 35 files; the Slither jo
 
 | What | Pin | Why / how to update |
 |---|---|---|
-| Node | `24.22.1` (`NODE_VERSION` in the workflows) | what the tests were written and run with; jsdom 26 and `zlib.crc32` (used by the zip script) need a recent Node. Change the env value and re-run `npm test` |
+| Node | `24.22.1` (`NODE_VERSION` in the workflows) | what the tests were written and run with; jsdom 30 and `zlib.crc32` (used by the zip script) need a recent Node. Change the env value and re-run `npm test` |
 | Foundry | `v1.7.1` (`FOUNDRY_VERSION`) | not `nightly` or `latest`, so a new Foundry release cannot turn the build red by itself. Pick a release from github.com/foundry-rs/foundry/releases, change the env value, run `npm run test:portable` |
 | solc for Foundry | `0.8.28` (`tests/solidity/foundry.toml`) | the suite has always compiled with 0.8.28 (the dump scripts relax the exact `0.8.24` pragma to `^0.8.24`). `offline = true` in that file is for the sandbox, so CI sets `FOUNDRY_OFFLINE=false` |
 | solc for Slither | `0.8.24` via `solc-select` | the version the browser compiles with, and the one the generated pragma names |

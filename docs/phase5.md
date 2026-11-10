@@ -176,3 +176,9 @@ inline handlers in the page or the markup the scripts build, every `data-on*` ca
 4. **Third-party script hosts stay** (ethers, solc, WalletConnect). The compiler and WalletConnect have no `integrity` hash; pinning them is listed above.
 5. **The CCTP V1 form's fixed owner** is recorded as a finding, not fixed (Solidity is out of scope for this phase).
 6. **`ui.js:73` was recategorised `C` → `E`** in the approved list (done); the statement and its hash are unchanged, only the category and the reason, because the statement already escaped every external value. `xss.mjs` section 11 now also passes the `info` argument the experimental gate actually reads (the old call was missing it, so that check was passing vacuously).
+
+## 9. Phase 5.5 (finishing) — housekeeping recorded here
+
+- **jsdom `^26.0.0` → `30.1.3`**: `npm install jsdom@30.1.3 && npm test` passes with the same counts, so the upgrade is kept (lockfile updated). `.github/dependabot.yml` now groups minor and patch releases into one PR; a semver-major bump (like jsdom 26 → 30) still opens its own PR for a by-hand validation.
+- **CSP is now tested on every run**: `csp.mjs` is in `npm test`, and the CI node job runs `npx playwright install --with-deps chromium` then `node csp-browser.mjs` with `REQUIRE_BROWSER=1`.
+- **`tests/node_modules_pw`** (a committed symlink to `/tmp/pw/node_modules`) was removed and the name is ignored in `tests/.gitignore`.

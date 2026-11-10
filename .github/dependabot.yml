@@ -5,6 +5,16 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Minor and patch releases are grouped into one pull request so they do not drown the queue; a semver-major
+    # bump (for example jsdom 26 -> 30) still opens its own PR and is validated by hand before it is merged.
+    groups:
+      minor-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: github-actions
     directory: /
     schedule:
