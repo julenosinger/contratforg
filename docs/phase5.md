@@ -26,7 +26,7 @@ was run so the golden files match. The mutation check (section 2) removes each c
 
 ## 2. Mutation coverage
 
-`tests/mutation-check.py` grew to 40 mutations (17 before phase 4, 10 in phase 4, 13 in phase 5). The phase-5 ones undo each
+`tests/mutation-check.py` grew to 42 mutations (17 before phase 4, 10 in phase 4, 13 in phase 5, 2 in phase 5.5). The phase-5 ones undo each
 new guard and expect the Foundry suite to fail: the DAO admin handed over without an accept step, a renounce that leaves a
 pending admin, a voting period of zero accepted again, a pending admin that can already cancel, an NFT ownership offered to
 the zero address, anyone able to accept the ownership, the wallet permission check ignoring the function, the blocked list
