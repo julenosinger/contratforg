@@ -142,7 +142,7 @@ ev("pendingSource = { name:'', code:'' }; renderCurrentContract();");
   safe('mainnet confirmation dialog'); close();
   ev(`uiConfirmAction({ tag: ${JSON.stringify(ALL)}, title: ${JSON.stringify(ALL)}, rows: [[${JSON.stringify(ALL)}, ${JSON.stringify(ALL)}]], note: ${JSON.stringify(ALL)}, confirmLabel: ${JSON.stringify(ALL)} })`);
   safe('action confirmation dialog'); close();
-  ev(`uiAddDeployResult({ network: ${JSON.stringify(ALL)}, name: ${JSON.stringify(ALL)}, address: ${JSON.stringify(ALL)}, txHash: ${JSON.stringify(ALL)} })`);
+  ev(`uiAddDeployResult({ network: ${JSON.stringify(ALL)}, name: ${JSON.stringify(ALL)}, address: ${JSON.stringify(ALL)}, txHash: ${JSON.stringify(ALL)}, compilerVersion: ${JSON.stringify(ALL)}, compilerSha256: ${JSON.stringify(ALL)}, bytecodeKeccak256: ${JSON.stringify(ALL)} })`);
   safe('deploy result card');
   ev(`pendingCtorArgs = [{ param: ${JSON.stringify(ALL)}, type: ${JSON.stringify(ALL)}, hint: ${JSON.stringify(ALL)}, value: ${JSON.stringify(ALL)} }]; renderCtorArgs(); renderMultiDeployPanel();`);
   safe('constructor argument panels'); ev('pendingCtorArgs = []; renderCtorArgs(); renderMultiDeployPanel();');

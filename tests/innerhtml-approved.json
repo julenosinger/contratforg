@@ -332,10 +332,10 @@
   },
   {
    "file": "ui.js",
-   "hash": "1b79b48a0fc7",
+   "hash": "495fbc0cccff",
    "category": "E",
-   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
-   "excerpt": "'<div class=\"dr-title\">' + (uiDeployResults.length === 1 ? 'Deployed' : uiDeployResults.length + ' deployments"
+   "why": "Every value that can come from outside (a deploy result's name, network, address, and the compiler version, sha256 and creation-bytecode keccak256) goes through escapeHtml; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
+   "excerpt": "'<div class=\"dr-title\">' + (uiDeployResults.length === 1 ? 'Deployed' : uiDeployResults.length + ' deployments') + '</div>' + uiDeployResults.map((r, i) => { co"
   }
  ]
 }

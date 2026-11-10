@@ -556,6 +556,7 @@ function renderDeployResult(){
       const url = net.explorer ? net.explorer + '/address/' + r.address : '';
       return '<div class="dr-row"><div class="dr-main"><b>' + escapeHtml(r.name) + '</b><span class="dr-net">' + escapeHtml(net.label) + '</span></div>'
         + '<code class="dr-addr">' + escapeHtml(r.address) + '</code>'
+        + (r.bytecodeKeccak256 ? '<div class="dr-meta">solc ' + escapeHtml(r.compilerVersion || '') + ' · creation bytecode keccak256 <code>' + escapeHtml(r.bytecodeKeccak256) + '</code></div>' : '')
         + '<div class="dr-actions"><button type="button" class="btn btn-ghost" data-copy="' + i + '">Copy address</button>'
         + (/^https:\/\//.test(url) ? '<a class="btn btn-ghost" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">View on explorer</a>' : '')
         + '</div></div>';

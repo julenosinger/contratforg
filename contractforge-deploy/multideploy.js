@@ -249,7 +249,7 @@ async function multiDeploy(){
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
         logConsole('step','— '+net.label+' —');
-        if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true, maturity: matDialogInfo(pendingSource.template), facts: pendingSource.facts || [], acks: pendingSource.acks || [] }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
+        if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true, maturity: matDialogInfo(pendingSource.template), facts: (typeof compilerFacts === 'function' ? compilerFacts(main) : []).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }
         const values = mdRowValues(key, mainInputs);
