@@ -13,7 +13,7 @@
   },
   "devDependencies": {
     "ethers": "5.7.2",
-    "jsdom": "^30.1.3",
+    "jsdom": "^31.0.0",
     "playwright": "^1.65.0",
     "solc": "0.8.24"
   }
