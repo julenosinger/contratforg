@@ -2563,7 +2563,7 @@ function deployFromBuffer(){
 }
 
 /* ======================================================================
-   COMPILE + DEPLOY (solc-js loaded on demand from binaries.soliditylang.org)
+   COMPILE + DEPLOY (self-hosted solc-js, verified against vendor/MANIFEST.json)
    ====================================================================== */
 
 async function compileAndDeploy(){
@@ -2574,7 +2574,6 @@ async function compileAndDeploy(){
   const sameAsDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
   if(sameAsDeployer){ logConsole('err','Deploy blocked. '+sameAsDeployer.label+' cannot be the wallet that deploys the contract. Use another address and generate again.'); return; }
   if(!(await matGate([activeNetwork], pendingSource))){ logConsole('warn','Mainnet deployment cancelled (maturity check not confirmed).'); return; }
-  if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: pendingSource.facts || [], acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
 
   if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
   logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
@@ -2583,6 +2582,7 @@ async function compileAndDeploy(){
     const compiled = await compilePending();
     const ctorInputs = (compiled.abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs;
     const ctorValues = collectCtorValues(ctorInputs);
+    if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: compilerFacts(compiled).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
     await deployCompiled(compiled, ctorValues, activeNetwork);
   }catch(e){
     if(e && e.handled) return; // already reported in the console
@@ -2617,9 +2617,10 @@ async function compileSource(name, code){
   const target = contracts[name] ? name : contractNames[0];
   const abi = contracts[target].abi;
   const bytecode = '0x'+contracts[target].evm.bytecode.object;
+  const bytecodeKeccak256 = (typeof ethers !== 'undefined' && ethers.utils && ethers.utils.keccak256) ? ethers.utils.keccak256(bytecode) : '';
 
   logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
-  return { name, target, abi, bytecode, sourceHash: matHash(code) };
+  return { name, target, abi, bytecode, sourceHash: matHash(code), compilerVersion: SOLC_VERSION, compilerSha256: SOLC_SHA256, bytecodeKeccak256 };
 }
 
 async function compilePending(){
@@ -2656,15 +2657,24 @@ async function deployCompiled(compiled, ctorValues, netKey){
   if(net.explorer){
     logConsole('ok','Explorer:', { href: net.explorer+'/address/'+contract.address, text: net.explorer+'/address/'+contract.address });
   }
-  if(typeof uiAddDeployResult === 'function') uiAddDeployResult({ name: compiled.name, network: netKey, address: contract.address, txHash: contract.deployTransaction.hash });
+  if(typeof uiAddDeployResult === 'function') uiAddDeployResult({ name: compiled.name, network: netKey, address: contract.address, txHash: contract.deployTransaction.hash, compilerVersion: compiled.compilerVersion, compilerSha256: compiled.compilerSha256, bytecodeKeccak256: compiled.bytecodeKeccak256 });
+  logConsole('ok','Compiler solc v'+(compiled.compilerVersion||SOLC_VERSION)+' · sha256 '+(compiled.compilerSha256||SOLC_SHA256).slice(0,16)+'… · creation bytecode keccak256 '+(compiled.bytecodeKeccak256||''));
   await refreshBalance();
   return contract;
 }
 
-const SOLC_COMMITS = {
-  '0.8.24': 'e11b9ed9',
-  '0.8.20': 'a1b79de6'
-};
+/* The one compiler version this app ships. The compiler is self-hosted under vendor/ and its sha256 is checked
+   against vendor/MANIFEST.json before it runs (in the worker, and again on the main-thread fallback). Only this
+   version compiles: any other version is refused with an explicit error, never downloaded. */
+const SOLC_VERSION = '0.8.24';
+const SOLC_SHA256 = 'fb59b825b7d57f9de89cd9de2415b12aab1fcc7eb2573fd2bf5c9b969eacf4d9';
+
+/* The compiler facts shown in the deploy summary, so the user can reproduce the build outside the app. */
+function compilerFacts(compiled){
+  const f = [['Compiler', 'solc ' + SOLC_VERSION + ' · sha256 ' + SOLC_SHA256.slice(0, 16) + '…']];
+  if(compiled && compiled.bytecodeKeccak256) f.push(['Creation bytecode keccak256', compiled.bytecodeKeccak256]);
+  return f;
+}
 
 /* solc runs in a Web Worker (solc-worker.js). If a worker cannot be started in
    this environment, it falls back to loading the compiler on the main thread. */
@@ -2699,44 +2709,27 @@ function startSolcWorker(){
   solcWorker = w;
 }
 
-async function resolveSolcUrl(version){
-  let commit = SOLC_COMMITS[version];
-  if(!commit){
-    try{
-      const listResp = await fetch('https://binaries.soliditylang.org/emscripten-wasm32/list.json');
-      const list = await listResp.json();
-      const fileName = list.releases && list.releases[version];
-      if(fileName){ const m = fileName.match(/commit\.([0-9a-f]+)/); if(m) commit = m[1]; }
-    }catch(e){ /* ignore, fall through */ }
-  }
-  if(!commit) throw new Error('Unknown compiler version: '+version);
-  return `https://binaries.soliditylang.org/emscripten-wasm32/solc-emscripten-wasm32-v${version}+commit.${commit}.js`;
+/* sha256 of a fetched ArrayBuffer, as hex (the same format as vendor/MANIFEST.json). */
+async function vendorSha256(buf){
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/* Where the compiler can be downloaded from: the official host first, then a CDN mirror of the same build. */
-async function resolveSolcUrls(version){
-  const primary = await resolveSolcUrl(version);
-  return [primary, `https://cdn.jsdelivr.net/npm/solc@${version}/soljson.js`];
+/* Loads the self-hosted compiler on the main thread (no Web Worker): fetch the manifest, fetch the file,
+   verify its sha256, then run it. No remote fallback. */
+async function loadSolcMainThread(){
+  const manifest = await (await fetch('vendor/MANIFEST.json')).json();
+  const entry = manifest && manifest.solc;
+  if(!entry || !entry.file || !entry.sha256) throw new Error('Compiler manifest is missing or incomplete');
+  const resp = await fetch('vendor/' + entry.file);
+  if(!resp.ok) throw new Error('Could not load the self-hosted compiler (' + resp.status + ')');
+  const buf = await resp.arrayBuffer();
+  const actual = await vendorSha256(buf);
+  if(actual !== entry.sha256) throw new Error('Compiler integrity check failed: the file does not match the manifest sha256. Refusing to run it.');
+  await loadSolcScript('vendor/' + entry.file);
 }
 
-function solcHost(u){ try{ return new URL(u).host; }catch(_){ return String(u); } }
-
-async function loadSolcMainThread(version, urls){
-  const list = Array.isArray(urls) ? urls : [urls];
-  const failures = [];
-  for(const url of list){
-    try{
-      await loadSolcScript(version, url);
-      return url;
-    }catch(e){
-      failures.push(solcHost(url));
-      const stale = document.querySelector('script[data-solc="1"]'); if(stale) stale.remove();
-    }
-  }
-  throw new Error('Could not download the compiler from '+failures.join(' or ')+'. Check your connection, VPN, or an ad-blocker/privacy extension that blocks these hosts, then try again.');
-}
-
-function loadSolcScript(version, url){
+function loadSolcScript(url){
   return new Promise((resolve,reject)=>{
     window.Module = undefined;
     const script=document.createElement('script');
@@ -2754,29 +2747,32 @@ function loadSolcScript(version, url){
       else if(window.Module){ window.Module.onRuntimeInitialized = finish; }
       else { reject(new Error('solc module did not initialize')); }
     };
-    script.onerror=()=>reject(new Error('Failed to download solc v'+version+' — check your connection.'));
+    script.onerror=()=>reject(new Error('Failed to load solc v'+SOLC_VERSION+' — the self-hosted compiler is missing.'));
     document.head.appendChild(script);
   });
 }
 
 async function ensureSolcLoaded(version){
-  if(solcLoaded && solcLoaded.version===version) return;
-  logConsole('step','Loading solc-js v'+version+'… (first time may take ~10-20s)');
-  const urls = await resolveSolcUrls(version);
+  if(version && version !== SOLC_VERSION){
+    logConsole('err','Only solc '+SOLC_VERSION+' is supported. The compiler is self-hosted and pinned; other versions cannot be downloaded.');
+    throw new Error('Only solc '+SOLC_VERSION+' is supported');
+  }
+  if(solcLoaded && solcLoaded.version===SOLC_VERSION) return;
+  logConsole('step','Loading solc-js v'+SOLC_VERSION+'… (first time may take ~10-20s)');
 
   let mode = 'worker';
   try{
     if(typeof Worker === 'undefined') throw new Error('Web Workers unavailable');
     startSolcWorker();
-    await solcCall({ type:'load', urls });
+    await solcCall({ type:'load' });
   }catch(e){
     if(solcWorker){ solcWorker.terminate(); solcWorker = null; }
     logConsole('warn','Background compiler unavailable ('+(e.message||e)+'). Trying the main thread.');
-    await loadSolcMainThread(version, urls);
+    await loadSolcMainThread();
     mode = 'main';
   }
-  solcLoaded = { version, mode };
-  logConsole('ok','Compiler solc v'+version+' ready.');
+  solcLoaded = { version: SOLC_VERSION, mode };
+  logConsole('ok','Compiler solc v'+SOLC_VERSION+' ready (sha256 '+SOLC_SHA256.slice(0,16)+'…).');
 }
 
 function solcCompile(inputJson){
@@ -3336,34 +3332,6 @@ function toggleTheme(){
 function initTheme(){
   const saved = localStorage.getItem('cf_theme');
   if(saved==='light'){ isDark=false; document.body.classList.add('light'); const btn=document.getElementById('themeBtn'); if(btn) btn.textContent='☾ Dark mode'; }
-}
-
-/* ======================================================================
-   WALLETCONNECT v2 (lightweight on-demand)
-   ====================================================================== */
-async function connectWalletConnect(){
-  if(window.WalletConnectProvider){
-    try{
-      const wcp = new window.WalletConnectProvider.default({
-        rpc: Object.fromEntries(Object.values(NETWORKS).map(n=>[n.chainIdDec, n.rpc]))
-      });
-      await wcp.enable();
-      provider = new ethers.providers.Web3Provider(wcp);
-      signer   = provider.getSigner();
-      account  = await signer.getAddress();
-      setWalletConnected(account);
-      await refreshBalance();
-      registerWalletEvents();
-      logConsole('ok','WalletConnect connected: '+account);
-    }catch(e){ logConsole('err','WalletConnect: '+(e.message||e)); }
-  } else {
-    logConsole('step','Loading WalletConnect provider…');
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js';
-    script.onload = ()=>{ logConsole('ok','WalletConnect loaded — click the button again.'); };
-    script.onerror= ()=>{ logConsole('err','Could not load WalletConnect. Use MetaMask instead.'); };
-    document.head.appendChild(script);
-  }
 }
 
 /* ======================================================================
