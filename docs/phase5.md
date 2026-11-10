@@ -137,8 +137,8 @@ The 48 approved dynamic sinks, case by case (`xss.mjs` covers every E sink and s
 
 ### CSP
 
-`script-src` is `'self' https://cdnjs.cloudflare.com https://binaries.soliditylang.org https://cdn.jsdelivr.net
-'wasm-unsafe-eval'` — no `'unsafe-inline'`, no `'unsafe-eval'`. The page has no inline event handlers and no inline
+`script-src` is `'self' 'wasm-unsafe-eval'` (phase 6 removed the three CDN hosts when solc and ethers were self-hosted;
+see `docs/supply-chain.md`) — no `'unsafe-inline'`, no `'unsafe-eval'`. The page has no inline event handlers and no inline
 `<script>`, so the only remaining inline-code allowance is `'wasm-unsafe-eval'` for solc's WebAssembly build. The policy is
 written in both `vercel.json` and `contractforge-deploy/_headers` (Cloudflare), and `csp.mjs` asserts the two are identical.
 `csp-browser.mjs` loads the page under the real `_headers` policy in Chromium and walks the main flow (navigate with the
@@ -153,7 +153,7 @@ style-src keeps 'unsafe-inline' for the inline style attributes documented in se
 | Directive | What is allowed | Why it stays, with proof |
 |---|---|---|
 | `style-src 'self' 'unsafe-inline'` | inline `style` attributes | The page uses inline `style="…"` in `index.html` (dozens of elements: `style="display:none;"`, layout, colours) and builds more in JS (the network chip colour, the audit ring `stroke="${color}"`, the analytics bars `height:${…}px`). Inline style attributes can only be allowed with `'unsafe-inline'` (a nonce or hash does not cover `style` attributes), so removing it would need a large refactor. No `<style>` element or `style` element content is added by the app. |
-| `script-src` third-party hosts: `cdnjs.cloudflare.com`, `binaries.soliditylang.org`, `cdn.jsdelivr.net` | scripts from three CDNs | `cdnjs.cloudflare.com` serves ethers 5.7.2 with an `integrity` hash (`index.html`, line 925). `binaries.soliditylang.org` is the primary source of the solc-js compiler and `cdn.jsdelivr.net` the fallback (`app.js`: `https://binaries.soliditylang.org/emscripten-wasm32/list.json`, `…/solc-emscripten-wasm32-v…js`, `https://cdn.jsdelivr.net/npm/solc@…/soljson.js`); `cdn.jsdelivr.net` also serves the WalletConnect provider (`app.js`: `@walletconnect/web3-provider@1.8.0`). These hosts are a residual trust point: a compromised CDN could serve a malicious compiler or library. The compiler and the WalletConnect script have no `integrity` hash. |
+| `script-src` third-party hosts | ~~`cdnjs.cloudflare.com`, `binaries.soliditylang.org`, `cdn.jsdelivr.net`~~ | **Resolved in phase 6.** solc-js and ethers are self-hosted under `vendor/` and sha256-verified, so `script-src` is now `'self' 'wasm-unsafe-eval'` with no external host. See `docs/supply-chain.md`. |
 | `img-src … https://api.qrserver.com` | the QR image | The Share panel renders a QR of the configuration URL (`app.js`: `https://api.qrserver.com/v1/create-qr-code/?…data=${encodeURIComponent(url)}`). The data is `encodeURIComponent`-ed inside the fixed URL, so it cannot carry markup. |
 | `connect-src … https://api.coingecko.com` (plus the RPC and explorer origins from `NETWORKS`) | the price lookup and chain access | The gas estimator fetches the price from CoinGecko (`app.js`: `https://api.coingecko.com/api/v3/simple/price?…`). `connect-src` also lists the RPC and explorer origins read from `NETWORKS`; `csp.mjs` asserts every `connect-src` origin is used and none is unused. |
 
@@ -168,7 +168,7 @@ inline handlers in the page or the markup the scripts build, every `data-on*` ca
 |---|---|---|---|
 | Medium (design) | `crosschain` (CCTP V1 form) | a fixed, non-rotatable `owner` (used only in `markResolved`) | two-step rotation like the NFT, or drop the owner and let only the burn's own sender mark it resolved; the template is experimental |
 | Info | `erc20`, `paywall`, `staking` | fixed owner/admin with no rotation (section 4) | the same two-step pattern as the NFT; they are experimental |
-| Info | solc and WalletConnect | loaded from `binaries.soliditylang.org` / `cdn.jsdelivr.net` without an `integrity` hash | pin and hash, or self-host |
+| ~~Info~~ | ~~solc and WalletConnect loaded from `binaries.soliditylang.org` / `cdn.jsdelivr.net` without an `integrity` hash~~ | **Fixed in phase 6.** Both are self-hosted under `vendor/` and sha256-verified; WalletConnect v1 was removed. See `docs/supply-chain.md`. | — |
 | Info | `connect-src` third-party RPCs | public RPC endpoints are trusted for balance, gas and logs | allow the user to set their own RPC, and keep the hosts explicit |
 
 ## 8. Decisões que preciso da sua validação
@@ -176,7 +176,7 @@ inline handlers in the page or the markup the scripts build, every `data-on*` ca
 1. **The DAO is `reviewed`** with the guardian admin still present by default. The veto can be ended with `renounceAdmin()` or handed to a multisig. If you consider the guardian itself unacceptable, the promotion is a one-line change in `maturity.js`, but the label would then say "reviewed" for a contract whose default deployment keeps a veto key.
 2. **The NFT has no renounce**, only a two-step rotation, because the owner is the payee. If you would rather have a renounce that redirects payments somewhere else, that is a separate design change.
 3. **`style-src 'unsafe-inline'` stays.** Removing it means moving every inline `style` attribute (static and JS-built) to classes or a nonce; it is a UI refactor, not a security fix on its own.
-4. **Third-party script hosts stay** (ethers, solc, WalletConnect). The compiler and WalletConnect have no `integrity` hash; pinning them is listed above.
+4. **Third-party script hosts are gone** (resolved in phase 6): solc-js and ethers are self-hosted and sha256-verified; WalletConnect v1 was removed. Only the runtime data hosts remain (RPCs, CoinGecko, QR).
 5. **The CCTP V1 form's fixed owner** is recorded as a finding, not fixed (Solidity is out of scope for this phase).
 6. **`ui.js:73` was recategorised `C` → `E`** in the approved list (done); the statement and its hash are unchanged, only the category and the reason, because the statement already escaped every external value. `xss.mjs` section 11 now also passes the `info` argument the experimental gate actually reads (the old call was missing it, so that check was passing vacuously).
 

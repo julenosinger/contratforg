@@ -111,6 +111,11 @@ artifact of the CI run.
 - **Clean-machine check**: `tests/package.json`'s Foundry scripts now regenerate every source first
   (`npm run dump`). Before that, `npm run test:swap` only passed where earlier runs had left other files behind; a fresh
   clone exposed it.
+- **Self-hosted compiler and ethers (phase 6)**: `contractforge-deploy/vendor/` holds the pinned solc 0.8.24 and
+  ethers 5.7.2 binaries plus `vendor/MANIFEST.json` (their sha256). `tests/vendor.mjs` fails if a vendored file drifts
+  from the devDependency or the manifest, and `tests/reproducible-bytecode.mjs` compiles every golden contract with both
+  the vendor and the npm solc and requires identical bytecode. A Dependabot bump of solc/ethers must be re-vendored with
+  `scripts/vendor-solc.mjs` / `scripts/vendor-ethers.mjs`. See `docs/supply-chain.md`.
 
 ## 5. Branch protection to enable by hand
 
