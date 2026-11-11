@@ -11,6 +11,8 @@ contract ArcDollar {
     uint256 public totalSupply;
     uint256 public immutable cap = 0 * 10**18;
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -19,6 +21,9 @@ contract ArcDollar {
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Mint(address indexed to, uint256 amount);
     event Burn(address indexed from, uint256 amount);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -31,6 +36,34 @@ contract ArcDollar {
             balanceOf[msg.sender] = initial;
             emit Transfer(address(0), msg.sender, initial);
         }
+    }
+
+    /// @notice Offer the owner role (mint and burn) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
+
+    /// @notice Give up the owner role for good: minting stops and the supply is fixed. IRREVERSIBLE.
+    function renounceOwnership() external onlyOwner {
+        pendingOwner = address(0);
+        emit OwnershipTransferred(owner, address(0));
+        owner = address(0);
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {

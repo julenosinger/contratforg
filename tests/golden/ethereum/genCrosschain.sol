@@ -31,9 +31,14 @@ contract ArcCrossPay {
     IMessageTransmitter public messageTransmitter = IMessageTransmitter(0x0a992d191DEeC32aFe36203Ad87D7d289a738F81);
     IERC20 public usdc = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     event BurnInitiated(address indexed sender, uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, uint64 nonce);
     event MintReceived(bytes32 indexed messageHash);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     // ---------------- Persistent state for resuming interrupted burns ----------------
     struct PendingBurn {
@@ -104,4 +109,27 @@ contract ArcCrossPay {
     }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (markResolved) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "not owner");
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external {
+        require(msg.sender == owner, "not owner");
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 }

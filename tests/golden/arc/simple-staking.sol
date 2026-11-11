@@ -19,7 +19,9 @@ interface IERC20 {
 contract ArcStaking {
     IERC20 public stakingToken = IERC20(0x2916570661279426764209465153711134050312);
     IERC20 public rewardToken  = IERC20(0x1465286169178818223818121258874261063564);
-    address public immutable owner;
+    address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     uint256 public constant APY_BPS      = 12 * 100;
     uint256 public constant LOCK_PERIOD  = 30 days;
@@ -44,6 +46,9 @@ contract ArcStaking {
     event RewardClaimed(address indexed user, uint256 reward);
     event RewardPoolFunded(uint256 amount);
     event FeesClaimed(address indexed to, uint256 amount);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
 
@@ -55,6 +60,27 @@ contract ArcStaking {
     }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (fundRewardPool/claimFees) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 
     function stake(uint256 amount) external nonReentrant {
         require(amount > 0, "zero amount");

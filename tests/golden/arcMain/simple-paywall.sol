@@ -14,16 +14,42 @@ contract ArcSubscription {
     uint256 public pricePerPeriod = 9 * 10**6;
     uint256 public periodDuration = 30 days;
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     mapping(address => uint256) public accessUntil;
 
     event Subscribed(address indexed user, uint256 until);
     event PriceUpdated(uint256 oldPrice, uint256 newPrice);
     event BeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (setPrice/setBeneficiary) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 
     function isActive(address user) external view returns (bool) {
         return accessUntil[user] >= block.timestamp;

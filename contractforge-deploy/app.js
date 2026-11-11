@@ -682,6 +682,8 @@ contract ${name} {
     uint256 public totalSupply;
     uint256 public immutable cap = ${cap} * 10**${dec};
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -690,6 +692,9 @@ contract ${name} {
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Mint(address indexed to, uint256 amount);
     ${burn?'event Burn(address indexed from, uint256 amount);':''}
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
@@ -702,6 +707,34 @@ contract ${name} {
             balanceOf[msg.sender] = initial;
             emit Transfer(address(0), msg.sender, initial);
         }
+    }
+
+    /// @notice Offer the owner role (mint and burn) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
+
+    /// @notice Give up the owner role for good: minting stops and the supply is fixed. IRREVERSIBLE.
+    function renounceOwnership() external onlyOwner {
+        pendingOwner = address(0);
+        emit OwnershipTransferred(owner, address(0));
+        owner = address(0);
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
@@ -1108,16 +1141,42 @@ contract ${name} {
     uint256 public pricePerPeriod = ${amount} * 10**6;
     uint256 public periodDuration = ${duration} days;
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     mapping(address => uint256) public accessUntil;
 
     event Subscribed(address indexed user, uint256 until);
     event PriceUpdated(uint256 oldPrice, uint256 newPrice);
     event BeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner(){ require(msg.sender == owner, "not owner"); _; }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (setPrice/setBeneficiary) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 
     function isActive(address user) external view returns (bool) {
         return accessUntil[user] >= block.timestamp;
@@ -2279,9 +2338,14 @@ contract ${name} {
     IMessageTransmitter public messageTransmitter = IMessageTransmitter(${msgTransmitter});
     IERC20 public usdc = IERC20(${usdc});
     address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     event BurnInitiated(address indexed sender, uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, uint64 nonce);
     event MintReceived(bytes32 indexed messageHash);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 `;
 
   if(resume){
@@ -2480,6 +2544,29 @@ contract ${name} {
 
   code += `
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (markResolved) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "not owner");
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external {
+        require(msg.sender == owner, "not owner");
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 }`;
 
   code = portabilize(code, []);
@@ -4046,7 +4133,9 @@ interface IERC20 {
 contract ${name} {
     IERC20 public stakingToken = IERC20(${stkTok});
     IERC20 public rewardToken  = IERC20(${rwdTok||stkTok});
-    address public immutable owner;
+    address public owner;
+    /// @notice The account offered the owner role by transferOwnership(); it has no powers until it calls acceptOwnership().
+    address public pendingOwner;
 
     uint256 public constant APY_BPS      = ${apy} * 100;
     uint256 public constant LOCK_PERIOD  = ${lock} days;
@@ -4071,6 +4160,9 @@ contract ${name} {
     event RewardClaimed(address indexed user, uint256 reward);
     event RewardPoolFunded(uint256 amount);
     event FeesClaimed(address indexed to, uint256 amount);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferCancelled(address indexed previousOwner, address indexed pendingOwner);
 
     modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
 
@@ -4082,6 +4174,27 @@ contract ${name} {
     }
 
     constructor() { owner = msg.sender; }
+
+    /// @notice Offer the owner role (fundRewardPool/claimFees) to newOwner; it takes effect when newOwner accepts.
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /// @notice Take over the owner role after being offered it.
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");
+        emit OwnershipTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
+    }
+
+    /// @notice The current owner cancels a pending transfer.
+    function cancelOwnershipTransfer() external onlyOwner {
+        emit OwnershipTransferCancelled(owner, pendingOwner);
+        pendingOwner = address(0);
+    }
 
     function stake(uint256 amount) external nonReentrant {
         require(amount > 0, "zero amount");
