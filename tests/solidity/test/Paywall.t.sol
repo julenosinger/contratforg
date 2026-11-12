@@ -92,9 +92,9 @@ contract PaywallTest is Base {
     function testPaymentsReachTheCurrentBeneficiary() public {
         (Tok t, IPaywall p) = _new();
         address ben = p.beneficiary();
-        vm.prank(a); p.subscribe();
         uint before = t.balanceOf(ben);
-        require(t.balanceOf(ben) >= before + p.pricePerPeriod() == false || t.balanceOf(ben) >= before, "beneficiary paid");
+        vm.prank(a); p.subscribe();
+        require(t.balanceOf(ben) >= before + p.pricePerPeriod(), "beneficiary paid");
     }
     function testFuzzRenewalNeverShrinksAccess(uint256 times) public {
         (, IPaywall p) = _new();

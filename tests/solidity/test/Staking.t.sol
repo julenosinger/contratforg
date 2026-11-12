@@ -57,13 +57,15 @@ contract StakingTest is Base {
     }
 
     function testOwnerIsRotatable() public {
-        (, IStaking s) = _new();
+        (Tok t, IStaking s) = _new();
+        t.mint(b, 1000e6); vm.prank(b); t.approve(address(s), type(uint).max);
         s.transferOwnership(b);
         require(s.owner() == address(this) && s.pendingOwner() == b, "nothing until accept");
         vm.prank(b); s.acceptOwnership();
         require(s.owner() == b, "rotated");
         vm.prank(address(this)); vm.expectRevert(bytes("not owner")); s.fundRewardPool(1);
-        vm.prank(b); s.fundRewardPool(0 == 0 ? 1 : 1);   // the new owner funds
+        vm.prank(b); s.fundRewardPool(1);   // the new owner funds
+        require(s.rewardPool() == 1, "funded by the new owner");
     }
     function testPendingOwnerHasNoPowersAndNonPendingCannotAccept() public {
         (, IStaking s) = _new();
@@ -94,7 +96,7 @@ contract StakingTest is Base {
         vm.warp(block.timestamp + 100 days);
         uint earned = s.pendingReward(a);
         vm.prank(a); s.unstake(1000e6);                      // the pool is empty; the principal still comes out
-        require(t.balanceOf(a) >= 1_000_000e6 - 1000e6 + 1000e6, "principal returned");
+        require(t.balanceOf(a) == 1_000_000e6, "principal returned without any reward payment");
         require(s.pendingReward(a) >= earned, "rewards still recorded");
     }
     function testClaimPaysOnlyWhatThePoolHas() public {

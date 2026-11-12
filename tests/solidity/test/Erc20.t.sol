@@ -120,7 +120,8 @@ contract Erc20Test is Base {
         IERC20 t = _new();
         t.mint(a, 1e12);
         uint256 bal0 = t.balanceOf(a) + t.balanceOf(b);
-        vm.prank(a); t.transfer(b, amt);
+        uint256 x = _bound(amt, 0, 1e12);
+        vm.prank(a); t.transfer(b, x);
         require(t.balanceOf(a) + t.balanceOf(b) == bal0, "no funds created or lost");
         require(t.totalSupply() == 1e12, "supply constant");
     }
@@ -128,8 +129,9 @@ contract Erc20Test is Base {
         IERC20 t = _new();
         t.mint(a, 1e12);
         uint256 s = _bound(spend, 1, 1e6);
-        vm.prank(a); t.approve(b, amt);
-        if (amt >= s) { vm.prank(b); t.transferFrom(a, c, s); require(t.allowance(a, b) == amt - s, "allowance spent"); }
+        uint256 allowed = _bound(amt, 0, 1e12);
+        vm.prank(a); t.approve(b, allowed);
+        if (allowed >= s) { vm.prank(b); t.transferFrom(a, c, s); require(t.allowance(a, b) == allowed - s, "allowance spent"); }
         else { vm.prank(b); vm.expectRevert(bytes("allowance exceeded")); t.transferFrom(a, c, s); }
     }
 }
