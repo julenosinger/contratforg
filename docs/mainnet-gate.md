@@ -19,9 +19,11 @@ against the files in this repository, so a wrong "reviewed" fails the test run.
 | DAO (`dao`) | **reviewed** (phase 5, 2026-11-04) | `docs/dao-review.md` + `Dao.t.sol` with fuzz and invariants. The permanent admin veto, the zero voting period and the missing getters are fixed (two-step admin transfer, irreversible `renounceAdmin()`, minimum period of one block, proposal getters). Residual: a guardian can veto while an admin exists, no vote escrow. NOT audited |
 | NFT (`erc721`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Nft.t.sol` with fuzz and invariant tests, including a payment token that calls back |
 | MultiSend (`multisend`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Multisend.t.sol`: the contract never holds funds and value is conserved |
-| Staking (`staking`), Escrow (`escrow`), Vesting (`vesting`), Subscription (`paywall`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |
-| ERC-20 (`erc20`) | experimental | no review document of its own, no dedicated suite |
-| CCTP V1 form (`crosschain`) | experimental | no review document, no dedicated suite |
+| Staking (`staking`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Staking.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps without changing the reward economy |
+| Subscription (`paywall`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Paywall.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps; the beneficiary stays a separate address |
+| ERC-20 (`erc20`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Erc20.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps and can renounce (irreversible) to fix the supply |
+| Escrow (`escrow`), Vesting (`vesting`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |
+| CCTP V1 form (`crosschain`) | experimental | unit and rotation tests only, no fuzz or invariant suite (the CCTP addresses are hard-coded); use the V2 bridge instead |
 | CCTP V2 bridge helper (`bridge`) | experimental | unit tests only, no review document |
 | AI-written (`ai`) | experimental | always. The model's text is untrusted |
 | Loaded from a link, a saved session or any unknown source (`imported`) | experimental | the origin cannot be checked |

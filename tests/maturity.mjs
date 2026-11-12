@@ -28,7 +28,7 @@ ok(!Object.values(M).some((e) => e.level === 'audited'), 'no template is audited
 
 /* classification rule, checked against real files */
 const reviewed = Object.entries(M).filter(([, e]) => e.level === 'reviewed').map(([k]) => k).sort();
-eq(reviewed, ['dao', 'erc721', 'multisend', 'smartwallet', 'swap-amm-factory', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
+eq(reviewed, ['dao', 'erc20', 'erc721', 'multisend', 'paywall', 'smartwallet', 'staking', 'swap-amm-factory', 'swap-amm-single', 'treasury', 'vault'], 'the reviewed set');
 for (const k of reviewed) {
   const e = M[k];
   const docPath = path.join(repo, 'docs', e.doc || '__missing__');
@@ -52,7 +52,7 @@ for (const [k, e] of Object.entries(M).filter(([, x]) => x.level === 'experiment
   ok(!dao.split('\n').some((l) => /^\| \d+ \|/.test(l) && /\| High/.test(l) && /\*\*Open\*\*/.test(l)), 'dao: no High finding is open in docs/dao-review.md');
 }
 /* templates that must stay experimental by evidence in the repo */
-for (const k of ['ai', 'imported', 'erc20', 'crosschain', 'bridge', 'swap-orderbook', 'escrow', 'vesting', 'paywall', 'staking']) {
+for (const k of ['ai', 'imported', 'crosschain', 'bridge', 'swap-orderbook', 'escrow', 'vesting']) {
   eq(M[k].level, 'experimental', `${k} stays experimental`);
 }
 

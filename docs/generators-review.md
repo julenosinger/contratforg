@@ -89,3 +89,45 @@ replaced would mean a lost key freezes the price and a compromised key cannot be
 would burn every payment. Tests: `Phase5Nft.t.sol` (three unit tests that failed against the previous output, and a fuzz test).
 The other generated contracts with a fixed owner (subscription, ERC-20, staking) have the same weakness; they are experimental and it is listed in `docs/phase5.md`.
 
+## Phase 7 (2026-11-10): ERC-20, subscription, staking and CCTP V1 — owner rotation + fuzz
+
+The four templates that still had a fixed owner (recorded in `docs/phase5.md` section 4) now get the same two-step rotation
+as the NFT (`pendingOwner`; `transferOwnership(newOwner)` onlyOwner; `acceptOwnership()`; `cancelOwnershipTransfer()`; events
+`OwnershipTransferStarted`/`OwnershipTransferred`/`OwnershipTransferCancelled`; the new owner cannot be zero, the current owner or the
+contract). ABI changes are additive only. Each one is reviewed against the `mainnet-gate.md` rule.
+
+### ERC-20 (`erc20`, `ArcDollar`) — promoted to `reviewed`
+- **Reviewed:** the owner role (mint; burn is public self-burn), the cap and the initial supply. The rotation plus an irreversible
+  `renounceOwnership()` (sets the owner to zero and clears any pending owner, so minting stops and the supply is fixed; a pending owner
+  can never act, and no one can mint after a renounce). `tests/solidity/test/Erc20.t.sol` — unit, fuzz and invariants (the sum of balances
+  always equals `totalSupply`, and the owner never becomes zero without a renounce).
+- **Findings (all fixed here):** a fixed, non-rotatable owner (a lost key would freeze minting; a compromised key could mint past the cap)
+  — fixed by the rotation and the renounce.
+- **Residual risks:** the owner can still mint up to the cap while it holds the role; `cap` and the initial supply are fixed at generation;
+  `renounceOwnership()` is irreversible. These are documented limits, not findings.
+
+### Subscription (`paywall`, `ArcSubscription`) — promoted to `reviewed`
+- **Reviewed:** the owner role (`setPrice`/`setBeneficiary`), with the beneficiary kept as a separate address the owner configures.
+  `tests/solidity/test/Paywall.t.sol` — unit, fuzz and invariants (access never shrinks on renewal, the beneficiary is never zero, and
+  `setPrice` protects the payer via `subscribeAtMost`).
+- **Findings (all fixed here):** a fixed, non-rotatable owner — fixed by the rotation.
+- **Residual risks:** the beneficiary is a single address set by the owner (not a multisig); the token is trusted to behave like USDC.
+
+### Staking (`staking`, `ArcStaking`) — promoted to `reviewed`
+- **Reviewed:** the owner role (`fundRewardPool`/`claimFees`) becomes rotatable without changing the economy. The `owner` was `immutable`
+  and is now a normal slot; the reward pool, the fee accounting and the staking math are untouched.
+  `tests/solidity/test/Staking.t.sol` — unit, fuzz and invariants (the contract's token balance always covers the outstanding principal
+  plus the reward pool, and a reward claim never pays more than the pool). `Rest.t.sol` keeps the existing economy tests (an underfunded
+  pool keeps the debt; a full withdrawal does not erase rewards; a top-up keeps earlier rewards; the exit fee rounds up and is collected
+  separately; a fee-on-transfer and a no-return token are credited correctly).
+- **Findings (all fixed here):** a fixed, immutable owner — fixed by the rotation.
+- **Residual risks:** the APY, lock period and exit fee are fixed at generation; the reward pool is only as full as the owner funds it.
+
+### CCTP V1 (`crosschain`) — stays `experimental`
+- **Reviewed:** the owner role (used only in `markResolved`) is now rotatable; `tests/solidity/test/Crosschain.t.sol` has unit and rotation
+  tests. The CCTP addresses are hard-coded in the source, so the messenger/transmitter are not mocked and the burn/mint path is not
+  exercised in Foundry.
+- **Why it stays experimental:** the rule needs a dedicated Foundry suite **with fuzz or invariant tests**, and the V1 form has no
+  meaningful on-chain state to fuzz (its state is the `pendingBurns`/escrow arrays, which only grow through calls that hit the hard-coded
+  CCTP contracts). It is also the legacy form — the V2 bridge (`bridge`) is the current path. Recorded as experimental with this exact reason.
+
