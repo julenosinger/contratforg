@@ -70,6 +70,12 @@ M=[
  ('vendor: a byte of the compiler changes','contractforge-deploy/vendor/solc/soljson-v0.8.24+commit.e11b9ed9.js',"var Module = Module || {}","var Module = Module || {}x",'vendor.mjs'),
  ('vendor: the manifest hash diverges from the file','contractforge-deploy/vendor/MANIFEST.json','"sha256": "fb59b825b7d57f9de89cd9de2415b12aab1fcc7eb2573fd2bf5c9b969eacf4d9"','"sha256": "0000000000000000000000000000000000000000000000000000000000000000"','vendor.mjs'),
  ('worker: it fetches a remote compiler URL again','contractforge-deploy/solc-worker.js',"fetch('vendor/MANIFEST.json')","fetch('https://evil.example/MANIFEST.json')",'solc-loader.mjs'),
+ # ---- phase 7: manifest cache and the owner rotation (headers.mjs, and the Foundry suites for the rotation)
+ ('headers: the manifest becomes immutable again','contractforge-deploy/_headers',"Cache-Control: no-cache, must-revalidate","Cache-Control: public, max-age=31536000, immutable",'headers.mjs'),
+ ('owner: a pending owner gets the role at once','contractforge-deploy/app.js',"        pendingOwner = newOwner;\n        emit OwnershipTransferStarted(owner, newOwner);","        owner = newOwner;\n        emit OwnershipTransferStarted(owner, newOwner);",'forge'),
+ ('owner: anyone can accept the role','contractforge-deploy/app.js','require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");','require(msg.sender != address(0), "not pending owner");','forge'),
+ ('owner: renounce keeps the pending owner','contractforge-deploy/app.js',"        pendingOwner = address(0);\n        emit OwnershipTransferred(owner, address(0));","        emit OwnershipTransferred(owner, address(0));",'forge'),
+ ('owner: the zero address can be offered the role','contractforge-deploy/app.js','require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");','require(newOwner != owner && newOwner != address(this), "invalid new owner");','forge'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

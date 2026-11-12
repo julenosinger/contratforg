@@ -21,7 +21,7 @@ const save = (file, rename) => {
   fs.writeFileSync(path.join(out, file + '.sol'), code);
   console.log(file, JSON.stringify(JSON.parse(ev('JSON.stringify(pendingCtorArgs.map(a => a.param))'))));
 };
-for (const [id, file] of [['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', 'Vesting'], ['paywall', 'Paywall'], ['dao', 'Dao'], ['smartwallet', 'Wallet'], ['staking', 'Staking']]) {
+for (const [id, file] of [['erc20', 'Erc20'], ['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', 'Vesting'], ['paywall', 'Paywall'], ['dao', 'Dao'], ['smartwallet', 'Wallet'], ['staking', 'Staking']]) {
   ev(`renderSimpleForm('${id}')`); fillAddresses(app, 'arcMain'); clearTokens();
   if (id === 'erc721') set('s_price', '10');
   if (id === 'staking') set('s_reward', '');
@@ -29,6 +29,10 @@ for (const [id, file] of [['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', '
   if (id === 'smartwallet') set('s_session', '720');   // the longest allowed: 30 days
   ev(`genSimple('${id}')`); save(file);
 }
+// A burn-enabled ERC-20 (the default build has no burn function): the burn path and the renounce supply-fix are tested.
+ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_burn', 'yes'); ev("genSimple('erc20')"); save('Erc20Burn');
+// A capped ERC-20 with a small cap, so the supply invariants reach the cap.
+ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_cap', '1000'); ev("genSimple('erc20')"); save('Erc20Cap');
 // A collection that can hold exactly one token: the supply limit is the property under test for a hostile payment token.
 ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_price', '10'); set('s_supply', '1'); ev("genSimple('erc721')"); save('NftOne');
 // five tokens at most: small enough for the supply invariants to reach the limit
@@ -59,6 +63,25 @@ set('ms_mode', 'both'); ev('genMultisend()'); save('Multisend');
     console.log('single/' + file);
   };
   dump('Wallet');
+  // The CCTP V1 form (single mode): the owner is used in markResolved. Its CCTP addresses are hard-coded in the
+  // source (not constructor args), so the tests mock the messenger/transmitter behind them.
+  {
+    e2("genCrosschain()");
+    let { code } = JSON.parse(e2('JSON.stringify(pendingSource)'));
+    code = code.replace(/^pragma solidity 0\.8\.24;/m, 'pragma solidity ^0.8.24;');
+    fs.writeFileSync(path.join(single, 'Crosschain.sol'), code);
+    console.log('single/Crosschain');
+  }
+  // The resume variant stores pending burns and lets the owner mark them resolved.
+  {
+    e2("document.getElementById('cc_resume').value = 'yes'");
+    e2("genCrosschain()");
+    let { code } = JSON.parse(e2('JSON.stringify(pendingSource)'));
+    code = code.replace(/^pragma solidity 0\.8\.24;/m, 'pragma solidity ^0.8.24;');
+    fs.writeFileSync(path.join(single, 'CrosschainResume.sol'), code);
+    console.log('single/CrosschainResume');
+    e2("document.getElementById('cc_resume').value = 'no'");
+  }
   // The generator now refuses a zero guardian, so this variant is made from the valid source: it exists only to
   // prove that the contract's own constructor also rejects a zero guardian.
   {
