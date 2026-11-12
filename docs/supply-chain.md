@@ -64,6 +64,11 @@ distinto de `tests/golden/` com o vendor e com o npm e exige bytecode de criaç�
   o build do solc e o do ethers dependem de o `scripts/vendor-*.mjs` ter sido rodado após cada bump.
 - A verificação é feita no cliente (worker/main thread); ela protege contra CDN adulterado, não contra o próprio
   servidor de origem.
+- O worker confere o sha256 num `fetch` e executa por outro `importScripts` da mesma URL; executar os bytes já verificados
+  exigiria `blob:` ou `unsafe-eval` (proibidos no `script-src`). A janela entre os dois pedidos é coberta pelo
+  `Cache-Control: immutable` dos binários (o segundo pedido vem do cache, os mesmos bytes verificados).
+- O oráculo nativo (`tests/native-solc-bytecode.mjs`) compara o bytecode com o CBOR de metadados removido; a divergência de
+  metadado (plataforma) é relatada, não tratada como compilador hostil.
 - O teste de bytecode reproduzível carrega o solc duas vezes (uma por compilador) e é o trecho mais lento da suíte
   (~70 s nesta máquina); o job `node` do CI tem limite de 30 minutos, então cabe com folga.
 

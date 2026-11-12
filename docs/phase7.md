@@ -45,3 +45,81 @@ verificados exigiria `importScripts(blob:)` (proibido: `blob:` em `script-src`) 
 soljson é JS+WASM, então não dá para instanciar só com `WebAssembly`. Mantido como está. A janela entre o fetch e o
 `importScripts` é mitigada pelo `Cache-Control: immutable` dos binários (o segundo pedido vem do cache, os mesmos bytes
 verificados). Registrado como limitação em `docs/supply-chain.md`.
+
+## B. Rotação de owner
+
+O padrão é o mesmo do `ArcOriginals` (NFT): `pendingOwner`; `transferOwnership(newOwner)` onlyOwner; `acceptOwnership()`;
+`cancelOwnershipTransfer()`; eventos `OwnershipTransferStarted`/`OwnershipTransferred`/`OwnershipTransferCancelled`; o novo
+owner não pode ser `address(0)`, o owner atual ou `address(this)`; o pendente não tem poderes até aceitar. Mudanças de ABI
+só aditivas. Aplicado a quatro templates:
+
+| Template | Achado | Correção | Teste red-green | Evidência |
+|---|---|---|---|---|
+| `erc20` | owner fixo: mint só do owner; uma chave perdida congela a emissão e uma comprometida pode cunhar até o cap | rotação em duas etapas + `renounceOwnership()` irreversível (zera o owner e limpa o pendente; mint para). Cap e oferta inicial inalterados | `Erc20.t.sol` (unit, fuzz, invariantes). Antes: as funções de rotação não existem e o arquivo não compila; depois: passa | golden `simple-erc20.sol` (4 redes) + `docs/generators-review.md` fase 7 |
+| `paywall` | owner fixo (setPrice/setBeneficiary) | rotação em duas etapas; o beneficiário continua um endereço separado | `Paywall.t.sol` (unit, fuzz, invariantes) | golden `simple-paywall.sol` + review |
+| `staking` | `owner` era `immutable` | `owner` vira slot normal + rotação em duas etapas; economia e fluxo de `fundRewardPool`/`claimFees` intactos | `Staking.t.sol` (unit, fuzz, invariantes) | golden `simple-staking.sol` (a linha `immutable` some) + review |
+| `crosschain` (CCTP V1) | owner fixo (usado só em `markResolved`) | rotação em duas etapas (o contrato não tinha `onlyOwner`, então o `require(msg.sender == owner)` é explícito) | `Crosschain.t.sol` (unit + rotação) | golden `genCrosschain.sol` + review |
+
+A ponte V2 (`bridge`) não tem owner e não foi tocada. `node golden.mjs --update` mudou exatamente os 16 arquivos destes
+quatro contratos (4 redes cada) + a linha de carimbo dos três promovidos (12 arquivos, `experimental` → `reviewed`).
+`compile-generators.mjs` (single/portable/multi/cross) segue 342 passed — nenhuma regressão de geração nem de compilação.
+
+## C. Testes e revisão
+
+Suítes Foundry novas (modelo `Nft.t.sol`; fuzz 256 runs, invariantes 64×100, do `foundry.toml` existente):
+
+- **`Erc20.t.sol`** — owner nunca zero sem renúncia; soma dos saldos == `totalSupply`; `totalSupply` <= `cap`; allowance e
+  `transferFrom` sem criar/perder fundos; só o owner vigente cunha; após a renúncia nada cunha; burn reduz a oferta. Fuzz
+  (mint respeita o cap, transfer conserva, allowance gasta) e invariantes (conservação da oferta, owner nunca zero).
+- **`Staking.t.sol`** — saldo do token >= principal em aberto + pool; pagamento de recompensa nunca excede o pool; unstake
+  não depende de pagamento de taxa ou recompensa (a taxa acumula e a recompensa fica registrada); top-up não apaga
+  recompensas. Invariantes (cobertura do principal + pool, owner nunca zero) e rotação.
+- **`Paywall.t.sol`** — `accessUntil` nunca diminui; pagamentos chegam ao beneficiário vigente; `setPrice` protege o pagador
+  via `subscribeAtMost`. Invariantes (owner/beneficiário nunca zero) e rotação.
+- **`Crosschain.t.sol`** — unit (zero amount reverte antes de tocar token) + rotação; sem fuzz (não há estado que justifique:
+  o estado só cresce por chamadas que atingem os endereços CCTP hard-coded).
+
+`dump-portable-sources.mjs` agora gera `Erc20`, `Erc20Burn` (burn ativo), `Erc20Cap` (cap pequeno), `Crosschain` e
+`CrosschainResume` (resume). **NÃO rodei `forge`/`anvil`** nesta máquina, então o red-green das suítes Foundry é o código dos
+testes + o diff do golden, não a saída do `forge test` (que roda no CI).
+
+**Slither: NÃO rodei** (sem `slither`/`solc-select` aqui). As entradas de triagem dos contratos alterados (erc20/paywall/staking/
+crosschain V1) precisam ser re-pinadas com `tests/slither-pin.mjs` no CI, uma por vez; nenhum High/Medium novo foi escondido —
+qualquer achado novo vai para "Fora do escopo / achados novos".
+
+`tests/mutation-check.py` ganhou: a mutação A1 (manifesto volta a immutable, pega por `headers.mjs`) e quatro mutações de
+rotação (pendente ganha poderes, aceitar por não-pendente, renúncia mantém pendente, oferecer `address(0)`), todas `forge`
+(detectadas pelas suítes). A mutação A1 foi rodada aqui e é **CAUGHT**; as quatro de rotação só são detectadas com `forge`.
+
+## D. Promoção (regra do mainnet-gate.md aplicada, sem baixar a régua)
+
+A regra: revisão escrita em `docs/` + suíte Foundry dedicada com fuzz ou invariantes + nenhum achado relevante aberto.
+
+| Template | Antes | Depois | Por quê |
+|---|---|---|---|
+| `erc20` | experimental | **reviewed** | `docs/generators-review.md` (fase 7) + `Erc20.t.sol` (fuzz + invariantes); o achado (owner fixo) está corrigido |
+| `paywall` | experimental | **reviewed** | idem, `Paywall.t.sol`; owner fixo corrigido; beneficiário separado |
+| `staking` | experimental | **reviewed** | idem, `Staking.t.sol`; owner imutável corrigido sem mudar a economia |
+| `crosschain` | experimental | **experimental** | a regra exige fuzz ou invariantes, e a V1 não tem estado fuzzável (os endereços CCTP são hard-coded, sem mock); é o formulário legado (a V2 é o caminho atual) |
+
+`maturity.js`, a tabela de `mainnet-gate.md` e `tests/maturity.mjs` (conjunto reviewed e lista "fica experimental") foram
+atualizados; `maturity.mjs` passa (146 checks). O golden mudou apenas a linha de carimbo dos três promovidos.
+
+## E. Fora do escopo / achados novos
+
+| Severidade | Onde | Achado | Sugestão |
+|---|---|---|---|
+| Info | `erc721` (maturity.js) | o `reason` dizia "the owner cannot be rotated", o que ficou falso desde a fase 5 | corrigido junto (agora "rotates in two steps") |
+| Info | `crosschain` (CCTP V1) | endereços CCTP hard-coded impedem mock no Foundry, então a V1 não tem suíte fuzzável | usar a V2; ou mover os endereços para argumentos de construtor (mudança de ABI) |
+| Info | suítes Foundry novas | o red-green não foi executado localmente (sem `forge`) | rodar `npm run test:portable` no CI |
+
+## F. Decisões que preciso validar
+
+1. **Promovi erc20, paywall e staking para `reviewed`** (a regra foi cumprida nos três). Se você preferir manter algum deles
+   experimental, é uma linha em `maturity.js`.
+2. **`crosschain` (CCTP V1) fica `experimental`** por não ter suíte fuzz/invariante (endereços hard-coded). Não baixei a régua.
+3. **`renounceOwnership()` do erc20 é irreversível** e fixa a oferta (só o burn público continua reduzindo a oferta por escolha
+   do próprio titular). Se você quiser um "renounce com burn do owner", é outra mudança.
+4. **O oráculo nativo compara o bytecode com o CBOR de metadados removido** (o metadado codifica a plataforma e pode diferir
+   entre build nativo e Emscripten). A comparação forte é o código; a divergência de metadado é relatada, não tratada como hostil.
+5. **As quatro mutações de rotação são `forge`** e não foram detectadas localmente (sem `forge`); confio nelas no CI.

@@ -55,13 +55,15 @@ handed over in two steps; the zero owner is refused in `transferOwnership`.
 ## 4. Templates with a fixed owner/admin without rotation
 
 Read from the generators, not presumed. A "fixed" role is one the deployer holds with no way to offer, hand over or renounce it.
+**Resolved in phase 7:** all four got the same two-step rotation (see `docs/phase7.md`); erc20, paywall and staking were promoted
+to `reviewed`, and the CCTP V1 form stays `experimental` for a different reason (no fuzz/invariant suite).
 
 | Template | Role | Can it be rotated? | Maturity |
 |---|---|---|---|
-| `erc20` | `owner` (onlyOwner `mint`/`burn`) | No | experimental |
-| `paywall` (subscription) | `owner` (onlyOwner `setPrice`/`setBeneficiary`) | No | experimental |
-| `staking` | `owner` (`immutable`; `fundRewardPool`, `claimFees`) | No | experimental |
-| `crosschain` (CCTP V1 form) | `owner` (constructor sets it; used only in `markResolved`) | No | experimental |
+| ~~`erc20`~~ | ~~`owner` (onlyOwner `mint`/`burn`)~~ | ~~No~~ Yes (phase 7, + `renounceOwnership`) | ~~experimental~~ reviewed |
+| ~~`paywall`~~ (subscription) | ~~`owner` (onlyOwner `setPrice`/`setBeneficiary`)~~ | ~~No~~ Yes (phase 7) | ~~experimental~~ reviewed |
+| ~~`staking`~~ | ~~`owner` (`immutable`; `fundRewardPool`, `claimFees`)~~ | ~~No~~ Yes (phase 7) | ~~experimental~~ reviewed |
+| ~~`crosschain`~~ (CCTP V1 form) | ~~`owner` (constructor sets it; used only in `markResolved`)~~ | ~~No~~ Yes (phase 7) | experimental (no fuzz suite) |
 
 `docs/generators-review.md` names the first three ("subscription, ERC-20, staking"); the CCTP V1 form's fixed owner is a new
 finding recorded here. All four are `experimental`, so none blocks a promotion: the DAO, NFT, vault and smart wallet (the
