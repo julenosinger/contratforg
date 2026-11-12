@@ -117,7 +117,8 @@ Detalhes em [docs/mainnet-gate.md](docs/mainnet-gate.md#3-ai-proxy-apiaijs-funct
 ## Revisões de segurança
 
 [Maturidade e gate de mainnet](docs/mainnet-gate.md) · [Treasury, DAO e Vault + segunda passada](docs/generators-review.md) ·
-[AMM](docs/swap-amm-review.md) · [Smart wallet](docs/smart-wallet-review.md) · [Auditoria do app](docs/app-audit.md)
+[AMM](docs/swap-amm-review.md) · [Smart wallet](docs/smart-wallet-review.md) · [Auditoria do app](docs/app-audit.md) ·
+[Cadeia de suprimentos do compilador](docs/supply-chain.md)
 
 Para reportar uma vulnerabilidade: [SECURITY.md](SECURITY.md). Para contribuir: [CONTRIBUTING.md](CONTRIBUTING.md).
 
