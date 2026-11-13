@@ -1,7 +1,8 @@
 # Phase 7: endurecer o compilador e dar rotação de owner + fuzz aos templates experimentais
 
-Status: 2026-11-10. Em andamento. Escopo: A compilador; B rotação de owner (erc20, paywall, staking, crosschain V1);
-C testes e revisão; D promoção (só o que a regra do `mainnet-gate.md` permitir); E docs finais.
+Status: 2026-11-13 (atualizado na fase 7.1: erc20, paywall e staking voltaram a `experimental` — as suítes foram
+escritas mas nunca executadas no CI; ver `docs/phase7-1.md`). Escopo: A compilador; B rotação de owner (erc20, paywall,
+staking, crosschain V1); C testes e revisão; D promoção (só o que a regra do `mainnet-gate.md` permitir); E docs finais.
 
 ## A. Compilador
 
@@ -97,13 +98,15 @@ A regra: revisão escrita em `docs/` + suíte Foundry dedicada com fuzz ou invar
 
 | Template | Antes | Depois | Por quê |
 |---|---|---|---|
-| `erc20` | experimental | **reviewed** | `docs/generators-review.md` (fase 7) + `Erc20.t.sol` (fuzz + invariantes); o achado (owner fixo) está corrigido |
-| `paywall` | experimental | **reviewed** | idem, `Paywall.t.sol`; owner fixo corrigido; beneficiário separado |
-| `staking` | experimental | **reviewed** | idem, `Staking.t.sol`; owner imutável corrigido sem mudar a economia |
+| `erc20` | experimental | ~~reviewed~~ → **experimental** (7.1) | `Erc20.t.sol` tem fuzz + invariantes, mas nunca rodou no CI — a promoção foi revertida em 7.1 (ver `docs/phase7-1.md`) |
+| `paywall` | experimental | ~~reviewed~~ → **experimental** (7.1) | idem, `Paywall.t.sol` |
+| `staking` | experimental | ~~reviewed~~ → **experimental** (7.1) | idem, `Staking.t.sol` |
 | `crosschain` | experimental | **experimental** | a regra exige fuzz ou invariantes, e a V1 não tem estado fuzzável (os endereços CCTP são hard-coded, sem mock); é o formulário legado (a V2 é o caminho atual) |
 
 `maturity.js`, a tabela de `mainnet-gate.md` e `tests/maturity.mjs` (conjunto reviewed e lista "fica experimental") foram
-atualizados; `maturity.mjs` passa (146 checks). O golden mudou apenas a linha de carimbo dos três promovidos.
+atualizados; `maturity.mjs` passa (146 checks). O golden mudou apenas a linha de carimbo dos três promovidos (depois
+revertida em 7.1). **Nota 7.1:** a promoção de erc20/paywall/staking foi desfeita porque a regra passou a exigir que a
+suíte Foundry tenha de fato passado no CI, com a execução registrada no doc de revisão.
 
 ## E. Fora do escopo / achados novos
 

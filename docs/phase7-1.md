@@ -47,3 +47,18 @@ contagem = 19 passed.
 Nenhum outro erro de lógica encontrado. **NÃO rodei forge** (binário indisponível nesta máquina); os pontos que só o CI
 confirma são a execução real dos handlers/invariantes (o compile-foundry-tests só garante que compilam).
 
+## C. Maturidade honesta
+
+**Achado:** erc20, paywall e staking foram promovidos a `reviewed` com suítes que nunca rodaram (o próprio doc da fase 7
+admite "NÃO rodei forge") e duas que nem compilavam.
+
+**Correção:** os três voltaram a `experimental` em `maturity.js` (motivo: "Foundry suite written but not yet executed in
+CI; re-evaluate with evidence"). `tests/maturity.mjs` (conjunto reviewed e lista "fica experimental"), a tabela de
+`docs/mainnet-gate.md`, o README (definição de `reviewed` agora exige a execução no CI), `docs/phase7.md` (cabeçalho e
+seção D) e `docs/generators-review.md` (seção fase 7) foram atualizados. `node golden.mjs --update` mudou **só** as linhas
+de carimbo dos três (12 arquivos, `reviewed` → `experimental`).
+
+**Regra nova em `docs/mainnet-gate.md`:** para ser `reviewed`, a suíte Foundry precisa ter **passado no CI**, com o link ou
+id da execução registrado no doc de revisão. Nenhum outro nível foi mexido.
+
+

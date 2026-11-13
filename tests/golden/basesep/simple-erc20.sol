@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ContractForge v3.1.0 | maturity: reviewed | NOT AUDITED
+// ContractForge v3.1.0 | maturity: experimental | NOT AUDITED
 pragma solidity ^0.8.24;
 
 /// @title ArcDollar — ERC-20 Token

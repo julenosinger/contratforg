@@ -19,9 +19,7 @@ against the files in this repository, so a wrong "reviewed" fails the test run.
 | DAO (`dao`) | **reviewed** (phase 5, 2026-11-04) | `docs/dao-review.md` + `Dao.t.sol` with fuzz and invariants. The permanent admin veto, the zero voting period and the missing getters are fixed (two-step admin transfer, irreversible `renounceAdmin()`, minimum period of one block, proposal getters). Residual: a guardian can veto while an admin exists, no vote escrow. NOT audited |
 | NFT (`erc721`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Nft.t.sol` with fuzz and invariant tests, including a payment token that calls back |
 | MultiSend (`multisend`) | reviewed | `docs/generators-review.md` (phase 4 section) + `Multisend.t.sol`: the contract never holds funds and value is conserved |
-| Staking (`staking`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Staking.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps without changing the reward economy |
-| Subscription (`paywall`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Paywall.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps; the beneficiary stays a separate address |
-| ERC-20 (`erc20`) | **reviewed** (phase 7, 2026-11-10) | `docs/generators-review.md` (phase 7 section) + `Erc20.t.sol` with unit, fuzz and invariant tests. The owner rotates in two steps and can renounce (irreversible) to fix the supply |
+| Staking (`staking`), Subscription (`paywall`), ERC-20 (`erc20`) | experimental | the Foundry suites (`Staking.t.sol`, `Paywall.t.sol`, `Erc20.t.sol`) were written but never executed in CI (see `docs/phase7-1.md`); re-evaluate once they pass |
 | Escrow (`escrow`), Vesting (`vesting`) | experimental | second-pass review and unit tests; no fuzz or invariant tests |
 | CCTP V1 form (`crosschain`) | experimental | unit and rotation tests only, no fuzz or invariant suite (the CCTP addresses are hard-coded); use the V2 bridge instead |
 | CCTP V2 bridge helper (`bridge`) | experimental | unit tests only, no review document |
@@ -37,6 +35,8 @@ A template is `reviewed` only if all three hold, and the test run verifies the f
 1. a review document for it exists in `docs/`;
 2. a dedicated Foundry suite in `tests/solidity/test/` exists **and** contains fuzz (`testFuzz*`) or invariant tests;
 3. no relevant finding from that review is still open.
+
+In addition, the Foundry suite must have **actually passed in CI**: the review document records the CI run (link or run id) where the suite passed. A suite that was written but never executed is not evidence, and the template stays `experimental` (this is what reverted erc20, paywall and staking in phase 7.1 — see `docs/phase7-1.md`).
 
 Everything else is `experimental`. `audited` needs an independent audit report, and nothing sets it today.
 

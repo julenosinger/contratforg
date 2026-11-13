@@ -96,7 +96,12 @@ as the NFT (`pendingOwner`; `transferOwnership(newOwner)` onlyOwner; `acceptOwne
 `OwnershipTransferStarted`/`OwnershipTransferred`/`OwnershipTransferCancelled`; the new owner cannot be zero, the current owner or the
 contract). ABI changes are additive only. Each one is reviewed against the `mainnet-gate.md` rule.
 
-### ERC-20 (`erc20`, `ArcDollar`) — promoted to `reviewed`
+> **Nota 7.1 (2026-11-13):** erc20, paywall e staking foram promovidos a `reviewed` na fase 7, mas a promoção foi
+> **revertida** porque a regra passou a exigir que a suíte Foundry tenha de fato passado no CI, com a execução registrada
+> aqui. As suítes existem e têm fuzz/invariantes, mas nunca rodaram no CI, então os três voltaram a `experimental`
+> (ver `docs/phase7-1.md`). O texto abaixo mantém a revisão e os achados, que continuam válidos.
+
+### ERC-20 (`erc20`, `ArcDollar`) — `experimental` (promoção revertida em 7.1, aguardando execução no CI)
 - **Reviewed:** the owner role (mint; burn is public self-burn), the cap and the initial supply. The rotation plus an irreversible
   `renounceOwnership()` (sets the owner to zero and clears any pending owner, so minting stops and the supply is fixed; a pending owner
   can never act, and no one can mint after a renounce). `tests/solidity/test/Erc20.t.sol` — unit, fuzz and invariants (the sum of balances
@@ -106,14 +111,14 @@ contract). ABI changes are additive only. Each one is reviewed against the `main
 - **Residual risks:** the owner can still mint up to the cap while it holds the role; `cap` and the initial supply are fixed at generation;
   `renounceOwnership()` is irreversible. These are documented limits, not findings.
 
-### Subscription (`paywall`, `ArcSubscription`) — promoted to `reviewed`
+### Subscription (`paywall`, `ArcSubscription`) — `experimental` (promoção revertida em 7.1)
 - **Reviewed:** the owner role (`setPrice`/`setBeneficiary`), with the beneficiary kept as a separate address the owner configures.
   `tests/solidity/test/Paywall.t.sol` — unit, fuzz and invariants (access never shrinks on renewal, the beneficiary is never zero, and
   `setPrice` protects the payer via `subscribeAtMost`).
 - **Findings (all fixed here):** a fixed, non-rotatable owner — fixed by the rotation.
 - **Residual risks:** the beneficiary is a single address set by the owner (not a multisig); the token is trusted to behave like USDC.
 
-### Staking (`staking`, `ArcStaking`) — promoted to `reviewed`
+### Staking (`staking`, `ArcStaking`) — `experimental` (promoção revertida em 7.1)
 - **Reviewed:** the owner role (`fundRewardPool`/`claimFees`) becomes rotatable without changing the economy. The `owner` was `immutable`
   and is now a normal slot; the reward pool, the fee accounting and the staking math are untouched.
   `tests/solidity/test/Staking.t.sol` — unit, fuzz and invariants (the contract's token balance always covers the outstanding principal

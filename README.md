@@ -6,7 +6,7 @@ Não há backend, exceto uma função pequena que guarda a chave dos recursos de
 
 > **AVISO: nenhum template foi auditado por terceiros.** Os contratos gerados não são recomendações
 > financeiras nem garantia de segurança. Cada template tem um nível de maturidade: `reviewed` (revisão
-> interna documentada e testes Foundry com fuzz) ou `experimental` (todo o resto, e sempre o que vem da IA).
+> interna documentada e suíte Foundry com fuzz executada no CI) ou `experimental` (todo o resto, e sempre o que vem da IA).
 > Em mainnet, um contrato `experimental` só pode ser publicado depois de uma confirmação explícita.
 > Veja [docs/mainnet-gate.md](docs/mainnet-gate.md) antes de usar fundos reais.
 
