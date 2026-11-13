@@ -78,5 +78,40 @@ começando em assistant é aparado; `kind` inválido é descartado; conversa vá
 
 **Mutação:** "consecutive same-role messages are not merged" (`ui.mjs`) — **CAUGHT**.
 
+## E. Resumo e checklist da primeira execução do CI
+
+### Tabela Achado | Correção | Evidência
+
+| Achado | Correção | Evidência |
+|---|---|---|
+| `native-solc-bytecode.mjs` escolhia o `solcjs` (Emscripten) como "nativo" e quebrava | `findNativeSolc` só tenta `solc`; classificador `isNativeSolcVersion` rejeita Emscripten e exige marca de plataforma | `tests/native-solc-oracle.mjs` (9 checks) + mutação "Emscripten accepted" CAUGHT |
+| `Staking.t.sol`/`Paywall.t.sol` usavam getters públicos sem parênteses (TypeError) | `h.tok()`/`h.staking()`/`h.paywall()` | `tests/compile-foundry-tests.mjs` (18 suítes compilam) + mutação "getter sem parênteses" CAUGHT |
+| erc20/paywall/staking promovidos sem a suíte nunca ter rodado | revertidos a `experimental`; regra nova exige execução no CI | `maturity.mjs` 146 passed; golden só muda os carimbos dos três |
+| chat: `user` órfão e "Error:" voltando ao modelo | `aiBuildRequestMessages` (merge, trim, corta 20) + `kind:'error'` | `ui.mjs` 374 passed; reprodução "user,user" → "user"; mutação "not merged" CAUGHT |
+
+### O que só o CI confirma (NÃO rodei aqui)
+
+- **NÃO rodei forge** (binário indisponível): a execução real dos handlers/invariantes das quatro suítes novas
+  (`Erc20`, `Staking`, `Paywall`, `Crosschain`) e das suítes existentes. O `compile-foundry-tests.mjs` só prova que compilam.
+- **NÃO rodei slither**: a re-pinagem da triagem dos contratos alterados (fase 7) segue pendente.
+
+### Checklist da primeira execução do CI
+
+- Job **node**: `npm ci` + `npm test` (agora inclui `compile-foundry-tests.mjs`, `native-solc-bytecode.mjs` — que pula sem
+  solc nativo — e `native-solc-oracle.mjs`), depois `golden.mjs --update` + `git diff --exit-code`, `csp-browser.mjs` com
+  `REQUIRE_BROWSER=1` (Playwright), e o zip.
+  - **Ponto provável de quebra:** `npx playwright install --with-deps chromium` — confirme que o binário baixa e o
+    `csp-browser.mjs` abre a aba de IA sem violação.
+- Job **forge**: `npm run test:swap` e `test:portable`. **Ponto provável de quebra:** a versão do `foundry-toolchain`
+  (`v1.4.0`, Foundry `v1.7.1`) e o tempo de fuzz (256 runs / 64×100 invariantes) — pode estourar o timeout de 30 min se o
+  runner for lento.
+- Job **slither**: `pip install slither-analyzer==0.11.6 solc-select==1.2.0`, `solc-select install/use 0.8.24`, depois o
+  oráculo nativo com `REQUIRE_NATIVE_SOLC=1` (agora exige um build nativo de verdade), e o Slither.
+  - **Ponto provável de quebra:** `solc-select install 0.8.24` de um runner limpo, e o oráculo comparando bytecode nativo ×
+    vendor (CBOR removido).
+- Job **mutation** (manual/semanal): `python3 tests/mutation-check.py` — confirme que as 3 novas mutações (oracle, getter,
+  merge) são CAUGHT no Linux (aqui foram, no Windows, exceto as que dependem de forge).
+
+
 
 

@@ -91,6 +91,14 @@ por uma de `user`.
 Streaming e botão Parar, diff entre versões, regenerar/editar mensagem, remover a ação `generate` do proxy (mantida e
 marcada como legada). Documentado aqui por decisão explícita (fora do escopo desta etapa).
 
+## G. Correção da fase 7.1 (2026-11-13)
+
+`aiChatSend` salvava a mensagem do usuário antes da chamada; se a aba fechasse na espera, ficava um `user` órfão e o envio
+seguinte mandava `user,user` (o proxy recusa). Mensagens "Error: …" também voltavam ao modelo. Corrigido em
+`docs/phase7-1.md` (item D): `aiBuildRequestMessages` une mensagens consecutivas do mesmo papel, descarta assistant no
+início/fim, corta nas últimas 20 e exclui `kind 'tool'`/`'error'`; falhas são gravadas com `kind:'error'`.
+
+
 ## Decisões que preciso validar
 
 1. **Ação `generate` mantida** no proxy (a UI não a chama mais), marcada como legada.
