@@ -14,6 +14,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { isNativeSolcVersion } from './native-solc-version.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -23,13 +24,13 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  FAIL  ' + m); } };
 const note = (m) => console.log('  note  ' + m);
 
-/* find the native binary */
+/* find the native binary: only `solc` (or SOLC_NATIVE) counts, and its --version must be a real native build.
+   The `solcjs` that npm puts on PATH is the Emscripten build (the same soljson the vendor ships), so it is refused. */
 function findNativeSolc() {
   if (process.env.SOLC_NATIVE) return process.env.SOLC_NATIVE;
-  for (const cmd of ['solc', 'solcjs']) {
-    const r = spawnSync(cmd, ['--version'], { encoding: 'utf8' });
-    if (r.status === 0 && /0\.8\.24/.test((r.stdout || '') + (r.stderr || ''))) return cmd;
-  }
+  const r = spawnSync('solc', ['--version'], { encoding: 'utf8' });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (r.status === 0 && isNativeSolcVersion(out)) return 'solc';
   return null;
 }
 
