@@ -180,6 +180,26 @@ ev("pendingSource = { name:'', code:'' }; renderCurrentContract();");
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+/* 13. the AI chat: hostile assistant text and saved history render literally, never as markup */
+{
+  ev(`aiState.convs = [{ id: 'x1', msgs: [{ role: 'user', content: ${JSON.stringify(ALL)} }, { role: 'assistant', content: ${JSON.stringify(ALL)} }] }]; aiState.activeId = 'x1'; aiChatRender();`);
+  safe('chat: hostile assistant text renders literally');
+  ok(/__xss|onerror/.test(doc.getElementById('aiThread').textContent), 'chat: the payload appears as literal text');
+  ev(`aiState.convs = [{ id: 'x2', msgs: [{ role: 'user', content: 'x' }, { role: 'assistant', content: '[bad](javascript:window.__xss=1) [d](data:text/html,<img src=x onerror=window.__xss=2>) [ok](https://example.com)' }] }]; aiState.activeId = 'x2'; aiChatRender();`);
+  safe('chat: javascript: and data: links are not anchors');
+  const links = [...doc.querySelectorAll('#aiThread a')];
+  ok(links.length === 1 && links[0].getAttribute('href') === 'https://example.com' && links[0].getAttribute('rel') === 'noopener noreferrer' && links[0].getAttribute('target') === '_blank', 'chat: only the http(s) link is an anchor', JSON.stringify(links.map((a) => a.getAttribute('href'))));
+  ev(`aiState.convs = [{ id: 'x3', msgs: [{ role: 'user', content: 'x' }, { role: 'assistant', content: ${JSON.stringify('```solidity\ncontract X {\n  string s = "<img src=x onerror=window.__xss=3>";\n}\n```')} }] }]; aiState.activeId = 'x3'; aiChatRender();`);
+  safe('chat: a hostile code block renders literally');
+  ok(doc.querySelector('#aiThread .ai-code-block code') && /__xss/.test(doc.querySelector('#aiThread .ai-code-block code').textContent), 'chat: the code block holds the literal text');
+  // saved history round-trips and hostile content stays literal
+  w.localStorage.setItem('cf_ai_chats_v1', JSON.stringify([{ id: 'h1', msgs: [{ role: 'user', content: ALL }, { role: 'assistant', content: ALL }] }]));
+  ev('aiState.convs = aiLoad(); aiState.activeId = aiState.convs[0] ? aiState.convs[0].id : null; aiChatRender();');
+  safe('chat: hostile saved history renders literally');
+  w.localStorage.removeItem('cf_ai_chats_v1');
+  ev('aiState.convs = []; aiState.activeId = null; aiChatRender();');
+}
+
 ok(app.pageErrors.length === 0 || true, 'page errors are not part of this test');
 console.log(pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -68,4 +68,40 @@ corrompido reinicia sem erro. Títulos vêm da primeira mensagem (60 caracteres,
 Aviso visível: "The history stays only in this browser.". Ao enviar, o cliente manda só as últimas 20 mensagens, começando
 por uma de `user`.
 
+## E. Testes
+
+- **`ai-proxy.mjs`** (146 checks): chat válido; papéis inválidos; assistant primeiro; dois assistants seguidos; mais de
+  20 mensagens; mensagem de 20001 caracteres; total acima do limite (400 ou 413); `system`/`model`/`messages` do cliente
+  ignorados; campos extras ignorados; multi-turno em ordem; equivalência Vercel/Cloudflare (o "shared core" continua
+  idêntico). O rate limit é por IP e compartilhado entre ações (o teste existente cobre o chat).
+- **`xss.mjs`** (43 checks): payloads em mensagens do assistente e no histórico salvo (`<img onerror>`, `<script>`,
+  `javascript:` e `data:` em links, markup aninhado, aspas, bloco de código hostil) provando que nada executa e o texto
+  aparece literal; só o link `http(s)` vira âncora com `rel="noopener noreferrer"`.
+- **`ui.mjs`** (363 checks, `aiFetch` simulado): estado vazio com chips; enviar adiciona as duas mensagens; botões do
+  bloco; Use define `pendingSource` com `template:'ai'` e o carimbo `experimental` (o gate de mainnet continua); Audit e
+  Tests usam o código do bloco sem mudar `pendingSource`; ida e volta do histórico; storage corrompido; limites de 30
+  conversas e 40 mensagens.
+- **`innerhtml-lint.mjs`**: zero usos novos aprovados (o chat usa `createElement`/`textContent`).
+- **`csp.mjs`** passa (235 checks); `csp-browser.mjs` (Chromium local) passa (11 checks) — a aba de IA abre sem violação.
+- **`mutation-check.py`** ganhou 4 mutações, todas **CAUGHT**: renderizador aceita qualquer link (`xss.mjs`), assistant
+  primeiro (`ai-proxy.mjs`), `system` do cliente honrado (`ai-proxy.mjs`), Use sem `matStamp` (`ui.mjs`).
+
+## F. O que fica para a etapa 2
+
+Streaming e botão Parar, diff entre versões, regenerar/editar mensagem, remover a ação `generate` do proxy (mantida e
+marcada como legada). Documentado aqui por decisão explícita (fora do escopo desta etapa).
+
+## Decisões que preciso validar
+
+1. **Ação `generate` mantida** no proxy (a UI não a chama mais), marcada como legada.
+2. **`adoptAiCode`** concentra a lógica antiga de `generateFromNL`/`useNLContract` (carimbo, `pendingSource`, rótulos,
+   `deployFromBuffer('nlai')`); a IA continua `experimental` no gate.
+3. **Audit/Tests no chat** usam os selects existentes (`audit_focus`/`test_framework`/`test_coverage`) para foco/framework/
+   cobertura; o resultado é anexado como mensagem do assistente (o audit é formatado em markdown).
+4. **Renomear** usa `window.prompt()` (não testável em jsdom; no navegador funciona).
+5. **Limites do histórico** (30 conversas / 40 mensagens / ~200 KB) são heurísticas; os mais antigos são descartados.
+6. **`until()` do ui.mjs subiu de 3 s para 15 s** porque desde a fase 7 o resumo de deploy aparece depois da compilação
+   (que leva ~4,5 s em contratos grandes). Ajuste de robustez do teste, não de asserção.
+
+
 

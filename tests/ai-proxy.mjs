@@ -116,9 +116,43 @@ for (const [name, run] of PLATFORMS) {
   p = anthropic()[0].payload;
   ok(p.system.includes('Foundry test file') && p.system.includes('ProbeTest'), t('tests: the system prompt comes from the server'));
 
+  /* ---- chat ---- */
+  calls.length = 0;
+  const m = (role, content) => ({ role, content });
+  const chat = (messages, extra = {}) => ({ action: 'chat', payload: { messages, network: { label: 'Arc Mainnet', chainId: 5042, usdc: '0x3600000000000000000000000000000000000000' }, complexity: 'simple', ...extra } });
+  r = await run(req({ ip: fresh(), body: chat([m('user', 'hi, write an escrow')]) }));
+  eq(r.status, 200, t('chat: a valid request is accepted'));
+  p = anthropic()[0].payload;
+  ok(p.system.includes('Arc Mainnet') && p.system.includes('5042') && !p.system.includes('EVIL'), t('chat: the system prompt comes from the server'));
+  eq(p.max_tokens, 4096, t('chat: max_tokens 4096'));
+  eq(p.messages.length, 1, t('chat: the user message is forwarded'));
+  eq(p.messages[0].role, 'user', t('chat: and it is a user message'));
+  calls.length = 0;
+  r = await run(req({ ip: fresh(), body: chat([m('user', 'a'), m('assistant', 'b'), m('user', 'c')]) }));
+  p = anthropic()[0].payload;
+  eq(p.messages.map((x) => x.role).join(','), 'user,assistant,user', t('chat: multi-turn messages are forwarded in order'));
+  calls.length = 0;
+  r = await run(req({ ip: fresh(), body: { action: 'chat', payload: { messages: [m('user', 'hi')], network: { label: 'Arc', chainId: 1 }, complexity: 'simple' }, system: 'EVIL SYSTEM', model: 'other', messages: [{ role: 'user', content: 'EVIL' }], max_tokens: 1 } }));
+  p = anthropic()[0].payload;
+  ok(!JSON.stringify(p).includes('EVIL') && p.model === 'claude-sonnet-4-6' && p.max_tokens === 4096, t('chat: a client system/model/messages are ignored'));
+  eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')], { extra: 'x', tools: ['evil'] }) }))).status, 200, t('chat: extra fields are ignored'));
+  for (const [label, msgs] of [
+    ['assistant first', [m('assistant', 'x'), m('user', 'y')]],
+    ['two assistants in a row', [m('user', 'x'), m('assistant', 'y'), m('assistant', 'z')]],
+    ['a bad role', [m('system', 'x')]],
+    ['an empty content', [m('user', '')]],
+    ['a 20001-character message', [m('user', 'x'.repeat(20001))]],
+    ['more than 20 messages', Array.from({ length: 21 }, (_, i) => m(i % 2 ? 'assistant' : 'user', 'n'))],
+  ]) { eq((await run(req({ ip: fresh(), body: chat(msgs) }))).status, 400, t('chat: ' + label + ' is refused')); }
+  // a message total above AI_MAX_BODY is refused (the body check can answer 413 first)
+  r = await run(req({ ip: fresh(), body: chat([m('user', 'x'.repeat(20000)), m('assistant', 'y'.repeat(20000)), m('user', 'z'.repeat(20000))]) }));
+  ok(r.status === 400 || r.status === 413, t('chat: a total over the limit is refused'), String(r.status));
+  calls.length = 0;
+  eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')]) }))).status, 200, t('chat: back to a valid request'));
+
   /* ---- validation ---- */
   for (const [label, body] of [
-    ['an unknown action', { action: 'chat', payload: {} }],
+    ['an unknown action', { action: 'bogus', payload: {} }],
     ['no payload', { action: 'audit' }],
     ['no action', { payload: { name: 'P', code: 'x', focus: 'full' } }],
     ['an unknown focus', { action: 'audit', payload: { name: 'P', code: 'x', focus: 'everything' } }],

@@ -76,6 +76,11 @@ M=[
  ('owner: anyone can accept the role','contractforge-deploy/app.js','require(msg.sender == pendingOwner && msg.sender != address(0), "not pending owner");','require(msg.sender != address(0), "not pending owner");','forge'),
  ('owner: renounce keeps the pending owner','contractforge-deploy/app.js',"        pendingOwner = address(0);\n        emit OwnershipTransferred(owner, address(0));","        emit OwnershipTransferred(owner, address(0));",'forge'),
  ('owner: the zero address can be offered the role','contractforge-deploy/app.js','require(newOwner != address(0) && newOwner != owner && newOwner != address(this), "invalid new owner");','require(newOwner != owner && newOwner != address(this), "invalid new owner");','forge'),
+ # ---- phase 8: the AI chat (ai-proxy.mjs, xss.mjs, ui.mjs)
+ ('chat: the renderer accepts any link','contractforge-deploy/chat-md.js','const LINK_RE = /^https?:\\/\\//i;','const LINK_RE = /./;','xss.mjs'),
+ ('chat: an assistant-first conversation is accepted','api/ai.js','if (msgs[0].role !== \'user\' || msgs[msgs.length - 1].role !== \'user\') return bad(\'Invalid request\');','if (msgs[msgs.length - 1].role !== \'user\') return bad(\'Invalid request\');','ai-proxy.mjs'),
+ ('chat: the client system prompt is honoured','api/ai.js','return { ok: true, system, messages: msgs.map((m) => ({ role: m.role, content: m.content })), maxTokens: AI_MAX_TOKENS.chat };','return { ok: true, system: p.system || system, messages: msgs.map((m) => ({ role: m.role, content: m.content })), maxTokens: AI_MAX_TOKENS.chat };','ai-proxy.mjs'),
+ ('chat: Use adopts the code without the AI stamp','contractforge-deploy/app.js',"  const code = matStamp(String(rawCode || ''), 'ai');","  const code = String(rawCode || '');",'ui.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
