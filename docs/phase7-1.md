@@ -21,3 +21,29 @@ foi extraído para `tests/native-solc-version.mjs` (`isNativeSolcVersion`): reje
 
 **CI:** `ci/workflows/ci.yml` já estava correto: `REQUIRE_NATIVE_SOLC=1` só no job `slither` (que instala solc via
 solc-select), nunca no job `node` (que roda `npm test`, onde o oráculo apenas pula). Nenhuma mudança de CI necessária.
+
+## B. Suítes Foundry
+
+**Achado:** `Staking.t.sol` e `Paywall.t.sol` acessavam variáveis de estado públicas do handler sem chamar o getter
+(`h.tok`, `h.staking`, `h.paywall`), o que em Solidity resolve para a *função* do getter, não para o valor — TypeError
+(confirmado compilando com o npm solc). Como o forge compila o diretório inteiro, todas as suítes falhariam.
+
+**Correção:** `h.tok` → `h.tok()`, `h.staking` → `h.staking()`, `h.paywall` → `h.paywall()` nas invariantes.
+
+**Teste:** `tests/compile-foundry-tests.mjs` (novo, no `npm test`): roda o dump e compila cada `tests/solidity/test/*.t.sol`
+com o npm solc 0.8.24 (standard JSON, evmVersion cancun, imports resolvidos em `solidity/src` e `test/`), falhando com
+arquivo e linha em qualquer erro. Antes: `Staking.t.sol` e `Paywall.t.sol` com TypeError; agora: 18 suítes + a checagem de
+contagem = 19 passed.
+
+**Releitura das quatro suítes** (Erc20, Paywall, Staking, Crosschain) procurando erros de lógica que só a execução revela:
+- pré-condições dos handlers: `fund()` no StakingHandler minte/approva o próprio handler (que é o owner) antes de
+  `fundRewardPool`, então o pool é de fato financiado; `rotate` usa try/catch e a primeira rotação tira o handler do papel
+  de owner (as mints seguintes revertem e são engolidas por `fail_on_revert=false`, sem quebrar as invariantes);
+- invariantes: `sum(balanceOf) == totalSupply` (Erc20) e `balance >= totalStaked + rewardPool` (Staking) valem porque os
+  atores são os únicos que seguram tokens e as taxas ficam em `accruedFees` (que só reforça o `>=`);
+- fundos iniciais: o Erc20 default tem `supply=0` (a invariante parte de 0); o Staking minte 1_000_000e6 por ator;
+- limites de fuzz: `_bound` já limita transfer/stake/approve aos saldos; os valores grandes não estouram (uint256).
+
+Nenhum outro erro de lógica encontrado. **NÃO rodei forge** (binário indisponível nesta máquina); os pontos que só o CI
+confirma são a execução real dos handlers/invariantes (o compile-foundry-tests só garante que compilam).
+

@@ -146,12 +146,12 @@ contract StakingInvariantTest {
     }
     /// The contract's token balance always covers the outstanding principal and the unspent reward pool.
     function invariant_balancesCoverPrincipalAndPool() public view {
-        require(h.tok.balanceOf(address(h.staking)) >= h.staking.totalStaked() + h.staking.rewardPool(), "token balance below principal + pool");
+        require(h.tok().balanceOf(address(h.staking())) >= h.staking().totalStaked() + h.staking().rewardPool(), "token balance below principal + pool");
     }
     /// A reward claim never pays out more than the pool holds.
     function invariant_rewardPoolNeverNegative() public view {
-        require(h.staking.rewardPool() <= h.tok.balanceOf(address(h.staking)), "pool exceeds the balance");
+        require(h.staking().rewardPool() <= h.tok().balanceOf(address(h.staking())), "pool exceeds the balance");
     }
     /// The owner is never the zero address.
-    function invariant_ownerNeverZero() public view { require(h.staking.owner() != address(0), "owner zero"); }
+    function invariant_ownerNeverZero() public view { require(h.staking().owner() != address(0), "owner zero"); }
 }

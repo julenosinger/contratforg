@@ -129,6 +129,6 @@ contract PaywallInvariantTest {
         s[0] = FuzzSelector(address(h), sel);
     }
     /// A subscription never extends less than a full period from the call, and the owner is never zero.
-    function invariant_ownerNeverZero() public view { require(h.paywall.owner() != address(0), "owner zero"); }
-    function invariant_beneficiaryNeverZero() public view { require(h.paywall.beneficiary() != address(0), "beneficiary zero"); }
+    function invariant_ownerNeverZero() public view { require(h.paywall().owner() != address(0), "owner zero"); }
+    function invariant_beneficiaryNeverZero() public view { require(h.paywall().beneficiary() != address(0), "beneficiary zero"); }
 }
