@@ -61,4 +61,22 @@ de carimbo dos três (12 arquivos, `reviewed` → `experimental`).
 **Regra nova em `docs/mainnet-gate.md`:** para ser `reviewed`, a suíte Foundry precisa ter **passado no CI**, com o link ou
 id da execução registrado no doc de revisão. Nenhum outro nível foi mexido.
 
+## D. Chat: órfão e erro no contexto
+
+**Achado (reproduzido):** `aiChatSend` salvava a mensagem do usuário antes da chamada; se a aba fechava durante a espera,
+a conversa guardava um `user` órfão e o envio seguinte mandava `user,user` (o proxy recusa e a conversa trava). Mensagens
+"Error: …" do assistente também voltavam ao modelo como contexto.
+
+**Correção:** a montagem do request saiu de `aiChatSend` para `aiBuildRequestMessages`, que (1) exclui `kind 'tool'` e
+`kind 'error'`; (2) une mensagens consecutivas do mesmo papel com `\n\n`; (3) descarta um início com assistant; (4) garante
+que a última é user; (5) só então corta nas últimas 20 sem quebrar a alternância. Falhas são gravadas como assistant com
+`kind:'error'`. `aiValidMessage`/`aiLoad` agora validam `kind` (`'tool'`/`'error'`/ausente) e descartam o resto.
+
+**Teste (ui.mjs):** órfão + novo envio vira um único turno com conteúdo unido; erro anterior não entra no pedido; histórico
+começando em assistant é aparado; `kind` inválido é descartado; conversa válida continua idêntica. Reprodução antes:
+"roles sent: user,user"; depois: "roles sent: user" com conteúdo unido.
+
+**Mutação:** "consecutive same-role messages are not merged" (`ui.mjs`) — **CAUGHT**.
+
+
 

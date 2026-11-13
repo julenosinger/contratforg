@@ -81,6 +81,10 @@ M=[
  ('chat: an assistant-first conversation is accepted','api/ai.js','if (msgs[0].role !== \'user\' || msgs[msgs.length - 1].role !== \'user\') return bad(\'Invalid request\');','if (msgs[msgs.length - 1].role !== \'user\') return bad(\'Invalid request\');','ai-proxy.mjs'),
  ('chat: the client system prompt is honoured','api/ai.js','return { ok: true, system, messages: msgs.map((m) => ({ role: m.role, content: m.content })), maxTokens: AI_MAX_TOKENS.chat };','return { ok: true, system: p.system || system, messages: msgs.map((m) => ({ role: m.role, content: m.content })), maxTokens: AI_MAX_TOKENS.chat };','ai-proxy.mjs'),
  ('chat: Use adopts the code without the AI stamp','contractforge-deploy/app.js',"  const code = matStamp(String(rawCode || ''), 'ai');","  const code = String(rawCode || '');",'ui.mjs'),
+ # ---- phase 7.1: native oracle, Foundry compile, chat normalisation
+ ('oracle: the Emscripten build is accepted as native','tests/native-solc-version.mjs','if (/Emscripten/i.test(v)) return false;','if (/Emscripten/i.test(v)) return true;','native-solc-oracle.mjs'),
+ ('foundry: a getter is used without parentheses again','tests/solidity/test/Erc20.t.sol','require(h.token().owner() != address(0), "owner became zero without a renounce");','require(h.token.owner() != address(0), "owner became zero without a renounce");','compile-foundry-tests.mjs'),
+ ('chat: consecutive same-role messages are not merged','contractforge-deploy/app.js',"    if (last && last.role === m.role) last.content += '\\n\\n' + m.content;\n    else merged.push({ role: m.role, content: m.content });","    merged.push({ role: m.role, content: m.content });",'ui.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

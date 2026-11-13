@@ -427,7 +427,7 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
   const cards = [...d.querySelectorAll('#simpleGrid .tcard')];
   ok(cards.length >= 8 && cards.every((c) => { const b = c.querySelector('.mat-badge'); return b && /Reviewed|Experimental/.test(b.textContent) && b.getAttribute('title'); }), 'every template card carries a labelled maturity badge');
   const lvl = (id) => d.querySelector(`#simpleGrid .tcard[data-id="${id}"] .mat-badge`)?.className || '';
-  ok(/mat-reviewed/.test(lvl('smartwallet')) && /mat-reviewed/.test(lvl('erc721')) && /mat-experimental/.test(lvl('escrow')) && /mat-reviewed/.test(lvl('erc20')) && /mat-reviewed/.test(lvl('paywall')) && /mat-reviewed/.test(lvl('staking')) && /mat-reviewed/.test(lvl('dao')), 'template card levels match the registry');
+  ok(/mat-reviewed/.test(lvl('smartwallet')) && /mat-reviewed/.test(lvl('erc721')) && /mat-experimental/.test(lvl('escrow')) && /mat-experimental/.test(lvl('erc20')) && /mat-experimental/.test(lvl('paywall')) && /mat-experimental/.test(lvl('staking')) && /mat-reviewed/.test(lvl('dao')), 'template card levels match the registry');
   ok(/mat-reviewed/.test(d.querySelector('#sec-treasury .section-head .mat-badge')?.className || '') && /mat-reviewed/.test(d.querySelector('#sec-multisend .section-head .mat-badge')?.className || '') && /mat-experimental/.test(d.querySelector('#sec-crosschain .section-head .mat-badge')?.className || ''), 'section badges: treasury and multisend reviewed, crosschain experimental');
   e.gen('escrow');
   const exp = d.querySelector('#currentContract .mat-badge');
@@ -761,6 +761,35 @@ ok(!!doc.getElementById('themeBtn') && !!doc.getElementById('mcSelector') && !!d
   ok(ev('aiState.convs.length') <= 30, 'chat: at most 30 conversations are kept', String(ev('aiState.convs.length')));
   ev("aiState.convs = [{ id: 'c1', msgs: Array.from({ length: 45 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'x' + i })) }]; aiSave(); aiState.convs = aiLoad();");
   ok(ev('aiState.convs[0].msgs.length') <= 40, 'chat: at most 40 messages are kept', String(ev('aiState.convs[0].msgs.length')));
+  w.localStorage.removeItem('cf_ai_chats_v1');
+}
+
+/* chat request building (aiBuildRequestMessages) and history validation */
+{
+  const a = loadApp(); const { ev, w } = a; const d = w.document;
+  const build = (msgs) => JSON.parse(ev(`JSON.stringify(aiBuildRequestMessages(${JSON.stringify(msgs)}))`));
+  // a history ending in a user (orphan after a tab close) merges with the next user into one alternating turn
+  let r = build([{ role: 'user', content: 'build a token' }, { role: 'user', content: 'make it pausable' }]);
+  eq(r.map((m) => m.role).join(','), 'user', 'chat: an orphan user merges with the next (roles)');
+  ok(r[0].content.includes('build a token') && r[0].content.includes('make it pausable') && r[0].content.includes('\n\n'), 'chat: an orphan user merges with the next (content joined)');
+  // an error result is never part of the request
+  r = build([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'Error: boom', kind: 'error' }, { role: 'user', content: 'b' }]);
+  eq(r.map((m) => m.role).join(','), 'user', 'chat: an error result is dropped, leaving the merged users');
+  ok(!r.some((m) => /Error:/.test(m.content)), 'chat: an error result never returns to the model');
+  // a history starting with an assistant is trimmed
+  r = build([{ role: 'assistant', content: 'stale' }, { role: 'user', content: 'hello' }]);
+  eq(r.map((m) => m.role).join(','), 'user', 'chat: a leading assistant is trimmed');
+  // a trailing assistant is trimmed (last must be user)
+  r = build([{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }]);
+  eq(r.map((m) => m.role).join(','), 'user', 'chat: a trailing assistant is trimmed');
+  // a valid alternating conversation is untouched
+  const good = [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }, { role: 'user', content: 'c' }];
+  eq(JSON.stringify(build(good)), JSON.stringify(good.map((m) => ({ role: m.role, content: m.content }))), 'chat: a valid conversation stays identical');
+  // an invalid kind is discarded on load
+  w.localStorage.setItem('cf_ai_chats_v1', JSON.stringify([{ id: 'k1', msgs: [{ role: 'user', content: 'x', kind: 'evil' }] }]));
+  eq(ev('aiLoad().length'), 0, 'chat: a message with an invalid kind is discarded');
+  w.localStorage.setItem('cf_ai_chats_v1', JSON.stringify([{ id: 'k2', msgs: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'e', kind: 'error' }] }]));
+  ok(ev('aiLoad().length') === 1 && ev('aiLoad()[0].msgs.length') === 2, 'chat: tool/error kinds round-trip');
   w.localStorage.removeItem('cf_ai_chats_v1');
 }
 
