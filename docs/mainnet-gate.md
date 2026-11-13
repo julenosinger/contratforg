@@ -72,8 +72,9 @@ as template, and `deployCompiled` called on its own.
 
 ## 3. AI proxy (`api/ai.js`, `functions/api/ai.js`)
 
-The browser sends only `{ action, payload }` with `action` in `audit`, `generate`, `tests`. Prompts, model and
-`max_tokens` live on the server; any `system`, `model`, `max_tokens` or `messages` from the browser is ignored.
+The browser sends only `{ action, payload }` with `action` in `audit`, `generate` (legacy), `tests`, `chat`. Prompts, model and
+`max_tokens` live on the server; any `system`, `model`, `max_tokens` or `messages` from the browser is ignored (the `chat`
+action validates and forwards the conversation's own `messages`, but never a client-supplied system prompt).
 A request needs a same-host `Origin` (a missing one is refused), `Sec-Fetch-Site: same-origin` when the browser
 sends it, and `Content-Type: application/json`. The request body is limited to 60,000 characters. Errors are
 generic. The shared logic is the same text in both files (checked by `tests/ai-proxy.mjs`).

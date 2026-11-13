@@ -16,7 +16,7 @@ Não há backend, exceto uma função pequena que guarda a chave dos recursos de
   (pool único e factory), order book, treasury multisig, vault, MultiSend e ponte CCTP.
 - Modos multichain (Single, Portable, Multi-deploy, Crosschain): [docs/multichain.md](docs/multichain.md).
 - ABI Playground e Test Lab (simulador de EVM no navegador): [docs/test-lab.md](docs/test-lab.md).
-- Recursos de IA (auditoria, geração de Solidity, geração de testes) via `/api/ai`.
+- Recursos de IA (chat para gerar Solidity, auditoria, geração de testes) via `/api/ai`.
 
 ## Redes suportadas
 
@@ -118,7 +118,7 @@ Detalhes em [docs/mainnet-gate.md](docs/mainnet-gate.md#3-ai-proxy-apiaijs-funct
 
 [Maturidade e gate de mainnet](docs/mainnet-gate.md) · [Treasury, DAO e Vault + segunda passada](docs/generators-review.md) ·
 [AMM](docs/swap-amm-review.md) · [Smart wallet](docs/smart-wallet-review.md) · [Auditoria do app](docs/app-audit.md) ·
-[Cadeia de suprimentos do compilador](docs/supply-chain.md)
+[Cadeia de suprimentos do compilador](docs/supply-chain.md) · [Chat de IA](docs/ai-chat.md)
 
 Para reportar uma vulnerabilidade: [SECURITY.md](SECURITY.md). Para contribuir: [CONTRIBUTING.md](CONTRIBUTING.md).
 

@@ -9,7 +9,8 @@ generated contracts has had an independent audit (see `docs/mainnet-gate.md`).
 
 ## What the app is
 
-A no-backend page (plus one small AI proxy function) that generates Solidity from forms, compiles it in the
+A no-backend page (plus one small AI proxy function) that generates Solidity from forms and from an AI chat
+(section 15, `docs/ai-chat.md`), compiles it in the
 browser (self-hosted solc-js, sha256-verified against `vendor/MANIFEST.json` before it runs), deploys with an
 injected wallet (self-hosted ethers 5.7.2), and has an ABI playground, a simulated Test Lab, deploy history and a
 mainnet gate by maturity.
