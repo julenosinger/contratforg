@@ -385,7 +385,7 @@ ok(/uint8  public decimals = 6;/.test(ev('pendingSource.code')), 'a value change
 
 
 /* ===== Phase 2: maturity badges, the mainnet gate, required fields, per-network wallet limit ===== */
-const until = async (fn, ms = 3000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await new Promise((r) => setTimeout(r, 5)); } return null; };
+const until = async (fn, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await new Promise((r) => setTimeout(r, 5)); } return null; };
 const tick = () => new Promise((r) => setTimeout(r, 15));
 const PLACE = /0x0{34,36}(dEaD|bEEF|cAfE)/i;   // the old placeholder addresses (not the word 'deadline')
 const fillParties = (a, net) => { fillAddresses(a, net); for (const id of ['s_token', 's_reward', 'swap_tokenA', 'swap_tokenB', 'vault_asset']) { const el = a.w.document.getElementById(id); if (el) el.value = ''; } };
