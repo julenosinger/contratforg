@@ -4684,7 +4684,7 @@ async function aiChatRunAction(action, name, code, extra){
   } finally {
     aiState.sending = false; aiChatRenderComposerState();
   }
-  conv.msgs.push({ role: 'assistant', content: text });
+  conv.msgs.push({ role: 'assistant', content: text, kind: 'tool' });
   aiSave(); aiChatRender();
 }
 function aiChatAudit(btn){
@@ -4712,7 +4712,8 @@ async function aiChatSend(){
   const netKey = document.getElementById('nl_network')?.value || 'arc';
   const net = NETWORKS[netKey] || NETWORKS.arc;
   const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
-  const history = conv.msgs.slice(-20);
+  // the model sees only the chat turns, not the audit/tests results (kind 'tool') appended for display
+  const history = conv.msgs.filter((x) => x.kind !== 'tool').slice(-20);
   let start = history.findIndex((m) => m.role === 'user');
   if (start < 0) start = 0;
   const messages = history.slice(start).map((m) => ({ role: m.role, content: m.content }));

@@ -741,6 +741,13 @@ ok(!!doc.getElementById('themeBtn') && !!doc.getElementById('mcSelector') && !!d
   findChatBlock().querySelectorAll('button')[4].click(); await tick();   // Tests
   ok(JSON.parse(ev('JSON.stringify(window.__aiCalls)')).some((c) => c.action === 'tests' && /ChatToken/.test(c.payload.code)), 'chat: Tests uses the block code');
   eq(ev('pendingSource.name'), 'Wizard', 'chat: Tests does not change pendingSource');
+  // the model request still alternates after audit/tests (the tool results are not part of the chat turns)
+  ev('window.__aiReply = "```solidity\\ncontract Pausable {}\\n```";');
+  d.getElementById('aiComposer').value = 'make it pausable';
+  ev('aiChatSend()'); await tick(); await tick();
+  const lastChat = JSON.parse(ev('JSON.stringify(window.__aiCalls)')).filter((c) => c.action === 'chat').pop();
+  ok(lastChat && lastChat.payload.messages.length > 0 && lastChat.payload.messages[0].role === 'user' && lastChat.payload.messages[lastChat.payload.messages.length - 1].role === 'user', 'chat: the model request starts and ends with a user');
+  ok(lastChat && lastChat.payload.messages.every((mm, i, arr) => i === 0 || mm.role !== arr[i - 1].role), 'chat: the model request alternates (audit/tests results excluded)');
   // history round-trip and limits
   ev("aiState.convs = [{ id: 'c1', msgs: [{ role: 'user', content: 'hello world, build me a token' }, { role: 'assistant', content: 'ok' }] }]; aiState.activeId = 'c1'; aiSave();");
   ok(ev('localStorage.getItem("cf_ai_chats_v1")') !== null, 'chat: history is saved');
