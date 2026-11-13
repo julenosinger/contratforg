@@ -25,3 +25,16 @@ pergunta de esclarecimento; aviso em uma frase de que nada foi auditado; todo te
 ferramentas. `max_tokens` 4096, mesmo rate limit e mesmo `aiExtract` (resposta `{ text, outputTokens }`).
 
 A ação `generate` continua no proxy, **marcada como legada** (a UI não a chama mais).
+
+## B. Renderizador seguro (`chat-md.js`)
+
+Novo arquivo same-origin carregado no `index.html` (depois de `ui.js`), sem biblioteca. `window.renderChatMarkdown(text)`
+converte texto em um `DocumentFragment` usando só `createElement`/`createTextNode` — nunca `innerHTML`, então nada do que
+o assistente (ou um histórico adulterado) devolver pode virar marcação.
+
+Suporta: parágrafos, títulos (como negrito), listas com marcador e numeradas, citações (`>`), `` `código` `` inline,
+**negrito**, *itálico*, blocos com cerca (```lang) com rótulo de linguagem, e links só `http(s)` com
+`rel="noopener noreferrer"` e `target="_blank"`. Qualquer outra coisa vira texto literal. Entrada truncada em 200000
+caracteres e aninhamento inline limitado (8 níveis), então mensagem gigante não trava a página. Os blocos de código saem
+como `<div class="ai-code-block" data-lang="..."><pre><code>`; o cabeçalho e os botões são da UI (item C).
+
