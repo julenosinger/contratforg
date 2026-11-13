@@ -4408,7 +4408,7 @@ function wizardGenerate(){
 }
 
 /* ======================================================================
-   NL → SOLIDITY AI GENERATOR
+   AI CHAT (section 15)
    ====================================================================== */
 const NL_EXAMPLES = {
   escrow:       'Create a two-party escrow. The buyer deposits USDC. A neutral arbiter can release funds to the seller or refund the buyer. After 14 days with no dispute the seller can claim automatically.',
@@ -4419,66 +4419,327 @@ const NL_EXAMPLES = {
   staking:      'Staking contract for an ERC-20 token. Users earn 15% APY in the same token. 30-day lock. Early exit allowed with 2% penalty.',
 };
 
-let lastNLCode = '';
+const AI_CHATS_KEY = 'cf_ai_chats_v1';
+const AI_MAX_CONVS = 30;
+const AI_MAX_MSGS = 40;
+const AI_MAX_TOTAL = 200 * 1024;   // ~200 KB across all conversations
+const AI_ATTACH_MAX = 15000;       // how much of the current contract is attached as context
 
-function setNLExample(key){
-  const ta=document.getElementById('nl_prompt');
-  if(ta && NL_EXAMPLES[key]) ta.value=NL_EXAMPLES[key];
-  document.querySelectorAll('#nl_examples .pill').forEach(p=>p.classList.remove('active'));
-  document.querySelector(`#nl_examples .pill[data-onclick*="${key}"]`)?.classList.add('active');
+const aiState = { convs: [], activeId: null, sending: false };
+
+/* Adopts an AI-written contract: stamps it, makes it the pending source (template 'ai', experimental on mainnet) and
+   jumps to Compile & Deploy. Shared by the chat "Use" button (the legacy generate flow did the same). */
+function adoptAiCode(rawCode){
+  const code = matStamp(String(rawCode || ''), 'ai');
+  const nameMatch = code.match(/contract\s+(\w+)/);
+  const contractName = nameMatch ? nameMatch[1] : 'GeneratedContract';
+  pendingSource = { name: contractName, code, template: 'ai' };
+  pendingCtorArgs = []; renderCtorArgs();
+  document.getElementById('pendingContractLabel').value = contractName + '.sol (AI — ' + NETWORKS[activeNetwork].label + ')';
+  document.getElementById('auditContractLabel').value = contractName + '.sol';
+  document.getElementById('test_contractLabel').value = contractName + '.sol';
+  logConsole('ok', 'AI generated: ' + contractName + '.sol (' + code.split('\n').length + ' lines)');
+  deployFromBuffer('nlai');
+  return contractName;
 }
 
-async function generateFromNL(){
-  const prompt=document.getElementById('nl_prompt')?.value?.trim();
-  if(!prompt||prompt.length<20){ alert('Describe your contract in more detail (at least 20 characters).'); return; }
+/* ---- history ---- */
+function aiValidMessage(m){
+  return m && typeof m === 'object' && !Array.isArray(m)
+    && (m.role === 'user' || m.role === 'assistant')
+    && typeof m.content === 'string' && m.content.length > 0 && m.content.length <= 20000;
+}
+function aiValidConv(c){
+  return c && typeof c === 'object' && !Array.isArray(c)
+    && typeof c.id === 'string' && c.id.length > 0 && c.id.length <= 40
+    && Array.isArray(c.msgs) && c.msgs.length > 0 && c.msgs.every(aiValidMessage);
+}
+function aiLoad(){
+  try {
+    const raw = localStorage.getItem(AI_CHATS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(aiValidConv).slice(0, AI_MAX_CONVS).map((c) => ({ id: c.id, title: typeof c.title === 'string' ? c.title.slice(0, 60) : undefined, msgs: c.msgs.slice(-AI_MAX_MSGS) }));
+  } catch (_) { return []; }
+}
+function aiSave(){
+  try {
+    const convs = aiState.convs.slice();
+    for (const c of convs) { while (c.msgs.length > AI_MAX_MSGS) c.msgs.shift(); }
+    const total = () => convs.reduce((n, c) => n + c.msgs.reduce((m, x) => m + x.content.length, 0), 0);
+    while (convs.length > AI_MAX_CONVS) convs.shift();
+    while (total() > AI_MAX_TOTAL && convs.length) convs.shift();
+    while (total() > AI_MAX_TOTAL && convs.length) { convs[0].msgs.shift(); if (!convs[0].msgs.length) convs.shift(); }
+    localStorage.setItem(AI_CHATS_KEY, JSON.stringify(convs));
+  } catch (_) { /* storage full or unavailable: ignore */ }
+}
 
-  const btn=document.getElementById('nlGenBtn');
-  btn.disabled=true; btn.textContent='Generating…';
-  document.getElementById('nl_output').style.display='none';
+/* ---- rendering ---- */
+function aiConvTitle(conv){
+  if (conv && conv.title) return conv.title;
+  const first = conv && conv.msgs.find((m) => m.role === 'user');
+  const t = (first ? first.content : '').replace(/\s+/g, ' ').trim();
+  return (t.slice(0, 60) || 'New chat');
+}
 
-  const networkCtx=document.getElementById('nl_network')?.value||'arc';
-  const complexity=document.getElementById('nl_complexity')?.value||'moderate';
-  const netInfo=NETWORKS[networkCtx]||NETWORKS.arc;
+function aiEmptyState(){
+  const box = document.createElement('div');
+  box.className = 'ai-empty';
+  const h = document.createElement('p'); h.className = 'chat-heading';
+  const b = document.createElement('strong'); b.textContent = 'Describe a contract in plain English';
+  h.appendChild(b); box.appendChild(h);
+  const hint = document.createElement('p');
+  hint.textContent = 'The AI writes production-ready Solidity for the chosen network. Pick an example or start typing.';
+  box.appendChild(hint);
+  const chips = document.createElement('div'); chips.className = 'pill-row';
+  for (const [key] of Object.entries(NL_EXAMPLES)) {
+    const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'pill';
+    chip.textContent = key[0].toUpperCase() + key.slice(1);
+    chip.setAttribute('data-onclick', `setNLExample('${key}')`);
+    chips.appendChild(chip);
+  }
+  box.appendChild(chips);
+  return box;
+}
 
-  try{
-    const data=await aiFetch('generate', { prompt, network:{ label:netInfo.label, chainId:netInfo.chainIdDec, usdc:netInfo.usdc||'' }, complexity });
-    let code=(data.text||'').replace(/^```[a-z]*\s*/,'').replace(/\s*```$/,'').trim();
-    lastNLCode=code;
+function aiDecorateCodeBlock(block){
+  const codeEl = block.querySelector('code');
+  const code = codeEl ? codeEl.textContent : '';
+  const nameMatch = code.match(/contract\s+(\w+)/);
+  const name = nameMatch ? nameMatch[1] : (block.getAttribute('data-lang') || 'solidity');
+  const lines = code.split('\n').length;
+  const head = document.createElement('div'); head.className = 'ai-code-head';
+  const info = document.createElement('span'); info.className = 'ai-code-info';
+  const nm = document.createElement('b'); nm.textContent = name + '.sol';
+  const ln = document.createElement('span'); ln.textContent = lines + ' lines';
+  info.appendChild(nm); info.appendChild(document.createTextNode(' ')); info.appendChild(ln);
+  const seal = document.createElement('span'); seal.className = 'ai-seal'; seal.textContent = 'Experimental (IA)';
+  const warn = document.createElement('span'); warn.className = 'ai-code-warn'; warn.textContent = 'gerado por IA, não revisado nem auditado';
+  head.appendChild(info); head.appendChild(seal); head.appendChild(warn);
+  block.insertBefore(head, block.firstChild);
+  const actions = document.createElement('div'); actions.className = 'ai-code-actions';
+  const mk = (label, onclick) => { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn btn-ghost'; btn.textContent = label; btn.setAttribute('data-onclick', onclick); return btn; };
+  actions.appendChild(mk('Copy', 'aiChatCopy(this)'));
+  actions.appendChild(mk('Download', 'aiChatDownload(this)'));
+  actions.appendChild(mk('Use', 'aiChatUse(this)'));
+  actions.appendChild(mk('Audit', 'aiChatAudit(this)'));
+  actions.appendChild(mk('Tests', 'aiChatTests(this)'));
+  block.appendChild(actions);
+}
 
-    const nameMatch=code.match(/contract\s+(\w+)/);
-    const contractName=nameMatch?nameMatch[1]:'GeneratedContract';
-    document.getElementById('nl_filename').textContent=contractName+'.sol  ('+(data.outputTokens||'?')+' tokens used)';
-    document.getElementById('nl_code').textContent=code;
-    document.getElementById('nl_output').style.display='block';
+function aiMessageNode(m){
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-msg ai-msg-' + m.role;
+  const tag = document.createElement('span'); tag.className = 'ai-msg-tag';
+  tag.textContent = m.role === 'user' ? 'You' : 'AI';
+  wrap.appendChild(tag);
+  if (m.role === 'assistant' && typeof renderChatMarkdown === 'function') {
+    wrap.appendChild(renderChatMarkdown(m.content));
+    for (const block of wrap.querySelectorAll('.ai-code-block')) aiDecorateCodeBlock(block);
+  } else {
+    const p = document.createElement('p'); p.textContent = m.content; wrap.appendChild(p);
+  }
+  return wrap;
+}
 
-    code = matStamp(code, 'ai');
-    lastNLCode = code;
-    document.getElementById('nl_code').textContent = code;
-    pendingSource={name:contractName, code, template:'ai'};
-    pendingCtorArgs = []; renderCtorArgs();
-    document.getElementById('pendingContractLabel').value=contractName+'.sol (AI — '+NETWORKS[activeNetwork].label+')';
-    document.getElementById('auditContractLabel').value=contractName+'.sol';
-    document.getElementById('test_contractLabel').value=contractName+'.sol';
-    logConsole('ok','AI generated: '+contractName+'.sol ('+code.split('\n').length+' lines)');
-  }catch(e){
-    document.getElementById('nl_code').textContent='Error: '+(e.message||e);
-    document.getElementById('nl_output').style.display='block';
-    logConsole('err','AI generation error: '+(e.message||e));
-  }finally{
-    btn.disabled=false; btn.textContent='Generate Solidity';
+function aiChatRender(){
+  const side = document.getElementById('aiConvs');
+  const thread = document.getElementById('aiThread');
+  if (!side || !thread) return;
+  side.textContent = '';
+  const active = aiState.convs.find((c) => c.id === aiState.activeId) || null;
+  for (const c of aiState.convs) {
+    const row = document.createElement('div');
+    row.className = 'ai-conv' + (active && c.id === active.id ? ' active' : '');
+    const title = document.createElement('span'); title.className = 'ai-conv-title'; title.textContent = aiConvTitle(c);
+    const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'ai-conv-btn'; rename.textContent = '✎';
+    rename.setAttribute('aria-label', 'Rename chat'); rename.setAttribute('data-onclick', `aiChatRename('${c.id}', event)`);
+    const del = document.createElement('button'); del.type = 'button'; del.className = 'ai-conv-btn ai-conv-del'; del.textContent = '×';
+    del.setAttribute('aria-label', 'Delete chat'); del.setAttribute('data-onclick', `aiChatDelete('${c.id}', event)`);
+    row.appendChild(title); row.appendChild(rename); row.appendChild(del);
+    row.setAttribute('data-onclick', `aiChatSelect('${c.id}')`);
+    side.appendChild(row);
+  }
+  thread.textContent = '';
+  if (!active || !active.msgs.length) thread.appendChild(aiEmptyState());
+  else for (const m of active.msgs) thread.appendChild(aiMessageNode(m));
+  aiChatRenderComposerState();
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function aiChatRenderComposerState(){
+  const btn = document.getElementById('aiSendBtn');
+  const gen = document.getElementById('aiGenerating');
+  if (btn) btn.disabled = aiState.sending;
+  if (gen) gen.hidden = !aiState.sending;
+}
+
+/* ---- actions ---- */
+function aiNewId(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+function aiChatNew(){
+  const conv = { id: aiNewId(), msgs: [] };
+  aiState.convs.unshift(conv); aiState.activeId = conv.id;
+  aiSave(); aiChatRender();
+  const ta = document.getElementById('aiComposer'); if (ta) ta.focus();
+}
+function aiChatSelect(id){ aiState.activeId = id; aiChatRender(); }
+function aiChatDelete(id, ev){
+  if (ev && 'cancelBubble' in ev) ev.cancelBubble = true;
+  aiState.convs = aiState.convs.filter((c) => c.id !== id);
+  if (aiState.activeId === id) aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
+  aiSave(); aiChatRender();
+}
+function aiChatDeleteAll(){ aiState.convs = []; aiState.activeId = null; aiSave(); aiChatRender(); }
+function aiChatRename(id, ev){
+  if (ev && 'cancelBubble' in ev) ev.cancelBubble = true;
+  const conv = aiState.convs.find((c) => c.id === id);
+  if (!conv) return;
+  const name = prompt('Chat title:', aiConvTitle(conv));
+  if (name && name.trim()) { conv.title = name.trim().slice(0, 60); aiSave(); aiChatRender(); }
+}
+function aiChatToggleSidebar(){
+  const side = document.getElementById('aiSidebar');
+  const toggle = document.querySelector('.ai-sidebar-toggle');
+  if (!side) return;
+  const collapsed = side.classList.toggle('collapsed');
+  if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
+}
+
+function setNLExample(key){
+  const ta = document.getElementById('aiComposer');
+  if (ta && NL_EXAMPLES[key]) { ta.value = NL_EXAMPLES[key]; aiAutoGrow(ta); ta.focus(); }
+}
+
+function aiAutoGrow(ta){
+  if (!ta) return;
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(Math.max(ta.scrollHeight, 24), 240) + 'px';
+}
+
+function aiChatAttachContext(){
+  const ta = document.getElementById('aiComposer');
+  if (!ta) return;
+  if (!pendingSource || !pendingSource.code) { logConsole('warn', 'No current contract to attach.'); return; }
+  const code = pendingSource.code.length > AI_ATTACH_MAX
+    ? pendingSource.code.slice(0, AI_ATTACH_MAX) + '\n// … (truncated)'
+    : pendingSource.code;
+  const block = '[contrato atual (dado)]\n```solidity\n' + code + '\n```\n';
+  ta.value = (ta.value ? ta.value + '\n' : '') + block;
+  aiAutoGrow(ta);
+}
+
+function aiBlockCode(btn){
+  const block = btn && btn.closest ? btn.closest('.ai-code-block') : null;
+  const codeEl = block && block.querySelector('code');
+  const code = codeEl ? codeEl.textContent : '';
+  const m = code.match(/contract\s+(\w+)/);
+  return { code, name: m ? m[1] : 'GeneratedContract' };
+}
+
+function aiChatUse(btn){
+  const { code } = aiBlockCode(btn);
+  if (!code) { alert('No code to use.'); return; }
+  adoptAiCode(code);
+}
+function aiChatCopy(btn){
+  const { code } = aiBlockCode(btn);
+  if (code) navigator.clipboard.writeText(code).then(() => logConsole('ok', 'Code copied.'));
+}
+function aiChatDownload(btn){
+  const { name, code } = aiBlockCode(btn);
+  if (!code) return;
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name + '.sol'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function aiChatFormatAudit(text){
+  try {
+    const r = JSON.parse(text);
+    if (!r || typeof r !== 'object') return text;
+    const parts = ['**Score: ' + (typeof r.score === 'number' ? r.score : '?') + '/100**'];
+    if (r.summary) parts.push(String(r.summary));
+    for (const f of (Array.isArray(r.findings) ? r.findings : [])) {
+      const s = ['critical', 'high', 'medium', 'low', 'info'].includes(f.severity) ? f.severity : 'info';
+      parts.push('**' + s.toUpperCase() + '** — ' + (f.title || '') + '\n' + (f.description || '') + (f.recommendation ? '\nFix: ' + f.recommendation : ''));
+    }
+    return parts.join('\n\n');
+  } catch (_) { return text; }
+}
+
+async function aiChatRunAction(action, name, code, extra){
+  const conv = aiState.convs.find((c) => c.id === aiState.activeId);
+  if (!conv) return;
+  aiState.sending = true; aiChatRenderComposerState();
+  let text;
+  try {
+    const data = await aiFetch(action, { name, code, ...extra });
+    text = data.text || '';
+    if (action === 'audit') text = aiChatFormatAudit(text);
+  } catch (e) {
+    text = 'Error: ' + (e.message || e);
+  } finally {
+    aiState.sending = false; aiChatRenderComposerState();
+  }
+  conv.msgs.push({ role: 'assistant', content: text });
+  aiSave(); aiChatRender();
+}
+function aiChatAudit(btn){
+  const { name, code } = aiBlockCode(btn);
+  if (!code) { alert('No code to audit.'); return; }
+  aiChatRunAction('audit', name, code, { focus: document.getElementById('audit_focus')?.value || 'full' });
+}
+function aiChatTests(btn){
+  const { name, code } = aiBlockCode(btn);
+  if (!code) { alert('No code to test.'); return; }
+  aiChatRunAction('tests', name, code, { framework: document.getElementById('test_framework')?.value || 'foundry', coverage: document.getElementById('test_coverage')?.value || 'full' });
+}
+
+async function aiChatSend(){
+  if (aiState.sending) return;
+  const ta = document.getElementById('aiComposer');
+  const text = (ta && ta.value || '').trim();
+  if (!text) return;
+  let conv = aiState.convs.find((c) => c.id === aiState.activeId);
+  if (!conv) { conv = { id: aiNewId(), msgs: [] }; aiState.convs.unshift(conv); aiState.activeId = conv.id; }
+  conv.msgs.push({ role: 'user', content: text });
+  if (ta) { ta.value = ''; aiAutoGrow(ta); }
+  aiSave(); aiChatRender();
+
+  const netKey = document.getElementById('nl_network')?.value || 'arc';
+  const net = NETWORKS[netKey] || NETWORKS.arc;
+  const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
+  const history = conv.msgs.slice(-20);
+  let start = history.findIndex((m) => m.role === 'user');
+  if (start < 0) start = 0;
+  const messages = history.slice(start).map((m) => ({ role: m.role, content: m.content }));
+
+  aiState.sending = true; aiChatRenderComposerState();
+  try {
+    const data = await aiFetch('chat', { messages, network: { label: net.label, chainId: net.chainIdDec, usdc: net.usdc || '' }, complexity });
+    conv.msgs.push({ role: 'assistant', content: data.text || '' });
+  } catch (e) {
+    conv.msgs.push({ role: 'assistant', content: 'Error: ' + (e.message || e) });
+  } finally {
+    aiState.sending = false; aiChatRenderComposerState();
+    aiSave(); aiChatRender();
   }
 }
 
-function useNLContract(){ if(!lastNLCode){ alert('Generate first.'); return; } deployFromBuffer('nlai'); }
-function copyNLContract(){ if(lastNLCode) navigator.clipboard.writeText(lastNLCode).then(()=>logConsole('ok','Code copied.')); }
-function auditNLContract(){
-  if(!lastNLCode){ alert('Generate a contract first.'); return; }
-  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-  document.querySelector('[data-section="auditor"]')?.classList.add('active');
-  document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
-  document.getElementById('sec-auditor').style.display='block';
-  runAudit();
+function initAiChat(){
+  aiState.convs = aiLoad();
+  aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
+  aiChatRender();
+  const ta = document.getElementById('aiComposer');
+  if (ta) {
+    ta.addEventListener('input', () => aiAutoGrow(ta));
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiChatSend(); } });
+  }
 }
+if (typeof document !== 'undefined') initAiChat();
 
 /* ======================================================================
    CONTRACT ANALYTICS

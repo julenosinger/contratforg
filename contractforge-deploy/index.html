@@ -769,58 +769,47 @@
       </div>
     </section>
 
-    <!-- ============ 15 NL → SOLIDITY ============ -->
+    <!-- ============ 15 NL → SOLIDITY (chat) ============ -->
     <section class="section" id="sec-nlai" style="display:none;">
       <div class="section-head"><span class="n">15</span><h2>AI → Solidity</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Describe your contract in plain English. The Anthropic API writes production-ready Solidity for you — security-aware, gas-optimized, with NatSpec docs. You can then edit, audit, and deploy it directly.
-        </p>
-        <div class="field-grid" style="margin-bottom:14px;">
-          <div class="field">
-            <label>Target network context</label>
-            <select id="nl_network">
-              <option value="arc">Arc Testnet (USDC gas, stablecoin-native)</option>
-              <option value="arcMain">Arc Mainnet (USDC gas, real funds)</option>
-              <option value="robinhood">Robinhood Chain Testnet</option>
-              <option value="sepolia">Ethereum Sepolia</option>
-              <option value="evm">Generic EVM</option>
-            </select>
+      <div class="ai-chat" id="aiChat">
+        <aside class="ai-sidebar" id="aiSidebar">
+          <div class="ai-sidebar-head">
+            <button type="button" class="btn btn-ghost" data-onclick="aiChatNew()">+ New</button>
+            <button type="button" class="btn btn-ghost" data-onclick="aiChatDeleteAll()">Delete all</button>
+            <button type="button" class="btn btn-ghost ai-sidebar-toggle" data-onclick="aiChatToggleSidebar()" aria-expanded="true" aria-controls="aiConvs" aria-label="Toggle chat list">&laquo;</button>
           </div>
-          <div class="field">
-            <label>Complexity hint</label>
-            <select id="nl_complexity">
-              <option value="simple">Simple (under 100 lines)</option>
-              <option value="moderate">Moderate (100-300 lines)</option>
-              <option value="advanced">Advanced (300+ lines, full DeFi)</option>
-            </select>
-          </div>
-        </div>
-        <div class="field" style="margin-bottom:14px;">
-          <label>Describe your contract</label>
-          <textarea class="nl-editor" id="nl_prompt" placeholder="Example: Create a subscription contract where users pay 10 USDC per month. If they don't renew within 3 days of expiry, access is revoked. The owner can pause the contract. Include events for subscriptions and cancellations."></textarea>
-        </div>
-        <div class="pill-row" id="nl_examples">
-          <div class="pill" data-onclick="setNLExample('escrow')">Escrow with arbiter</div>
-          <div class="pill" data-onclick="setNLExample('dao')">Voting DAO</div>
-          <div class="pill" data-onclick="setNLExample('nft')">NFT drop with allowlist</div>
-          <div class="pill" data-onclick="setNLExample('amm')">Minimal AMM</div>
-          <div class="pill" data-onclick="setNLExample('subscription')">Subscription</div>
-          <div class="pill" data-onclick="setNLExample('staking')">Staking rewards</div>
-        </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" id="nlGenBtn" data-onclick="generateFromNL()">Generate Solidity</button>
-          <button class="btn btn-ghost" data-onclick="useNLContract()">Use this contract →</button>
-        </div>
-        <div id="nl_output" style="display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px;">
-            <span style="font-family:var(--mono);font-size:11px;color:#7E8C86;" id="nl_filename">contract.sol</span>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" data-onclick="copyNLContract()">Copy</button>
-              <button class="btn btn-ghost" style="padding:7px 12px;font-size:11px;" data-onclick="auditNLContract()">Audit →</button>
+          <div class="ai-convs" id="aiConvs"></div>
+          <p class="ai-history-note">The history stays only in this browser.</p>
+        </aside>
+        <div class="ai-main">
+          <div class="ai-thread" id="aiThread" role="log" aria-live="polite" aria-label="Conversation"></div>
+          <div class="ai-composer">
+            <div class="ai-controls">
+              <div class="field"><label for="nl_network">Network context</label>
+                <select id="nl_network">
+                  <option value="arc">Arc Testnet (USDC gas, stablecoin-native)</option>
+                  <option value="arcMain">Arc Mainnet (USDC gas, real funds)</option>
+                  <option value="robinhood">Robinhood Chain Testnet</option>
+                  <option value="sepolia">Ethereum Sepolia</option>
+                  <option value="evm">Generic EVM</option>
+                </select>
+              </div>
+              <div class="field"><label for="nl_complexity">Complexity hint</label>
+                <select id="nl_complexity">
+                  <option value="simple">Simple (under 100 lines)</option>
+                  <option value="moderate">Moderate (100-300 lines)</option>
+                  <option value="advanced">Advanced (300+ lines, full DeFi)</option>
+                </select>
+              </div>
+              <button type="button" class="btn btn-ghost" data-onclick="aiChatAttachContext()">Use current contract as context</button>
+            </div>
+            <textarea id="aiComposer" class="ai-composer-input" rows="1" aria-label="Message" placeholder="Describe your contract in plain English, for example: Create a subscription contract where users pay 10 USDC per month…"></textarea>
+            <div class="ai-composer-row">
+              <span id="aiGenerating" class="ai-generating" hidden>generating…</span>
+              <button type="button" class="btn btn-primary" id="aiSendBtn" data-onclick="aiChatSend()">Send</button>
             </div>
           </div>
-          <div class="nl-preview" id="nl_code"></div>
         </div>
       </div>
     </section>

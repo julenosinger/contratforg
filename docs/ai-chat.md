@@ -38,3 +38,34 @@ Suporta: parágrafos, títulos (como negrito), listas com marcador e numeradas, 
 caracteres e aninhamento inline limitado (8 níveis), então mensagem gigante não trava a página. Os blocos de código saem
 como `<div class="ai-code-block" data-lang="..."><pre><code>`; o cabeçalho e os botões são da UI (item C).
 
+## C. UI (chat)
+
+A seção 15 virou um chat: lista de conversas à esquerda (nova, renomear, apagar, apagar tudo; recolhível com
+`aria-expanded`), mensagens no centro (`#aiThread` com `role="log"` e `aria-live="polite"`), composer no rodapé
+(textarea `#aiComposer` com altura automática, Enter envia, Shift+Enter quebra linha, `#aiSendBtn` desabilitado durante a
+requisição, indicador `#aiGenerating`). Acima do composer ficam os selects `nl_network`/`nl_complexity` (ids preservados)
+e o botão "Use current contract as context" (`aiChatAttachContext`, anexa `pendingSource.code` até 15000 caracteres com o
+delimitador `[contrato atual (dado)]` dentro de um bloco ```solidity).
+
+Estado vazio com os mesmos chips de exemplo (`setNLExample` preenche o composer). Cada bloco de código tem cabeçalho
+(nome do contrato, linhas, selo "Experimental (IA)" e o aviso "gerado por IA, não revisado nem auditado") e os botões
+Copy, Download (.sol), Use, Audit e Tests (por `data-onclick`, sem handlers inline).
+
+- **Use** → `adoptAiCode(code)` (extrai a lógica antiga de `generateFromNL`): `matStamp(code,'ai')`, `pendingSource`
+  com `template:'ai'` (a IA continua `experimental` no gate), rótulos e `deployFromBuffer('nlai')`.
+- **Audit** e **Tests** → `aiFetch('audit')`/`aiFetch('tests')` com o código daquele bloco (foco/framework/cobertura dos
+  selects existentes) e anexam o resultado como mensagem do assistente, sem tocar em `pendingSource`. Nada compila nem
+  faz deploy sem clique.
+
+A barra do topo (TEST, AUDIT, COPY, DOWNLOAD, DISCARD, PUBLISH) segue operando no contrato do wizard. Acessibilidade:
+`role="log"`/`aria-live="polite"`, rótulos, foco no composer ao criar chat, `prefers-reduced-motion` no CSS, responsivo.
+
+## D. Histórico (localStorage)
+
+Chave versionada `cf_ai_chats_v1`, tudo em try/catch. Limites: 30 conversas, 40 mensagens cada, ~200 KB no total (as mais
+antigas são descartadas). Ao carregar, valida forma e tipos (papéis, strings, tamanhos) e ignora o inválido; JSON
+corrompido reinicia sem erro. Títulos vêm da primeira mensagem (60 caracteres, só `textContent`), ou um título manual.
+Aviso visível: "The history stays only in this browser.". Ao enviar, o cliente manda só as últimas 20 mensagens, começando
+por uma de `user`.
+
+
