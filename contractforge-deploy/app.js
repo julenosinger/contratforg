@@ -4447,6 +4447,7 @@ function adoptAiCode(rawCode){
 function aiValidMessage(m){
   return m && typeof m === 'object' && !Array.isArray(m)
     && (m.role === 'user' || m.role === 'assistant')
+    && (m.kind === undefined || m.kind === 'tool' || m.kind === 'error')
     && typeof m.content === 'string' && m.content.length > 0 && m.content.length <= 20000;
 }
 function aiValidConv(c){
@@ -4698,6 +4699,25 @@ function aiChatTests(btn){
   aiChatRunAction('tests', name, code, { framework: document.getElementById('test_framework')?.value || 'foundry', coverage: document.getElementById('test_coverage')?.value || 'full' });
 }
 
+/* Builds the alternating user/assistant sequence the model sees: drop tool/error results, merge consecutive
+   same-role messages (an orphan user after a tab close joins the next one), trim a leading/trailing assistant,
+   then keep the last 20 starting from a user. */
+function aiBuildRequestMessages(msgs){
+  let seq = msgs.filter((m) => m.kind !== 'tool' && m.kind !== 'error');
+  const merged = [];
+  for (const m of seq) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) last.content += '\n\n' + m.content;
+    else merged.push({ role: m.role, content: m.content });
+  }
+  seq = merged;
+  while (seq.length && seq[0].role !== 'user') seq.shift();
+  while (seq.length && seq[seq.length - 1].role !== 'user') seq.pop();
+  if (seq.length > 20) seq = seq.slice(seq.length - 20);
+  while (seq.length && seq[0].role !== 'user') seq.shift();
+  return seq.map((m) => ({ role: m.role, content: m.content }));
+}
+
 async function aiChatSend(){
   if (aiState.sending) return;
   const ta = document.getElementById('aiComposer');
@@ -4712,18 +4732,14 @@ async function aiChatSend(){
   const netKey = document.getElementById('nl_network')?.value || 'arc';
   const net = NETWORKS[netKey] || NETWORKS.arc;
   const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
-  // the model sees only the chat turns, not the audit/tests results (kind 'tool') appended for display
-  const history = conv.msgs.filter((x) => x.kind !== 'tool').slice(-20);
-  let start = history.findIndex((m) => m.role === 'user');
-  if (start < 0) start = 0;
-  const messages = history.slice(start).map((m) => ({ role: m.role, content: m.content }));
+  const messages = aiBuildRequestMessages(conv.msgs);
 
   aiState.sending = true; aiChatRenderComposerState();
   try {
     const data = await aiFetch('chat', { messages, network: { label: net.label, chainId: net.chainIdDec, usdc: net.usdc || '' }, complexity });
     conv.msgs.push({ role: 'assistant', content: data.text || '' });
   } catch (e) {
-    conv.msgs.push({ role: 'assistant', content: 'Error: ' + (e.message || e) });
+    conv.msgs.push({ role: 'assistant', content: 'Error: ' + (e.message || e), kind: 'error' });
   } finally {
     aiState.sending = false; aiChatRenderComposerState();
     aiSave(); aiChatRender();
