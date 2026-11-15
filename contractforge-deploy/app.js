@@ -4417,6 +4417,8 @@ const NL_EXAMPLES = {
   amm:          'A minimal constant-product AMM for two ERC-20 tokens. Add/remove liquidity and swap both ways. 0.3% fee on swaps goes to liquidity providers.',
   subscription: 'Subscription contract: users pay 9 USDC per month. Access tracked per address, auto-expires. Owner can change price and pause the contract.',
   staking:      'Staking contract for an ERC-20 token. Users earn 15% APY in the same token. 30-day lock. Early exit allowed with 2% penalty.',
+  erc20:        'An ERC-20 token called Forge Dollar (FUSD) with 6 decimals. The owner can mint up to a fixed supply cap, and holders can burn their own tokens. Ownership transfer needs the new owner to accept it.',
+  treasury:     'A multisig treasury for a team. 3 owners, 2 approvals needed to execute. Owners can propose USDC transfers, approve or revoke them, and anyone can see pending proposals.',
 };
 
 const AI_CHATS_KEY = 'cf_ai_chats_v1';
@@ -4425,7 +4427,7 @@ const AI_MAX_MSGS = 40;
 const AI_MAX_TOTAL = 200 * 1024;   // ~200 KB across all conversations
 const AI_ATTACH_MAX = 15000;       // how much of the current contract is attached as context
 
-const aiState = { convs: [], activeId: null, sending: false };
+const aiState = { convs: [], activeId: null, sending: false, sendingId: null, status: { state: 'ready', text: 'Ready' } };
 
 /* Adopts an AI-written contract: stamps it, makes it the pending source (template 'ai', experimental on mainnet) and
    jumps to Compile & Deploy. Shared by the chat "Use" button (the legacy generate flow did the same). */
@@ -4484,115 +4486,259 @@ function aiConvTitle(conv){
   return (t.slice(0, 60) || 'New chat');
 }
 
+const AI_WELCOME_CHIPS = [['erc20', 'ERC-20 Token'], ['amm', 'Swap / AMM'], ['treasury', 'Treasury'], ['escrow', 'Escrow'], ['staking', 'Staking'], ['subscription', 'Subscription']];
+const AI_CTX_MARK = '[contrato atual (dado)]';
+const AI_CTX_RE = /\[contrato atual \(dado\)\]\n```solidity\n([\s\S]*?)\n```\n?/;
+const AI_MAX_MESSAGE = 20000;       // the proxy rejects a message longer than this
+
+function aiEl(tag, cls, text){
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+/* The welcome state. The chips only fill the composer; nothing is sent until the user presses Send. */
 function aiEmptyState(){
-  const box = document.createElement('div');
-  box.className = 'ai-empty';
-  const h = document.createElement('p'); h.className = 'chat-heading';
-  const b = document.createElement('strong'); b.textContent = 'Describe a contract in plain English';
-  h.appendChild(b); box.appendChild(h);
-  const hint = document.createElement('p');
-  hint.textContent = 'The AI writes production-ready Solidity for the chosen network. Pick an example or start typing.';
-  box.appendChild(hint);
-  const chips = document.createElement('div'); chips.className = 'pill-row';
-  for (const [key] of Object.entries(NL_EXAMPLES)) {
-    const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'pill';
-    chip.textContent = key[0].toUpperCase() + key.slice(1);
+  const box = aiEl('div', 'ai-empty');
+  box.appendChild(aiEl('h3', '', 'What would you like to build?'));
+  box.appendChild(aiEl('p', '', 'Describe your smart contract in natural language. ContractForge AI helps you generate Solidity, understand contract logic and prepare code for review and testing.'));
+  const chips = aiEl('div', 'ai-chips');
+  chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Example prompts');
+  for (const [key, label] of AI_WELCOME_CHIPS) {
+    const chip = aiEl('button', 'pill ai-chip', label); chip.type = 'button';
     chip.setAttribute('data-onclick', `setNLExample('${key}')`);
     chips.appendChild(chip);
   }
   box.appendChild(chips);
+  const steps = aiEl('ol', 'ai-steps');
+  ['Describe your contract.', 'Review generated Solidity.', 'Test and audit before deployment.'].forEach((t, i) => {
+    const li = document.createElement('li');
+    li.appendChild(aiEl('b', '', String(i + 1))); li.appendChild(aiEl('span', '', t));
+    steps.appendChild(li);
+  });
+  box.appendChild(steps);
   return box;
 }
 
+function aiIsSolidity(lang, code){
+  return /^(solidity|sol)$/i.test(lang || '') || /\bpragma\s+solidity\b|\b(?:contract|library|interface)\s+\w+/.test(code);
+}
+
+/* Turns a rendered fenced block into a code card. Only a Solidity block gets the contract actions; any other
+   language (a shell command, JSON) only gets Copy and is never labelled as a contract. */
 function aiDecorateCodeBlock(block){
   const codeEl = block.querySelector('code');
   const code = codeEl ? codeEl.textContent : '';
+  const lang = block.getAttribute('data-lang') || '';
+  const isSol = aiIsSolidity(lang, code);
   const nameMatch = code.match(/contract\s+(\w+)/);
-  const name = nameMatch ? nameMatch[1] : (block.getAttribute('data-lang') || 'solidity');
+  const name = isSol ? (nameMatch ? nameMatch[1] : (lang || 'solidity')) + '.sol' : (lang || 'code');
   const lines = code.split('\n').length;
-  const head = document.createElement('div'); head.className = 'ai-code-head';
-  const info = document.createElement('span'); info.className = 'ai-code-info';
-  const nm = document.createElement('b'); nm.textContent = name + '.sol';
-  const ln = document.createElement('span'); ln.textContent = lines + ' lines';
-  info.appendChild(nm); info.appendChild(document.createTextNode(' ')); info.appendChild(ln);
-  const seal = document.createElement('span'); seal.className = 'ai-seal'; seal.textContent = 'Experimental (IA)';
-  const warn = document.createElement('span'); warn.className = 'ai-code-warn'; warn.textContent = 'gerado por IA, não revisado nem auditado';
-  head.appendChild(info); head.appendChild(seal); head.appendChild(warn);
+  const head = aiEl('div', 'ai-code-head');
+  const info = aiEl('span', 'ai-code-info');
+  info.appendChild(aiEl('b', '', name));
+  info.appendChild(aiEl('span', '', isSol ? 'Solidity' : (lang || 'text')));
+  info.appendChild(aiEl('span', '', lines + (lines === 1 ? ' line' : ' lines')));
+  head.appendChild(info);
+  if (isSol) {
+    head.appendChild(aiEl('span', 'ai-seal', 'Experimental'));
+    const warn = aiEl('span', 'ai-code-warn', 'Not audited');
+    warn.title = 'Written by AI. Not reviewed or audited.';
+    head.appendChild(warn);
+  }
   block.insertBefore(head, block.firstChild);
-  const actions = document.createElement('div'); actions.className = 'ai-code-actions';
-  const mk = (label, onclick) => { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn btn-ghost'; btn.textContent = label; btn.setAttribute('data-onclick', onclick); return btn; };
-  actions.appendChild(mk('Copy', 'aiChatCopy(this)'));
-  actions.appendChild(mk('Download', 'aiChatDownload(this)'));
-  actions.appendChild(mk('Use', 'aiChatUse(this)'));
-  actions.appendChild(mk('Audit', 'aiChatAudit(this)'));
-  actions.appendChild(mk('Tests', 'aiChatTests(this)'));
+  const pre = block.querySelector('pre');
+  if (pre) { pre.tabIndex = 0; pre.setAttribute('role', 'region'); pre.setAttribute('aria-label', name + ' source code'); }
+  const actions = aiEl('div', 'ai-code-actions');
+  const mk = (label, onclick, cls) => { const btn = aiEl('button', 'ai-act' + (cls ? ' ' + cls : ''), label); btn.type = 'button'; btn.setAttribute('data-onclick', onclick); return btn; };
+  actions.appendChild(mk('Copy Code', 'aiChatCopy(this)'));
+  if (isSol) {
+    actions.appendChild(mk('Download .sol', 'aiChatDownload(this)'));
+    actions.appendChild(mk('Use in ContractForge', 'aiChatUse(this)', 'ai-act-primary'));
+    actions.appendChild(mk('Audit', 'aiChatAudit(this)'));
+    actions.appendChild(mk('Generate Tests', 'aiChatTests(this)'));
+  }
   block.appendChild(actions);
+}
+
+/* A user message. A contract attached with "Attach Current Contract" is shown as a labelled, collapsed block. */
+function aiUserBody(wrap, text){
+  const m = AI_CTX_RE.exec(text);
+  if (!m) { wrap.appendChild(aiEl('p', '', text)); return; }
+  const before = text.slice(0, m.index).trim();
+  const after = text.slice(m.index + m[0].length).trim();
+  if (before) wrap.appendChild(aiEl('p', '', before));
+  const det = aiEl('details', 'ai-attached');
+  const n = m[1].split('\n').length;
+  det.appendChild(aiEl('summary', '', 'Attached contract (' + n + (n === 1 ? ' line' : ' lines') + ')'));
+  const pre = document.createElement('pre'); pre.appendChild(aiEl('code', '', m[1])); det.appendChild(pre);
+  wrap.appendChild(det);
+  if (after) wrap.appendChild(aiEl('p', '', after));
+}
+
+function aiErrorKind(msg){ return /not configured|not available/i.test(msg) ? 'unavailable' : 'error'; }
+
+/* A failed request: the message is the real one the service or the network gave, nothing is made up. */
+function aiNoticeNode(content){
+  const msg = content.replace(/^Error:\s*/, '');
+  const kind = aiErrorKind(msg);
+  const box = aiEl('div', 'ai-notice'); box.setAttribute('data-kind', kind);
+  box.appendChild(aiEl('b', '', kind === 'unavailable' ? 'AI is unavailable' : 'The request could not be completed'));
+  box.appendChild(aiEl('span', '', msg));
+  box.appendChild(aiEl('span', '', kind === 'unavailable'
+    ? 'Your conversation is saved in this browser. The rest of ContractForge keeps working.'
+    : 'Your conversation is saved. You can send your message again.'));
+  return box;
 }
 
 function aiMessageNode(m){
   const wrap = document.createElement('div');
   wrap.className = 'ai-msg ai-msg-' + m.role;
-  const tag = document.createElement('span'); tag.className = 'ai-msg-tag';
-  tag.textContent = m.role === 'user' ? 'You' : 'AI';
+  const tag = aiEl('span', 'ai-msg-tag', m.role === 'user' ? 'You' : 'ContractForge AI');
   wrap.appendChild(tag);
-  if (m.role === 'assistant' && typeof renderChatMarkdown === 'function') {
-    wrap.appendChild(renderChatMarkdown(m.content));
-    for (const block of wrap.querySelectorAll('.ai-code-block')) aiDecorateCodeBlock(block);
+  if (m.role === 'assistant' && (m.kind === 'error' || m.kind === 'tool') && /^Error:/.test(m.content)) {
+    wrap.appendChild(aiNoticeNode(m.content));
+  } else if (m.role === 'assistant' && typeof renderChatMarkdown === 'function') {
+    const body = aiEl('div', 'ai-prose');
+    body.appendChild(renderChatMarkdown(m.content));
+    for (const block of body.querySelectorAll('.ai-code-block')) aiDecorateCodeBlock(block);
+    wrap.appendChild(body);
+  } else if (m.role === 'user') {
+    aiUserBody(wrap, m.content);
   } else {
-    const p = document.createElement('p'); p.textContent = m.content; wrap.appendChild(p);
+    wrap.appendChild(aiEl('p', '', m.content));
   }
   return wrap;
+}
+
+function aiTypingNode(){
+  const t = aiEl('div', 'ai-typing'); t.setAttribute('aria-hidden', 'true');
+  t.appendChild(document.createElement('i')); t.appendChild(document.createElement('i')); t.appendChild(document.createElement('i'));
+  t.appendChild(aiEl('span', '', 'ContractForge AI is writing…'));
+  return t;
+}
+
+/* The conversation list only (also used by the search box, so typing there never redraws the thread). */
+function aiChatRenderList(){
+  const side = document.getElementById('aiConvs');
+  if (!side) return;
+  const search = document.getElementById('aiConvSearch');
+  const q = ((search && search.value) || '').trim().toLowerCase();
+  side.textContent = '';
+  const active = aiState.convs.find((c) => c.id === aiState.activeId) || null;
+  let shown = 0;
+  for (const c of aiState.convs) {
+    const label = aiConvTitle(c);
+    if (q && label.toLowerCase().indexOf(q) === -1) continue;
+    shown++;
+    const row = aiEl('div', 'ai-conv' + (active && c.id === active.id ? ' active' : ''));
+    row.setAttribute('role', 'listitem');
+    const title = aiEl('button', 'ai-conv-title', label); title.type = 'button'; title.id = 'aiConvTitle' + shown;
+    if (active && c.id === active.id) title.setAttribute('aria-current', 'true');
+    const tools = aiEl('span', 'ai-conv-tools');
+    const rename = aiEl('button', 'ai-conv-btn', '✎'); rename.type = 'button';
+    rename.setAttribute('aria-label', 'Rename chat'); rename.setAttribute('aria-describedby', title.id); rename.title = 'Rename'; rename.setAttribute('data-onclick', `aiChatRename('${c.id}', event)`);
+    const del = aiEl('button', 'ai-conv-btn ai-conv-del', '×'); del.type = 'button';
+    del.setAttribute('aria-label', 'Delete chat'); del.setAttribute('aria-describedby', title.id); del.title = 'Delete'; del.setAttribute('data-onclick', `aiChatDelete('${c.id}', event)`);
+    tools.appendChild(rename); tools.appendChild(del);
+    row.appendChild(title); row.appendChild(tools);
+    row.setAttribute('data-onclick', `aiChatSelect('${c.id}')`);
+    side.appendChild(row);
+  }
+  if (!shown) side.appendChild(aiEl('p', 'ai-convs-empty', aiState.convs.length ? 'No conversations match your search.' : 'No conversations yet. Start a new chat and it will appear here.'));
+  const delAll = document.getElementById('aiDelAllBtn');
+  if (delAll) delAll.disabled = !aiState.convs.length;
+  const confirmBox = document.getElementById('aiDelConfirm');
+  if (confirmBox && !aiState.convs.length) confirmBox.hidden = true;
 }
 
 function aiChatRender(){
   const side = document.getElementById('aiConvs');
   const thread = document.getElementById('aiThread');
   if (!side || !thread) return;
-  side.textContent = '';
+  aiChatRenderList();
   const active = aiState.convs.find((c) => c.id === aiState.activeId) || null;
-  for (const c of aiState.convs) {
-    const row = document.createElement('div');
-    row.className = 'ai-conv' + (active && c.id === active.id ? ' active' : '');
-    const title = document.createElement('span'); title.className = 'ai-conv-title'; title.textContent = aiConvTitle(c);
-    const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'ai-conv-btn'; rename.textContent = '✎';
-    rename.setAttribute('aria-label', 'Rename chat'); rename.setAttribute('data-onclick', `aiChatRename('${c.id}', event)`);
-    const del = document.createElement('button'); del.type = 'button'; del.className = 'ai-conv-btn ai-conv-del'; del.textContent = '×';
-    del.setAttribute('aria-label', 'Delete chat'); del.setAttribute('data-onclick', `aiChatDelete('${c.id}', event)`);
-    row.appendChild(title); row.appendChild(rename); row.appendChild(del);
-    row.setAttribute('data-onclick', `aiChatSelect('${c.id}')`);
-    side.appendChild(row);
-  }
   thread.textContent = '';
   if (!active || !active.msgs.length) thread.appendChild(aiEmptyState());
   else for (const m of active.msgs) thread.appendChild(aiMessageNode(m));
+  if (active && aiState.sending && aiState.sendingId === active.id) thread.appendChild(aiTypingNode());
+  const title = document.getElementById('aiMainTitle');
+  if (title) title.textContent = active ? aiConvTitle(active) : 'New chat';
   aiChatRenderComposerState();
   thread.scrollTop = thread.scrollHeight;
 }
 
+/* Status line: ready, generating, completed, error, unavailable (or a short notice). */
+function aiSetStatus(state, text){ aiState.status = { state, text }; aiChatRenderComposerState(); }
+
 function aiChatRenderComposerState(){
   const btn = document.getElementById('aiSendBtn');
   const gen = document.getElementById('aiGenerating');
+  const chat = document.getElementById('aiChat');
+  const st = document.getElementById('aiStatus');
+  const stText = document.getElementById('aiStatusText');
   if (btn) btn.disabled = aiState.sending;
   if (gen) gen.hidden = !aiState.sending;
+  if (chat) chat.classList.toggle('is-busy', aiState.sending);
+  const s = aiState.sending ? { state: 'generating', text: 'Generating…' } : aiState.status;
+  if (st) st.setAttribute('data-state', s.state);
+  if (stText) stText.textContent = s.text;
 }
 
 /* ---- actions ---- */
 function aiNewId(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function aiIsMobile(){ return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches; }
+
+function aiSetSidebar(collapsed){
+  const side = document.getElementById('aiSidebar');
+  const chat = document.getElementById('aiChat');
+  if (!side) return;
+  side.classList.toggle('collapsed', collapsed);
+  if (chat) chat.classList.toggle('list-collapsed', collapsed);
+  for (const t of document.querySelectorAll('.ai-sidebar-toggle')) t.setAttribute('aria-expanded', String(!collapsed));
+}
 
 function aiChatNew(){
   const conv = { id: aiNewId(), msgs: [] };
   aiState.convs.unshift(conv); aiState.activeId = conv.id;
+  if (!aiState.sending) aiState.status = { state: 'ready', text: 'Ready' };
   aiSave(); aiChatRender();
+  if (aiIsMobile()) aiSetSidebar(true);
   const ta = document.getElementById('aiComposer'); if (ta) ta.focus();
 }
-function aiChatSelect(id){ aiState.activeId = id; aiChatRender(); }
+function aiChatSelect(id){
+  const list = document.getElementById('aiConvs');
+  const keepFocus = !!(list && list.contains(document.activeElement));
+  aiState.activeId = id;
+  if (!aiState.sending) aiState.status = { state: 'ready', text: 'Ready' };
+  aiChatRender();
+  if (aiIsMobile()) { aiSetSidebar(true); return; }
+  if (keepFocus) { const b = document.querySelector('#aiConvs .ai-conv.active .ai-conv-title'); if (b) b.focus(); }
+}
 function aiChatDelete(id, ev){
   if (ev && 'cancelBubble' in ev) ev.cancelBubble = true;
   aiState.convs = aiState.convs.filter((c) => c.id !== id);
   if (aiState.activeId === id) aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
   aiSave(); aiChatRender();
 }
-function aiChatDeleteAll(){ aiState.convs = []; aiState.activeId = null; aiSave(); aiChatRender(); }
+/* "Delete All" in the sidebar only asks; the deletion itself is aiChatDeleteAll, as before. */
+function aiChatAskDeleteAll(){
+  if (!aiState.convs.length) return;
+  const box = document.getElementById('aiDelConfirm');
+  if (!box) { aiChatDeleteAll(); return; }
+  box.hidden = false;
+  const cancel = box.querySelector('button:not(.ai-del-yes)'); if (cancel) cancel.focus();
+}
+function aiChatCancelDeleteAll(){
+  const box = document.getElementById('aiDelConfirm'); if (box) box.hidden = true;
+  const btn = document.getElementById('aiDelAllBtn'); if (btn) btn.focus();
+}
+function aiChatDeleteAll(){
+  aiState.convs = []; aiState.activeId = null; aiSave();
+  const box = document.getElementById('aiDelConfirm'); if (box) box.hidden = true;
+  aiChatRender();
+}
 function aiChatRename(id, ev){
   if (ev && 'cancelBubble' in ev) ev.cancelBubble = true;
   const conv = aiState.convs.find((c) => c.id === id);
@@ -4602,10 +4748,14 @@ function aiChatRename(id, ev){
 }
 function aiChatToggleSidebar(){
   const side = document.getElementById('aiSidebar');
-  const toggle = document.querySelector('.ai-sidebar-toggle');
   if (!side) return;
-  const collapsed = side.classList.toggle('collapsed');
-  if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
+  const trigger = document.activeElement;
+  const collapse = !side.classList.contains('collapsed');
+  aiSetSidebar(collapse);
+  if (trigger && trigger.classList && trigger.classList.contains('ai-sidebar-toggle')) {
+    const target = document.querySelector(collapse ? '.ai-open-list' : '#aiSidebar .ai-sidebar-toggle');
+    if (target) target.focus();
+  }
 }
 
 function setNLExample(key){
@@ -4617,18 +4767,45 @@ function aiAutoGrow(ta){
   if (!ta) return;
   ta.style.height = 'auto';
   ta.style.height = Math.min(Math.max(ta.scrollHeight, 24), 240) + 'px';
+  aiUpdateContextChip();
+}
+
+/* The attached contract lives in the message box as text, so what you see is exactly what is sent. This chip only
+   labels it, and is derived from the box itself, so it can never disagree with what will be sent. */
+function aiUpdateContextChip(){
+  const ta = document.getElementById('aiComposer');
+  const chip = document.getElementById('aiContextChip');
+  const txt = document.getElementById('aiContextText');
+  if (!ta || !chip) return;
+  const has = ta.value.indexOf(AI_CTX_MARK) !== -1;
+  chip.hidden = !has;
+  if (!has || !txt) return;
+  const m = AI_CTX_RE.exec(ta.value);
+  const cm = m && m[1].match(/contract\s+(\w+)/);
+  txt.textContent = m
+    ? 'Attached as reference data: ' + (cm ? cm[1] + '.sol' : 'current contract') + ' (' + m[1].split('\n').length + ' lines' + (/\/\/ … \(truncated\)\s*$/.test(m[1]) ? ', truncated to ' + AI_ATTACH_MAX.toLocaleString('en-US') + ' characters' : '') + '). It is sent with your message.'
+    : 'A contract is attached to this message. It is sent with your message.';
 }
 
 function aiChatAttachContext(){
   const ta = document.getElementById('aiComposer');
   if (!ta) return;
-  if (!pendingSource || !pendingSource.code) { logConsole('warn', 'No current contract to attach.'); return; }
+  if (!pendingSource || !pendingSource.code) { logConsole('warn', 'No current contract to attach.'); aiSetStatus('notice', 'No current contract to attach'); return; }
+  if (ta.value.indexOf(AI_CTX_MARK) !== -1) { aiSetStatus('notice', 'A contract is already attached'); return; }
   const code = pendingSource.code.length > AI_ATTACH_MAX
     ? pendingSource.code.slice(0, AI_ATTACH_MAX) + '\n// … (truncated)'
     : pendingSource.code;
-  const block = '[contrato atual (dado)]\n```solidity\n' + code + '\n```\n';
+  const block = AI_CTX_MARK + '\n```solidity\n' + code + '\n```\n';
   ta.value = (ta.value ? ta.value + '\n' : '') + block;
-  aiAutoGrow(ta);
+  if (!aiState.sending) aiState.status = { state: 'ready', text: 'Ready' };
+  aiAutoGrow(ta); aiChatRenderComposerState();
+}
+function aiChatDetachContext(){
+  const ta = document.getElementById('aiComposer');
+  if (!ta) return;
+  if (AI_CTX_RE.test(ta.value)) ta.value = ta.value.replace(AI_CTX_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  else aiSetStatus('notice', 'Edit the message to remove the attached contract');
+  aiAutoGrow(ta); ta.focus();
 }
 
 function aiBlockCode(btn){
@@ -4644,9 +4821,20 @@ function aiChatUse(btn){
   if (!code) { alert('No code to use.'); return; }
   adoptAiCode(code);
 }
+function aiFlash(btn, label){
+  if (!btn) return;
+  if (!btn.getAttribute('data-label')) btn.setAttribute('data-label', btn.textContent);
+  btn.textContent = label;
+  setTimeout(() => { btn.textContent = btn.getAttribute('data-label'); }, 1600);
+}
 function aiChatCopy(btn){
   const { code } = aiBlockCode(btn);
-  if (code) navigator.clipboard.writeText(code).then(() => logConsole('ok', 'Code copied.'));
+  if (!code) return;
+  if (!navigator.clipboard || !navigator.clipboard.writeText) { logConsole('warn', 'Copy is not available in this browser.'); aiFlash(btn, 'Copy failed'); return; }
+  navigator.clipboard.writeText(code).then(
+    () => { logConsole('ok', 'Code copied.'); aiFlash(btn, 'Copied'); },
+    () => { logConsole('warn', 'Could not copy the code.'); aiFlash(btn, 'Copy failed'); }
+  );
 }
 function aiChatDownload(btn){
   const { name, code } = aiBlockCode(btn);
@@ -4671,21 +4859,33 @@ function aiChatFormatAudit(text){
   } catch (_) { return text; }
 }
 
+/* Records the outcome of a request in the status line. A reply that arrives after its chat was deleted or the user
+   moved to another chat never changes the chat that is open now. */
+function aiFinishStatus(conv, failed, errMsg, okText){
+  if (!aiState.convs.includes(conv)) { aiSetStatus('ready', 'Ready'); return; }
+  if (failed) { aiSetStatus(aiErrorKind(errMsg), aiErrorKind(errMsg) === 'unavailable' ? 'AI unavailable' : 'Request failed'); return; }
+  aiSetStatus('completed', conv.id === aiState.activeId ? okText : 'Reply saved in another chat');
+}
+
 async function aiChatRunAction(action, name, code, extra){
+  if (aiState.sending) return;
   const conv = aiState.convs.find((c) => c.id === aiState.activeId);
   if (!conv) return;
-  aiState.sending = true; aiChatRenderComposerState();
-  let text;
+  aiState.sending = true; aiState.sendingId = conv.id; aiChatRender();
+  let text, failed = false, errMsg = '';
   try {
     const data = await aiFetch(action, { name, code, ...extra });
     text = data.text || '';
+    if (!text.trim()) throw new Error('The AI returned an empty answer.');
     if (action === 'audit') text = aiChatFormatAudit(text);
   } catch (e) {
-    text = 'Error: ' + (e.message || e);
+    failed = true; errMsg = String((e && e.message) || e);
+    text = 'Error: ' + errMsg;
   } finally {
-    aiState.sending = false; aiChatRenderComposerState();
+    aiState.sending = false; aiState.sendingId = null;
   }
   conv.msgs.push({ role: 'assistant', content: text, kind: 'tool' });
+  aiFinishStatus(conv, failed, errMsg, action === 'audit' ? 'Audit completed' : 'Tests generated');
   aiSave(); aiChatRender();
 }
 function aiChatAudit(btn){
@@ -4723,25 +4923,29 @@ async function aiChatSend(){
   const ta = document.getElementById('aiComposer');
   const text = (ta && ta.value || '').trim();
   if (!text) return;
+  if (text.length > AI_MAX_MESSAGE) { aiSetStatus('error', 'Message is too long (max 20,000 characters)'); return; }
   let conv = aiState.convs.find((c) => c.id === aiState.activeId);
   if (!conv) { conv = { id: aiNewId(), msgs: [] }; aiState.convs.unshift(conv); aiState.activeId = conv.id; }
   conv.msgs.push({ role: 'user', content: text });
   if (ta) { ta.value = ''; aiAutoGrow(ta); }
+  aiState.sending = true; aiState.sendingId = conv.id;
   aiSave(); aiChatRender();
 
-  const netKey = document.getElementById('nl_network')?.value || 'arc';
-  const net = NETWORKS[netKey] || NETWORKS.arc;
-  const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
-  const messages = aiBuildRequestMessages(conv.msgs);
-
-  aiState.sending = true; aiChatRenderComposerState();
+  let failed = false, errMsg = '';
   try {
+    const netKey = document.getElementById('nl_network')?.value || 'arc';
+    const net = NETWORKS[netKey] || NETWORKS.arc;
+    const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
+    const messages = aiBuildRequestMessages(conv.msgs);
     const data = await aiFetch('chat', { messages, network: { label: net.label, chainId: net.chainIdDec, usdc: net.usdc || '' }, complexity });
-    conv.msgs.push({ role: 'assistant', content: data.text || '' });
+    if (!data.text || !data.text.trim()) throw new Error('The AI returned an empty answer.');
+    conv.msgs.push({ role: 'assistant', content: data.text });
   } catch (e) {
-    conv.msgs.push({ role: 'assistant', content: 'Error: ' + (e.message || e), kind: 'error' });
+    failed = true; errMsg = String((e && e.message) || e);
+    conv.msgs.push({ role: 'assistant', content: 'Error: ' + errMsg, kind: 'error' });
   } finally {
-    aiState.sending = false; aiChatRenderComposerState();
+    aiState.sending = false; aiState.sendingId = null;
+    aiFinishStatus(conv, failed, errMsg, 'Completed');
     aiSave(); aiChatRender();
   }
 }
@@ -4750,11 +4954,34 @@ function initAiChat(){
   aiState.convs = aiLoad();
   aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
   aiChatRender();
+  aiSetSidebar(aiIsMobile());
   const ta = document.getElementById('aiComposer');
   if (ta) {
     ta.addEventListener('input', () => aiAutoGrow(ta));
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiChatSend(); } });
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); aiChatSend(); } });
+    ta.addEventListener('focus', () => { if (aiIsMobile()) setTimeout(() => ta.scrollIntoView({ block: 'nearest' }), 250); });
   }
+  const list = document.getElementById('aiConvs');
+  if (list) list.addEventListener('keydown', (e) => {
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].indexOf(e.key) === -1) return;
+    const items = [...list.querySelectorAll('.ai-conv-title')];
+    const i = items.indexOf(document.activeElement);
+    if (i === -1 || !items.length) return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : Math.min(items.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    items[next].focus();
+  });
+  const chat = document.getElementById('aiChat');
+  if (chat) chat.addEventListener('keydown', (e) => {
+    const side = document.getElementById('aiSidebar');
+    if (e.key === 'Escape' && aiIsMobile() && side && !side.classList.contains('collapsed')) {
+      aiSetSidebar(true);
+      const open = document.querySelector('.ai-open-list'); if (open) open.focus();
+    }
+  });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', () => {
+    if (aiIsMobile() && document.activeElement === ta) ta.scrollIntoView({ block: 'nearest' });
+  });
 }
 if (typeof document !== 'undefined') initAiChat();
 

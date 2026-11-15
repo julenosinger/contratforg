@@ -724,7 +724,7 @@ ok(!!doc.getElementById('themeBtn') && !!doc.getElementById('mcSelector') && !!d
   ok(JSON.parse(ev('JSON.stringify(window.__aiCalls)'))[0].action === 'chat' && JSON.parse(ev('JSON.stringify(window.__aiCalls)'))[0].payload.messages[0].role === 'user', 'chat: the request was a chat with a user message');
   // the block buttons exist
   const block = msgs()[1].querySelector('.ai-code-block');
-  for (const label of ['Copy', 'Download', 'Use', 'Audit', 'Tests']) ok([...block.querySelectorAll('button')].some((b) => b.textContent === label), 'chat: the ' + label + ' button exists');
+  for (const label of ['Copy Code', 'Download .sol', 'Use in ContractForge', 'Audit', 'Generate Tests']) ok([...block.querySelectorAll('button')].some((b) => b.textContent === label), 'chat: the ' + label + ' button exists');
   // Use adopts the code with template 'ai' and keeps the mainnet gate experimental
   ev("pendingSource = { name: '', code: '' };");
   block.querySelectorAll('button')[2].click(); await tick();   // Use

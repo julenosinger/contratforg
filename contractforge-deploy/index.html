@@ -773,20 +773,35 @@
     <section class="section" id="sec-nlai" style="display:none;">
       <div class="section-head"><span class="n">15</span><h2>AI → Solidity</h2><div class="rule"></div></div>
       <div class="ai-chat" id="aiChat">
-        <aside class="ai-sidebar" id="aiSidebar">
+        <aside class="ai-sidebar" id="aiSidebar" aria-label="Conversations">
           <div class="ai-sidebar-head">
-            <button type="button" class="btn btn-ghost" data-onclick="aiChatNew()">+ New</button>
-            <button type="button" class="btn btn-ghost" data-onclick="aiChatDeleteAll()">Delete all</button>
-            <button type="button" class="btn btn-ghost ai-sidebar-toggle" data-onclick="aiChatToggleSidebar()" aria-expanded="true" aria-controls="aiConvs" aria-label="Toggle chat list">&laquo;</button>
+            <h3 class="ai-side-title">Conversations</h3>
+            <button type="button" class="ai-icon-btn ai-sidebar-toggle" data-onclick="aiChatToggleSidebar()" aria-expanded="true" aria-controls="aiSidebar" aria-label="Hide conversation list" title="Hide conversation list">&laquo;</button>
           </div>
-          <div class="ai-convs" id="aiConvs"></div>
-          <p class="ai-history-note">The history stays only in this browser.</p>
+          <button type="button" class="ai-new" data-onclick="aiChatNew()">+ New Chat</button>
+          <input type="search" id="aiConvSearch" class="ai-search" placeholder="Search conversations" aria-label="Search conversations" autocomplete="off" data-oninput="aiChatRenderList()">
+          <div class="ai-convs" id="aiConvs" role="list" aria-label="Saved conversations"></div>
+          <div class="ai-side-foot">
+            <p class="ai-history-note">The history stays only in this browser.</p>
+            <div class="ai-del-confirm" id="aiDelConfirm" hidden>
+              <span>Delete all conversations? This cannot be undone.</span>
+              <button type="button" class="ai-del-yes" data-onclick="aiChatDeleteAll()">Delete all</button>
+              <button type="button" data-onclick="aiChatCancelDeleteAll()">Cancel</button>
+            </div>
+            <button type="button" class="ai-del-all" id="aiDelAllBtn" data-onclick="aiChatAskDeleteAll()">Delete All</button>
+          </div>
         </aside>
+        <div class="ai-backdrop" data-onclick="aiChatToggleSidebar()" aria-hidden="true"></div>
         <div class="ai-main">
+          <div class="ai-main-head">
+            <button type="button" class="ai-icon-btn ai-sidebar-toggle ai-open-list" data-onclick="aiChatToggleSidebar()" aria-expanded="true" aria-controls="aiSidebar" aria-label="Show conversation list" title="Show conversation list">&#9776;</button>
+            <span class="ai-main-title" id="aiMainTitle">New chat</span>
+            <span class="ai-status" id="aiStatus" role="status" data-state="ready"><i class="ai-dot" aria-hidden="true"></i><span id="aiStatusText">Ready</span></span>
+          </div>
           <div class="ai-thread" id="aiThread" role="log" aria-live="polite" aria-label="Conversation"></div>
           <div class="ai-composer">
             <div class="ai-controls">
-              <div class="field"><label for="nl_network">Network context</label>
+              <div class="ai-ctl"><label for="nl_network">Target Network</label>
                 <select id="nl_network">
                   <option value="arc">Arc Testnet (USDC gas, stablecoin-native)</option>
                   <option value="arcMain">Arc Mainnet (USDC gas, real funds)</option>
@@ -795,19 +810,29 @@
                   <option value="evm">Generic EVM</option>
                 </select>
               </div>
-              <div class="field"><label for="nl_complexity">Complexity hint</label>
+              <div class="ai-ctl"><label for="nl_complexity">Complexity</label>
                 <select id="nl_complexity">
                   <option value="simple">Simple (under 100 lines)</option>
                   <option value="moderate">Moderate (100-300 lines)</option>
                   <option value="advanced">Advanced (300+ lines, full DeFi)</option>
                 </select>
               </div>
-              <button type="button" class="btn btn-ghost" data-onclick="aiChatAttachContext()">Use current contract as context</button>
+              <button type="button" class="ai-attach" data-onclick="aiChatAttachContext()" title="Adds the contract currently open in ContractForge to your message as reference data">Attach Current Contract</button>
             </div>
-            <textarea id="aiComposer" class="ai-composer-input" rows="1" aria-label="Message" placeholder="Describe your contract in plain English, for example: Create a subscription contract where users pay 10 USDC per month…"></textarea>
-            <div class="ai-composer-row">
-              <span id="aiGenerating" class="ai-generating" hidden>generating…</span>
-              <button type="button" class="btn btn-primary" id="aiSendBtn" data-onclick="aiChatSend()">Send</button>
+            <div class="ai-context" id="aiContextChip" hidden>
+              <span id="aiContextText">Current contract attached to this message.</span>
+              <button type="button" data-onclick="aiChatDetachContext()" aria-label="Remove the attached contract from the message">Remove</button>
+            </div>
+            <div class="ai-box">
+              <textarea id="aiComposer" class="ai-composer-input" rows="1" maxlength="20000" aria-label="Message" aria-describedby="aiHint" placeholder="Describe your contract (e.g., Create a subscription contract where users pay 10 USDC per month)"></textarea>
+              <button type="button" class="ai-send" id="aiSendBtn" data-onclick="aiChatSend()" aria-label="Send message" title="Send (Enter)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+              </button>
+            </div>
+            <div class="ai-hint" id="aiHint">
+              <span>Enter to send &middot; Shift+Enter for a new line</span>
+              <span>AI-written code is experimental and not audited.</span>
+              <span id="aiGenerating" class="ai-generating" hidden>Generating&hellip;</span>
             </div>
           </div>
         </div>
