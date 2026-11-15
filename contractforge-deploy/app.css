@@ -1001,3 +1001,23 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 @media (prefers-reduced-motion:reduce){
   #sec-nlai *,#sec-nlai *::before,#sec-nlai *::after{transition:none !important;animation:none !important;scroll-behavior:auto !important;}
 }
+
+/* ---- Phase 8.2: full-height AI workspace. aiSyncWorkspace() puts body.ai-workspace on while #sec-nlai is the open section and
+   removes it as soon as another section opens. The network bar, the current-contract bar and the section heading are only
+   hidden here (never removed), so every other section keeps them unchanged. The wallet bar stays. ---- */
+body.ai-workspace #netBanner,body.ai-workspace #currentContract,body.ai-workspace #netPanel{display:none !important;}
+body.ai-workspace main{display:flex;flex-direction:column;height:100vh;height:100dvh;max-width:none;padding:0;}
+body.ai-workspace .sticky-top{flex:none;margin:0;}
+/* !important: the section's own display is an inline style written by the navigation code; it is only ever visible together with this class */
+body.ai-workspace #sec-nlai{display:flex !important;flex-direction:column;flex:1 1 0;min-height:0;margin:0;padding:12px 20px 16px;}
+body.ai-workspace #sec-nlai .section-head{display:none;}
+body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:420px;}
+#sec-nlai .ai-brand{display:flex;flex-direction:column;min-width:0;line-height:1.25;}
+#sec-nlai .ai-brand-title{margin:0;font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;color:var(--ai-text);}
+#sec-nlai .ai-brand-sub{font-size:11px;color:var(--ai-dim);white-space:nowrap;}
+#sec-nlai .ai-main-head .ai-main-title{font-weight:500;color:var(--ai-muted);padding-left:12px;border-left:1px solid var(--ai-line-2);}
+@media (max-width:760px){
+  body.ai-workspace #sec-nlai{padding:6px 6px max(6px,env(safe-area-inset-bottom));}
+  body.ai-workspace #sec-nlai .ai-chat{min-height:360px;}
+  #sec-nlai .ai-brand-sub{display:none;}
+}

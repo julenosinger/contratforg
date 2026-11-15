@@ -4950,11 +4950,31 @@ async function aiChatSend(){
   }
 }
 
+/* Phase 8.2: while AI -> Solidity is the open section, the page is a full-height workspace (body.ai-workspace, see app.css).
+   The section's own inline display is the single source of truth; every way of opening or leaving it (menu, Use in
+   ContractForge, wizard, playground) writes it, so one observer covers them all. Nothing is removed or rebuilt. */
+function aiSyncWorkspace(){
+  const sec = document.getElementById('sec-nlai');
+  if (!sec || !document.body) return;
+  const on = sec.style.display === 'block';
+  const was = document.body.classList.contains('ai-workspace');
+  document.body.classList.toggle('ai-workspace', on);
+  if (on && !was) {
+    const thread = document.getElementById('aiThread');
+    if (thread) thread.scrollTop = thread.scrollHeight;
+    // on a phone the menu is stacked above the page: bring the workspace itself to the top of the screen
+    try { if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) document.querySelector('main').scrollIntoView({ block: 'start' }); } catch (_) { /* optional */ }
+  }
+}
+
 function initAiChat(){
   aiState.convs = aiLoad();
   aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
   aiChatRender();
   aiSetSidebar(aiIsMobile());
+  const wsSection = document.getElementById('sec-nlai');
+  if (wsSection && typeof MutationObserver === 'function') new MutationObserver(aiSyncWorkspace).observe(wsSection, { attributes: true, attributeFilter: ['style'] });
+  aiSyncWorkspace();
   const ta = document.getElementById('aiComposer');
   if (ta) {
     ta.addEventListener('input', () => aiAutoGrow(ta));

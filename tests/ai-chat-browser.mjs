@@ -102,6 +102,52 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
     await page.waitForTimeout(350);
     ok(await page.evaluate(() => getComputedStyle(document.getElementById('aiSidebar')).visibility) === 'visible', name + ': and reopens');
   }
+  // Phase 8.2: the full-height workspace. Real computed styles and geometry, with the bars and heading hidden only in AI.
+  await page.evaluate(() => { pendingSource = { name: 'Wizard', code: 'pragma solidity ^0.8.24;\ncontract Wizard {}', template: 'erc20' }; renderCurrentContract(); });
+  const nav = async (sec) => { await page.evaluate((x) => document.querySelector('.nav-item[data-section="' + x + '"]').click(), sec); await page.waitForTimeout(120); };
+  const geo = () => page.evaluate(() => {
+    const disp = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).display : 'missing'; };
+    const box = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { t: b.top, b: b.bottom, h: b.height, w: b.width }; };
+    return { cls: document.body.classList.contains('ai-workspace'), banner: disp('#netBanner'), bar: disp('#currentContract'), head: disp('#sec-nlai .section-head'),
+      wallet: disp('.walletbar'), connect: disp('#connectBtn'), vh: window.innerHeight, vw: window.innerWidth,
+      sx: document.documentElement.scrollWidth - document.documentElement.clientWidth, sy: document.documentElement.scrollHeight,
+      chat: box('#aiChat'), side: box('#aiSidebar'), mainCol: box('#sec-nlai .ai-main'), thread: box('#aiThread'), comp: box('#aiComposer'), send: box('#aiSendBtn'), walletBox: box('.walletbar') };
+  });
+  await nav('swap');
+  const outside = await page.evaluate(() => ({ cls: document.body.classList.contains('ai-workspace'), banner: getComputedStyle(document.getElementById('netBanner')).display, bar: getComputedStyle(document.getElementById('currentContract')).display, bannerH: document.getElementById('netBanner').getBoundingClientRect().height, barH: document.getElementById('currentContract').getBoundingClientRect().height }));
+  ok(!outside.cls && outside.banner !== 'none' && outside.bar !== 'none' && outside.bannerH > 0 && outside.barH > 0, name + ': both bars are visible and take space in Swap / AMM', JSON.stringify(outside));
+  await nav('nlai');
+  const g = await geo();
+  ok(g.cls && g.banner === 'none' && g.bar === 'none' && g.head === 'none', name + ': AI hides the network bar, the contract bar and the section heading', JSON.stringify(g));
+  ok(g.wallet !== 'none' && g.connect !== 'none' && g.walletBox.h > 0, name + ': the wallet bar and Connect Wallet stay visible');
+  const oldH = Math.min(920, Math.max(540, g.vh - 250));    // the Phase 8 formula, for comparison
+  ok(g.chat.h > oldH + 40 || g.chat.h >= 0.8 * g.vh - 60, name + ': the chat is taller than the Phase 8 chat (' + Math.round(g.chat.h) + ' vs ' + Math.round(oldH) + ')', JSON.stringify(g.chat));
+  ok(Math.abs(g.side.h - g.mainCol.h) <= 1 && Math.abs(g.side.t - g.mainCol.t) <= 1, name + ': sidebar and chat have the same height', g.side.h + ' / ' + g.mainCol.h);
+  ok(g.chat.b <= g.vh + 1 && g.comp.b <= g.vh + 1 && g.send.b <= g.vh + 1 && g.comp.t >= g.thread.b - 1, name + ': the composer is on screen, under the thread', JSON.stringify({ chatB: g.chat.b, compB: g.comp.b, vh: g.vh }));
+  ok(g.thread.h > 0.5 * g.chat.h, name + ': the conversation gets most of the height', g.thread.h + ' of ' + g.chat.h);
+  ok(g.sx <= 0, name + ': no sideways page scroll in the workspace');
+  if (name !== 'phone') ok(g.sy <= g.vh + 1, name + ': the page itself does not scroll in the workspace', g.sy + ' > ' + g.vh);
+  if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, name + '-workspace.png') });
+  // repeated navigation leaves nothing behind
+  for (const sec of ['home', 'swap', 'nlai', 'deploy', 'nlai']) {
+    await nav(sec);
+    const r = await geo(); const inAi = sec === 'nlai';
+    ok(r.cls === inAi && (r.banner === 'none') === inAi && (r.bar === 'none') === inAi, name + ': navigation to ' + sec + ' ' + (inAi ? 'hides' : 'shows') + ' the bars', JSON.stringify({ cls: r.cls, banner: r.banner, bar: r.bar }));
+  }
+  await nav('home');
+  ok(await page.evaluate(() => { const m = getComputedStyle(document.querySelector('main')); return m.display !== 'flex' && m.maxWidth !== 'none'; }), name + ': leaving AI restores the original page layout');
+  await nav('nlai');
+  // short desktop screen and browser zoom: the chat keeps a usable minimum and the composer stays reachable
+  if (name === 'desktop') {
+    await page.setViewportSize({ width: 1366, height: 520 }); await page.waitForTimeout(120);
+    const s = await geo();
+    ok(s.chat.h >= 400 && s.sx <= 0, name + ': a short screen keeps a usable chat', JSON.stringify(s.chat));
+    await page.evaluate(() => document.getElementById('aiComposer').scrollIntoView({ block: 'nearest' }));
+    ok(await page.evaluate(() => { const b = document.getElementById('aiComposer').getBoundingClientRect(); return b.bottom <= window.innerHeight + 1 && b.top >= 0; }), name + ': and the composer can be reached');
+    await page.setViewportSize(vp); await page.waitForTimeout(120);
+    const grown = await geo();
+    ok(grown.chat.h > s.chat.h, name + ': the chat grows again when the window does', grown.chat.h + ' vs ' + s.chat.h);
+  }
   // the composer is on screen and typing grows it without covering the thread
   await page.fill('#aiComposer', Array.from({ length: 8 }, (_, i) => 'line ' + i).join('\n'));
   const after = await page.evaluate(() => { const c = document.getElementById('aiComposer').getBoundingClientRect(), s = document.getElementById('aiSendBtn').getBoundingClientRect(), t = document.getElementById('aiThread').getBoundingClientRect(); return { cb: c.bottom, sb: s.bottom, tb: t.bottom, ct: c.top, h: c.height, vh: window.innerHeight }; });
