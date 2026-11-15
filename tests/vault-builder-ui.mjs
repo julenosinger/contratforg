@@ -238,7 +238,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ok(!d.querySelector('#vltSummary img, #vltSummary script, #vltProgress img, #vltAssetNote img') && w.__xss === undefined, 'xss: values are shown as text, never as markup');
   ok(![...d.querySelectorAll('#vltSummary *, #vltProgress *, #vltAssetNote, #vltCapNote')].some((e) => [...e.attributes].some((x) => /__xss/.test(x.value))), 'xss: no attribute carries the payload');
   eq(JSON.parse(ev('JSON.stringify(CFBuilder.keys())')).filter((k) => ['swap', 'treasury', 'vault'].includes(k)), ['swap', 'treasury', 'vault'], 'engine: three screens registered');
-  for (const id of ['sec-simple', 'sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
+  for (const id of ['sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
   a.set('vault_name', 'ArcYieldVault'); a.set('vault_symbol', 'avUSDC'); a.set('vault_asset', ''); await a.gen();
   for (let i = 0; i < 3; i++) for (const s of ['home', 'swap', 'vault', 'deploy', 'treasury', 'vault']) await a.go(s);
   ok(a.prog()['Code Generation'].state === 'done' && d.querySelectorAll('#vltSummary .bld-row').length === 8, 'repeated navigation keeps the state and does not duplicate rows');

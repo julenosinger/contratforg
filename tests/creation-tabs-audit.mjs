@@ -203,5 +203,25 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   ok(/address burnToken\s*\)/.test(gen()) && !/destinationCaller/.test(ev('pendingSource.code')), 'crosschain (single): the payments contract uses the 4-argument depositForBurn, not the V2 signature');
 }
 
+/* 11. Simple contracts particularities found by the Phase 9.5 audit (the page may explain them, it must not change them) */
+{
+  const app = loadApp(); const { ev, w } = app; const d = w.document; let alerts = 0; w.alert = () => { alerts++; };
+  const A = '0x' + '1'.repeat(40);
+  const gen = (id, o = {}) => { alerts = 0; ev("pendingSource = { name: '', code: '', template: '' }; pendingCtorArgs = []"); ev(`renderSimpleForm('${id}')`); for (const [k, v] of Object.entries(o)) d.getElementById(k).value = v; try { ev(`genSimple('${id}')`); return ''; } catch (e) { return String(e.message || e); } };
+  gen('erc20', { s_supply: '-5' });
+  ok(/-5 \* 10\*\*/.test(ev('pendingSource.code')) && ev('(pendingSource.problems || []).length') === 0, 'simple: numeric fields are written into the Solidity unchecked (a negative supply is not a generator problem)');
+  gen('dao', { s_token: A, s_voting: '0' }); ok(alerts === 1 && ev('pendingSource.code') === '', 'simple: the DAO voting period of 0 is refused with an alert');
+  for (const o of [{ s_session: '721' }, { s_rdelay: '31' }, { s_spendlimit: '-1' }, { s_guardian: '' }]) { gen('smartwallet', { s_guardian: A, ...o }); ok(alerts === 1 && ev('pendingSource.code') === '', 'simple: the Smart Wallet refuses ' + JSON.stringify(o)); }
+  gen('escrow'); eq(ev('pendingSource.problems.length'), 3, 'simple: an empty escrow is a draft with three problems');
+  ev("setMultichainMode('portable')");
+  ok(/is not a number/.test(gen('escrow', { s_amount: '-1' })), 'simple (portable): a scaled amount that is not digits makes the generator throw');
+  const ctor = {};
+  for (const id of ['erc20', 'erc721', 'escrow', 'vesting', 'paywall', 'dao', 'smartwallet', 'staking']) { gen(id, id === 'smartwallet' ? { s_guardian: A } : {}); ctor[id] = ev('pendingCtorArgs.map((x) => x.param).join()'); }
+  eq(ctor, { erc20: '', erc721: 'usdc_', escrow: 'token_', vesting: 'token_', paywall: 'token_', dao: 'token_,votingPeriod_', smartwallet: 'dailyLimit_', staking: 'stakingToken_' }, 'simple (portable): the constructor arguments of each template');
+  ev("setMultichainMode('single')");
+  for (const id of ['erc20', 'erc721', 'escrow', 'vesting', 'paywall', 'dao', 'smartwallet', 'staking']) { gen(id, id === 'smartwallet' ? { s_guardian: A } : {}); if (ev('pendingCtorArgs.length') !== 0) ok(false, 'simple (single): ' + id + ' has no constructor argument'); }
+  ok(true, 'simple (single): no template has a constructor argument');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -196,7 +196,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ok(!d.querySelector('#mslSummary img, #mslSummary script, #mslProgress img, #mslOwnerNote img') && w.__xss === undefined, 'xss: values are shown as text, never as markup');
   ok(![...d.querySelectorAll('#mslSummary *, #mslProgress *, #mslOwnerNote, #mslMaxNote')].some((e) => [...e.attributes].some((x) => /__xss/.test(x.value))), 'xss: no attribute carries the payload');
   ok(['swap', 'treasury', 'vault', 'multisend'].every((k) => JSON.parse(ev('JSON.stringify(CFBuilder.keys())')).includes(k)), 'engine: four screens registered');
-  for (const id of ['sec-simple', 'sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
+  for (const id of ['sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
   a.set('ms_name', 'ArcMultiSend'); a.set('ms_owner', ''); a.set('ms_max', '200'); a.set('ms_fee', '0'); await a.gen();
   for (let i = 0; i < 3; i++) for (const s of ['home', 'swap', 'multisend', 'deploy', 'vault', 'multisend']) await a.go(s);
   ok(a.prog()['Code Generation'].state === 'done' && d.querySelectorAll('#mslSummary .bld-row').length === 8, 'repeated navigation keeps the state and does not duplicate rows');

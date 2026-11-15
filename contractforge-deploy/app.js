@@ -3054,6 +3054,229 @@ const CCX_CONFIG = {
 };
 CFBuilder.register(CCX_CONFIG);
 
+/* ---- The Simple contracts screen (Phase 9.5). Eight templates behind one tab: the cards and the form are drawn by script (renderSimpleGrid,
+   renderSimpleForm) and stay exactly as they were; this config only reads whatever form is on screen, so the overview, the notes and the
+   progress follow the template you picked. Read-only: it never writes to the form or the buffer.
+   What the audit found, per kind of field (each one verified by compiling the generated Solidity):
+     W  whole number >= 0      a fraction or a negative value does not compile
+     N  number >= 0            a negative value does not compile (a fraction is fine)
+     P  number >= 0, 6 decimals at most, "scaled" by the token decimals: more decimals do not compile; the portable modes accept only digits
+        with an optional decimal part and THROW otherwise (portabilize)
+     S  text written into a Solidity string: a quote or a backslash does not compile
+   Some checks are refusals (an alert, nothing generated): the DAO voting period and the four Smart Wallet limits. Missing addresses write a DRAFT. ---- */
+const SMP_SPEC = {
+  erc20: { title: 'ERC-20 Token', ctor: [], fields: [
+    { id: 's_name', label: 'Token name', kind: 'name', def: 'ArcToken' },
+    { id: 's_symbol', label: 'Symbol', kind: 'S', def: 'ARC' },
+    { id: 's_decimals', label: 'Decimals', kind: 'W', def: '18', max: 255, why: 'the decimals are a uint8' },
+    { id: 's_supply', label: 'Initial supply', kind: 'N', def: '0', note: 'Written as supply × 10^decimals' },
+    { id: 's_cap', label: 'Max cap', kind: 'N', def: '0', zero: 'No limit', note: 'Written as cap × 10^decimals' },
+    { id: 's_burn', label: 'Burn', kind: 'sel', map: { yes: 'Allowed', no: 'Not allowed' } }],
+    notes: ['Owner-controlled mint, an optional cap and optional burn. It has no constructor argument in any Deployment Mode.'] },
+  erc721: { title: 'NFT Collection (ERC-721)', ctor: ['usdc_'], fields: [
+    { id: 's_name', label: 'Collection name', kind: 'name', def: 'ArcNFT' },
+    { id: 's_symbol', label: 'Symbol', kind: 'S', def: 'ARC' },
+    { id: 's_supply', label: 'Max supply', kind: 'W', def: '10000' },
+    { id: 's_price', label: 'Mint price', kind: 'P', def: '0', unit: 'USDC', zero: 'Free' },
+    { id: 's_royalty', label: 'Royalty', kind: 'W', def: '0', unit: 'bps' },
+    { id: 's_baseuri', label: 'Base URI', kind: 'S', def: '(empty)' }],
+    notes: ['Mints are paid in the payment token (USDC by default). In the portable modes the payment token is the constructor argument usdc_ and the price is scaled by its decimals at deploy time.'] },
+  escrow: { title: 'Buyer/Seller Escrow', ctor: ['token_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcEscrow' },
+    { id: 's_buyer', label: 'Buyer', kind: 'addr', req: true },
+    { id: 's_seller', label: 'Seller', kind: 'addr', req: true },
+    { id: 's_arbiter', label: 'Arbiter', kind: 'addr', req: true },
+    { id: 's_token', label: 'Token', kind: 'token' },
+    { id: 's_amount', label: 'Amount', kind: 'P', def: '0', unit: 'tokens' },
+    { id: 's_timeout', label: 'Refund timeout', kind: 'N', def: '14', unit: 'days' }],
+    notes: ['Buyer, seller and arbiter are three different addresses; a missing or repeated one writes a DRAFT.'] },
+  vesting: { title: 'Linear Vesting', ctor: ['token_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcVesting' },
+    { id: 's_token', label: 'Token', kind: 'token' },
+    { id: 's_beneficiary', label: 'Beneficiary', kind: 'addr', req: true },
+    { id: 's_amount', label: 'Total amount', kind: 'P', def: '0', unit: 'tokens' },
+    { id: 's_duration', label: 'Total duration', kind: 'N', def: '365', unit: 'days' },
+    { id: 's_cliff', label: 'Cliff', kind: 'N', def: '0', unit: 'days' }],
+    notes: ['A missing beneficiary writes a DRAFT.'] },
+  paywall: { title: 'Paywall / Subscription', ctor: ['token_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcSubscription' },
+    { id: 's_token', label: 'Payment token', kind: 'token' },
+    { id: 's_amount', label: 'Price per period', kind: 'P', def: '0', unit: 'tokens' },
+    { id: 's_duration', label: 'Period', kind: 'N', def: '30', unit: 'days' },
+    { id: 's_beneficiary', label: 'Beneficiary', kind: 'addr', req: true }],
+    notes: ['A missing beneficiary writes a DRAFT.'] },
+  dao: { title: 'DAO Governance', ctor: ['token_', 'votingPeriod_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcDAO' },
+    { id: 's_token', label: 'Governance token', kind: 'govtoken' },
+    { id: 's_quorum', label: 'Quorum', kind: 'W', def: '4', unit: '% of supply' },
+    { id: 's_voting', label: 'Voting period', kind: 'V', def: '45818', unit: 'blocks' },
+    { id: 's_delay', label: 'Timelock delay', kind: 'W', def: '172800', unit: 'seconds' },
+    { id: 's_threshold', label: 'Proposal threshold', kind: 'N', def: '1000', unit: 'tokens', note: 'Written as tokens × 10^18 (it assumes an 18-decimal governance token)' }],
+    notes: ['The voting period is counted in blocks, and block times differ between chains: in the portable modes it is a constructor argument, so you can set it per network.', 'In Single network mode the governance token is required (a missing one writes a DRAFT).'] },
+  smartwallet: { title: 'Smart Wallet (guardian recovery)', ctor: ['dailyLimit_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcSmartWallet' },
+    { id: 's_guardian', label: 'Guardian', kind: 'guardian' },
+    { id: 's_session', label: 'Longest session key', kind: 'R', def: '24', unit: 'hours', min: 1, max: 720 },
+    { id: 's_rdelay', label: 'Recovery delay', kind: 'R', def: '2', unit: 'days', min: 1, max: 30 },
+    { id: 's_spendlimit', label: 'Daily spend limit', kind: 'L', unit: 'native' }],
+    notes: ['The wallet refuses to generate (an alert, nothing is written) when the guardian is missing or is the account that deploys it, or when a limit is out of range.', 'The daily limit is counted in the network\'s gas token; in the portable modes it is a constructor argument, scaled per network.'] },
+  staking: { title: 'Staking Rewards', ctor: ['stakingToken_'], fields: [
+    { id: 's_name', label: 'Contract name', kind: 'name', def: 'ArcStaking' },
+    { id: 's_token', label: 'Staking token', kind: 'token' },
+    { id: 's_reward', label: 'Reward token', kind: 'reward' },
+    { id: 's_apy', label: 'APY', kind: 'N', def: '12', unit: '% per year' },
+    { id: 's_lock', label: 'Lock period', kind: 'N', def: '30', unit: 'days', zero: 'No lock' },
+    { id: 's_exitfee', label: 'Emergency exit fee', kind: 'W', def: '100', unit: 'bps' }],
+    notes: ['An empty reward token means the staking token.'] }
+};
+
+function smpTemplate(){
+  const b = document.querySelector('#simpleForm button[data-onclick^="genSimple("]');
+  const m = b && /genSimple\('(\w+)'\)/.exec(b.getAttribute('data-onclick'));
+  return (m && SMP_SPEC[m[1]]) ? m[1] : '';
+}
+function smpRead(){
+  const form = document.getElementById('simpleForm'), vals = {};
+  if(form) form.querySelectorAll('[id^="s_"]').forEach(el => { if('value' in el) vals[el.id] = String(el.value); });
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  return {
+    tpl: smpTemplate(), vals, net,
+    portable: typeof isPortable === 'function' ? isPortable() : false,
+    dmode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : ''
+  };
+}
+const smpVal = (v, f) => { const raw = v.vals[f.id]; return (raw === undefined || raw === '') ? '' : String(raw); };
+const smpUsed = (v, f) => { const x = smpVal(v, f); return x === '' && f.def !== undefined ? f.def : x; };
+const smpTokLabel = (tpl) => tpl === 'staking' ? 'Staking token' : 'Token';
+
+/* One problem per field at most: { text, sev } where sev is 'refuse' (the generator alerts and writes nothing), 'draft' (it writes a DRAFT)
+   or 'compile' (it writes Solidity that does not compile, or throws in the portable modes). */
+function smpFieldProblem(f, v){
+  const x = String(smpUsed(v, f)).trim(), L = f.label;
+  const net = v.net;
+  switch(f.kind){
+    case 'S': return /["\\]/.test(smpUsed(v, f)) ? { sev: 'compile', text: L + ' must not contain quotes or backslashes: it is written into a Solidity string and the contract would not compile.' } : null;
+    case 'W': if(!/^\d+$/.test(x)) return { sev: 'compile', text: L + ' must be a whole number of at least 0: the value is written into the Solidity as it is, and anything else does not compile.' };
+              return (f.max !== undefined && Number(x) > f.max) ? { sev: 'compile', text: L + ' must be at most ' + f.max + ' (' + f.why + '): a larger value does not compile.' } : null;
+    case 'N': return (x !== '' && Number.isFinite(Number(x)) && Number(x) >= 0) ? null : { sev: 'compile', text: L + ' must be a number of at least 0: a negative value does not compile.' };
+    case 'P':
+      if(v.portable) return /^\d+(\.\d+)?$/.test(x) ? null : { sev: 'compile', text: L + ' must be a plain number such as 500 or 1.5: any other form stops generation in the portable modes.' };
+      { const n = Number(x); return (x !== '' && Number.isFinite(n) && n >= 0 && Math.abs(n * 1e6 - Math.round(n * 1e6)) < 1e-6) ? null : { sev: 'compile', text: L + ' must be at least 0 with at most 6 decimals: it is multiplied by 10^6 in the Solidity.' }; }
+    case 'V': return (/^\d+$/.test(x) && Number(x) >= 1) ? null : { sev: 'refuse', text: 'The voting period must be a whole number of blocks, at least 1: generation is refused.' };
+    case 'R': return (/^\d+$/.test(x) && Number(x) >= f.min && Number(x) <= f.max) ? null : { sev: 'refuse', text: L + ' must be a whole number between ' + f.min + ' and ' + f.max + ' (' + f.unit + '): generation is refused.' };
+    case 'L': {
+      const lim = String(smpVal(v, f)).trim() || (net ? net.walletDailyDefault : '');
+      const dec = net ? net.gasDecimals : 18;
+      return (/^\d+(\.\d+)?$/.test(lim) && (lim.split('.')[1] || '').length <= dec) ? null : { sev: 'refuse', text: 'The daily limit must be a plain number with at most ' + dec + ' decimals: generation is refused.' };
+    }
+    case 'guardian': {
+      if(typeof reqAddressProblem !== 'function') return null;
+      const p = reqAddressProblem(smpVal(v, f).trim(), { required: true, notDeployer: true });
+      return p ? { sev: 'refuse', text: 'Guardian ' + p + ': generation is refused (the wallet needs a guardian that is not the account that deploys it).' } : null;
+    }
+    default: return null;
+  }
+}
+/* The address and token problems the generators record on pendingSource.problems (a DRAFT), mirrored read-only. */
+function smpDraftProblems(v){
+  if(typeof reqProblems !== 'function' || !v.net) return [];
+  const g = (id) => v.vals[id] === undefined ? '' : String(v.vals[id]);
+  const tok = (label, id) => { const raw = g(id), resolved = raw.trim() || v.net.usdc || ''; return typeof reqTokenProblem === 'function' ? reqTokenProblem(label, raw, resolved, v.net.label) : ''; };
+  let out = [];
+  switch(v.tpl){
+    case 'escrow': out = reqProblems([{ label: 'Buyer', value: g('s_buyer'), required: true }, { label: 'Seller', value: g('s_seller'), required: true }, { label: 'Arbiter', value: g('s_arbiter'), required: true }], true).concat([tok('Token', 's_token')]); break;
+    case 'vesting': case 'paywall': out = reqProblems([{ label: 'Beneficiary', value: g('s_beneficiary'), required: true }]).concat([tok('Token', 's_token')]); break;
+    case 'dao': out = reqProblems([{ label: 'Governance token', value: g('s_token').trim(), required: !v.portable }]); break;
+    case 'staking': out = [tok('Staking token', 's_token'), g('s_reward').trim() ? (typeof reqTokenProblem === 'function' ? reqTokenProblem('Reward token', g('s_reward'), g('s_reward') || '', v.net.label) : '') : '']; break;
+    case 'erc721': {
+      const price = String(g('s_price') || '0').trim(), usdc = v.net.usdc;
+      if(!v.portable && !/^0+(\.0+)?$/.test(price) && !usdc) out = ['Payment token: ' + v.net.label + ' has no default stablecoin, so set the mint price to 0 or use a portable mode'];
+      break;
+    }
+  }
+  return out.filter(Boolean);
+}
+function smpProblems(v){
+  if(!v.tpl) return ['Choose a template first.'];
+  const spec = SMP_SPEC[v.tpl], fp = spec.fields.map(f => smpFieldProblem(f, v)).filter(Boolean);
+  return [...fp.filter(p => p.sev === 'refuse'), ...smpDraftProblems(v), ...fp.filter(p => p.sev === 'compile')].map(p => typeof p === 'string' ? p : p.text);
+}
+function smpSig(v){ return JSON.stringify([v.tpl, v.vals, typeof activeNetwork !== 'undefined' ? activeNetwork : '', typeof multichainMode !== 'undefined' ? multichainMode : '']); }
+/* Single network mode writes token amounts times 10^6, which is right for a 6-decimal token only: the network's own default token may differ (BNB Chain). */
+function smpDecimalsNote(v, f){
+  if(v.portable || !v.net || !v.net.usdc || v.net.usdcDecimals === 6) return '';
+  const tokenId = v.tpl === 'erc721' ? null : 's_token';
+  if(tokenId && smpVal(v, { id: tokenId }).trim()) return '';
+  return 'The default token on ' + v.net.label + ' has ' + v.net.usdcDecimals + ' decimals; the amount is written for 6.';
+}
+
+function smpFieldRow(v, f, row){
+  const net = v.net, used = String(smpUsed(v, f)), typed = smpVal(v, f).trim();
+  const p = smpFieldProblem(f, v), dp = smpDraftProblems(v);
+  const mine = dp.find(t => t.indexOf(f.label) === 0 || (f.kind === 'token' && t.indexOf(smpTokLabel(v.tpl)) === 0));
+  const pf = (extra) => p ? p.text : (extra || '');
+  switch(f.kind){
+    case 'name': { const nm = used.replace(/[^A-Za-z0-9]/g, '') || f.def; return row(f.label, nm, 'ok'); }
+    case 'sel': return row(f.label, f.map[typed] || f.map[Object.keys(f.map)[0]], 'ok');
+    case 'S': return row(f.label, used === '' ? '(empty)' : used, p ? 'bad' : 'ok', pf());
+    case 'addr': return row(f.label, typed || 'Missing', mine ? (typed ? 'bad' : 'missing') : 'ok', mine || '', !!typed);
+    case 'guardian': return row(f.label, typed || 'Missing', p ? (typed ? 'bad' : 'missing') : 'ok', p ? p.text : 'Cannot be the account that deploys the wallet', !!typed);
+    case 'reward': return row(f.label, typed || 'Same as the staking token', mine ? 'bad' : 'ok', mine || '', !!typed);
+    case 'govtoken':
+      if(typed) return row(f.label, typed, mine ? 'bad' : 'ok', mine || '', true);
+      return v.portable ? row(f.label, 'Set at deploy time', 'ok', 'Constructor argument token_') : row(f.label, 'Missing', 'missing', mine || 'Required in Single network mode');
+    case 'token': {
+      if(typed) return row(f.label, typed, mine ? 'bad' : 'ok', mine || (v.portable ? 'Starting value for the constructor argument' : ''), true);
+      if(net && net.usdc) return row(f.label, net.usdc, 'ok', v.portable ? 'Network default (USDC), set per network at deploy time' : (smpDecimalsNote(v, f) || 'Network default (USDC)'), true);
+      return row(f.label, 'Missing', v.portable ? 'ok' : 'missing', v.portable ? 'Set at deploy time' : (mine || 'No default token on this network'));
+    }
+    case 'L': { const lim = typed || (net ? net.walletDailyDefault : ''); return row(f.label, lim + (net ? ' ' + net.gasSymbol : ''), p ? 'bad' : 'ok', pf(v.portable ? 'Constructor argument dailyLimit_, scaled per network' : 'Counted in the gas token of the network'), false); }
+    default: {
+      const zero = f.zero && /^0+(\.0+)?$/.test(used.trim());
+      const shown = zero ? f.zero : used + (f.unit ? ' ' + f.unit : '');
+      let note = '';
+      if(f.kind === 'P') note = v.portable ? 'Scaled by the token decimals at deploy time' : 'Written as ' + used + ' × 10^6' + (smpDecimalsNote(v, f) ? '. ' + smpDecimalsNote(v, f) : '');
+      else if(f.note) note = f.note;
+      return row(f.label, shown, p ? 'bad' : 'ok', pf(note));
+    }
+  }
+}
+
+const SMP_CONFIG = {
+  key: 'simple', prefix: 'bld',
+  section: 'sec-simple', codePanel: 'simpleCode', summary: 'smpSummary', progress: 'smpProgress', stages: 'smpStages',
+  watch: ['simpleForm'],
+  isTemplate: (tpl) => !!SMP_SPEC[tpl],
+  read: () => smpRead(),
+  problems: (v) => smpProblems(v),
+  signature: (v) => smpSig(v),
+  draft: () => (typeof pendingSource !== 'undefined' && pendingSource && SMP_SPEC[pendingSource.template] && Array.isArray(pendingSource.problems)) ? pendingSource.problems : [],
+  guidance(v){
+    const pick = document.getElementById('smpPick'); if(pick) pick.hidden = !!v.tpl;
+    const ul = document.getElementById('smpNotes'); if(!ul) return;
+    ul.textContent = '';
+    const add = (t, kind) => { const li = swbEl('li', '', t); if(kind) li.setAttribute('data-kind', kind); ul.appendChild(li); };
+    if(!v.tpl){ add('Choose a template to see what it generates, what it checks and what its constructor needs.'); return; }
+    const spec = SMP_SPEC[v.tpl];
+    spec.notes.forEach(t => add(t));
+    add(v.portable ? (spec.ctor.length ? 'In this Deployment Mode the constructor takes: ' + spec.ctor.join(', ') + '. They are set per network on the deploy page.' : 'It has no constructor argument in any Deployment Mode.') : 'In Single network mode nothing is set at deploy time: the values are written into the Solidity.');
+    smpProblems(v).slice(0, 3).forEach(t => add(t, 'warn'));
+  },
+  summaryRows(v, row){
+    if(!v.tpl){
+      row('Template', 'None selected', 'missing', 'Choose a template above');
+    } else {
+      const spec = SMP_SPEC[v.tpl];
+      row('Template', spec.title, 'ok');
+      spec.fields.forEach(f => smpFieldRow(v, f, row));
+    }
+    CFBuilder.networkRow(row, v.net);
+    const spec = v.tpl ? SMP_SPEC[v.tpl] : null;
+    row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad', !spec ? '' : (v.portable && spec.ctor.length ? 'Constructor arguments: ' + spec.ctor.join(', ') : 'No constructor arguments'));
+  }
+};
+CFBuilder.register(SMP_CONFIG);
+
 /* ======================================================================
    CODE DISPLAY / DOWNLOAD
    ====================================================================== */

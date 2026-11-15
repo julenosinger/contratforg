@@ -873,6 +873,17 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 .bld .bld-count{margin-left:6px;padding:1px 7px;border-radius:999px;background:rgba(52,211,153,.16);color:var(--b-em);font-family:var(--mono);font-size:10.5px;}
 .bld .bld-adv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:0 12px 12px;}
 .bld .bld-adv-grid .bld-wide{grid-column:1/-1;}
+.bld .bld-notes{list-style:none;margin:0;padding:0;display:grid;gap:8px;font-size:11.5px;line-height:1.5;color:var(--b-muted);}
+.bld .bld-notes li{padding-left:12px;position:relative;}
+.bld .bld-notes li::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--b-em);}
+.bld .bld-notes li[data-kind="warn"]::before{background:var(--b-warn);}
+.bld #simpleGrid{margin:0;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+.bld #simpleGrid .tcard{padding:14px 15px;}
+.bld #simpleGrid .tcard h3{font-size:16px;margin-bottom:6px;}
+.bld #simpleGrid .tcard p{font-size:11.5px;}
+.bld #simpleForm{margin:0;padding:16px 18px;border-radius:12px;border-color:var(--b-line-2);}
+.bld #simpleForm:empty,.bld #smpPick[hidden]{display:none;}
+
 .bld .bld-feebox{display:flex;align-items:center;gap:8px;}
 .bld .bld-feebox input{flex:1;min-width:0;}
 .bld .bld-pct{flex:none;padding:3px 8px;border-radius:6px;background:rgba(52,211,153,.14);color:var(--b-em);font-family:var(--mono);font-size:11.5px;white-space:nowrap;}

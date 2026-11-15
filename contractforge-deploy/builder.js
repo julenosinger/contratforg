@@ -20,6 +20,7 @@
      signature(v)                                         -> string    everything that changes the generated code (form + network + mode)
      summaryRows(v, row)                                  calls row(label, value, state, flag, mono) per summary line
      guidance(v)                                          optional: the module updates its own hints
+     watch                                                optional: ids of containers whose children the page script redraws (the screen redraws after them)
      texts                                                optional overrides, see TEXTS below
    ====================================================================== */
 const CFBuilder = (function(){
@@ -167,6 +168,10 @@ const CFBuilder = (function(){
     new MutationObserver(draw).observe(sec, { attributes: true, attributeFilter: ['style'] });                    // entering the section refreshes it
     const side = document.getElementById('sidenet');
     if(side) new MutationObserver(draw).observe(side, { childList: true, characterData: true, subtree: true });   // the active network changed
+    (m.watch || []).forEach(id => {                                                                                // a screen whose form is drawn by script (Simple contracts)
+      const el = document.getElementById(id);
+      if(el) new MutationObserver(() => setTimeout(draw, 0)).observe(el, { childList: true });                     // after the page script has restored saved values too
+    });
     const hist = document.getElementById('historyList');
     if(hist) new MutationObserver(draw).observe(hist, { childList: true });                                       // a deployment was recorded
   }

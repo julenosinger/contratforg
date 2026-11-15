@@ -155,11 +155,41 @@
     </section>
 
     <!-- ============ 01 SIMPLE CONTRACTS ============ -->
-    <section class="section" id="sec-simple" style="display:none;">
-      <div class="section-head"><span class="n">01</span><h2>Simple contracts</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="grid" id="simpleGrid"></div>
-
-      <div class="form-panel" id="simpleForm"></div>
+    <section class="section bld" id="sec-simple" style="display:none;">
+      <div class="section-head"><span class="n">01</span><h2>Simple Contracts Builder</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="bld-sub">Pick a ready-made template, fill in its fields and generate the Solidity. Every template has its own fields, checks and constructor, and the Deployment Mode changes how some of them are set.</p>
+      <ol class="bld-stages" id="smpStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="bld-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="bld-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="bld-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <div class="bld-block">
+            <h3 class="bld-h"><span class="bld-n" aria-hidden="true">1</span>Choose a Template</h3>
+            <div class="grid" id="simpleGrid"></div>
+          </div>
+          <div class="bld-block">
+            <h3 class="bld-h"><span class="bld-n" aria-hidden="true">2</span>Configure the Template</h3>
+            <p class="bld-note" id="smpPick" role="note">Choose a template above to see its fields.</p>
+            <div class="form-panel" id="simpleForm"></div>
+          </div>
+        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="smpSumH">
+            <h3 id="smpSumH">Configuration Summary</h3>
+            <dl class="bld-sum" id="smpSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="smpNotesH">
+            <h3 id="smpNotesH">About This Template</h3>
+            <ul class="bld-notes" id="smpNotes"></ul>
+          </section>
+          <section class="bld-card" aria-labelledby="smpProgH">
+            <h3 id="smpProgH">Build Progress</h3>
+            <ol class="bld-prog" id="smpProgress"></ol>
+          </section>
+        </aside>
+      </div>
       <div class="codepanel" id="simpleCode" style="display:none;"></div>
     </section>
 

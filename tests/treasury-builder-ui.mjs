@@ -234,7 +234,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   const a = fresh(); const { d, ev } = a;
   ok(['swap', 'treasury'].every((k) => JSON.parse(ev('JSON.stringify(CFBuilder.keys())')).includes(k)), 'engine: Swap and Treasury are registered');
   ok([...d.querySelectorAll('.bld')].map((s) => s.id).includes('sec-treasury'), 'the Treasury carries the shared builder class');
-  for (const id of ['sec-simple', 'sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
+  for (const id of ['sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
   a.set('tre_signers', S(3).join('\n')); await a.gen();
   ev("setMultichainMode('multi')"); eq(a.rows()['Deployment Mode'].text, 'Multi-deploy', 'the mode control keeps the overview in step');
   eq(a.prog()['Code Generation'].state, 'stale', 'and a mode change marks the generated code as stale (the constructor depends on it)');

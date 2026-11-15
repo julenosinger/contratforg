@@ -43,7 +43,7 @@ function screen(app, key, extra = {}) {
 {
   const app = loadApp(); const s = screen(app, 'one'); const { w, ev } = app;
   ok(typeof cf(w) === 'object', 'the engine is a page global');
-  eq(JSON.parse(ev('JSON.stringify(CFBuilder.keys())')), ['swap', 'treasury', 'vault', 'multisend', 'crosschain'], 'the screens registered at load (add a key here when a later phase registers one)');
+  eq(JSON.parse(ev('JSON.stringify(CFBuilder.keys())')), ['swap', 'treasury', 'vault', 'multisend', 'crosschain', 'simple'], 'the screens registered at load (add a key here when a later phase registers one)');
   let threw = '';
   try { cf(w).register({ key: 'x' }); } catch (e) { threw = e.message; }
   ok(/missing/.test(threw), 'a config without the required parts is refused', threw);
@@ -176,7 +176,7 @@ function screen(app, key, extra = {}) {
   eq(w.__guided, 'Alpha', 'the guidance hook runs with the screen values');
   ok(a.code.querySelector('.tst-lang') === null && !!b.code.querySelector('.tst-lang'), 'only the screen that generated gets a decorated code head');
   cf(w).renderAll();
-  eq(JSON.parse(app.ev('JSON.stringify(CFBuilder.keys())')), ['swap', 'treasury', 'vault', 'multisend', 'crosschain', 'sa', 'sb'], 'renderAll walks every registered screen');
+  eq(JSON.parse(app.ev('JSON.stringify(CFBuilder.keys())')), ['swap', 'treasury', 'vault', 'multisend', 'crosschain', 'simple', 'sa', 'sb'], 'renderAll walks every registered screen');
   // the Deployment Mode control refreshes every screen
   w.eval("setMultichainMode('portable')"); await tick();
   ok(b.d.querySelector('#sbSum .tst-row') !== null, 'a mode change redraws every registered screen without errors');
