@@ -70,7 +70,6 @@
       <div class="row"><span>chain id</span><b id="sidechain">5042002</b></div>
       <div class="row"><span>gas token</span><b id="sidegas">USDC</b></div>
     </div>
-    <div class="mc-box" id="mcSelector"></div>
     <div class="tier-widget">
       <div class="tier-label">Appearance</div>
       <button class="theme-btn" id="themeBtn" data-onclick="toggleTheme()">☀ Light mode</button>
@@ -157,7 +156,7 @@
 
     <!-- ============ 01 SIMPLE CONTRACTS ============ -->
     <section class="section" id="sec-simple" style="display:none;">
-      <div class="section-head"><span class="n">01</span><h2>Simple contracts</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">01</span><h2>Simple contracts</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="grid" id="simpleGrid"></div>
 
       <div class="form-panel" id="simpleForm"></div>
@@ -166,7 +165,7 @@
 
     <!-- ============ 02 SWAP / AMM ============ -->
     <section class="section" id="sec-swap" style="display:none;">
-      <div class="section-head"><span class="n">02</span><h2>Swap / AMM (Uniswap V2-style)</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">02</span><h2>Swap / AMM (Uniswap V2-style)</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <div class="field-grid">
           <div class="field">
@@ -212,7 +211,7 @@
 
     <!-- ============ 03 TREASURY ============ -->
     <section class="section" id="sec-treasury" style="display:none;">
-      <div class="section-head"><span class="n">03</span><h2>Treasury (multisig + streaming)</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">03</span><h2>Treasury (multisig + streaming)</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <div class="field-grid">
           <div class="field">
@@ -249,7 +248,7 @@
 
     <!-- ============ 04 VAULT ============ -->
     <section class="section" id="sec-vault" style="display:none;">
-      <div class="section-head"><span class="n">04</span><h2>Vault — ERC-4626</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">04</span><h2>Vault — ERC-4626</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <div class="field-grid">
           <div class="field">
@@ -290,7 +289,7 @@
 
     <!-- ============ 05 MULTISEND ============ -->
     <section class="section" id="sec-multisend" style="display:none;">
-      <div class="section-head"><span class="n">05</span><h2>MultiSend / Batch Payments</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">05</span><h2>MultiSend / Batch Payments</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <div class="field-grid">
           <div class="field">
@@ -328,7 +327,7 @@
 
     <!-- ============ 06 CROSSCHAIN ============ -->
     <section class="section" id="sec-crosschain" style="display:none;">
-      <div class="section-head"><span class="n">06</span><h2>Crosschain Payments (CCTP)</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">06</span><h2>Crosschain Payments (CCTP)</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <div class="field-grid">
           <div class="field">
@@ -704,7 +703,7 @@
 
     <!-- ============ 14 CONTRACT WIZARD ============ -->
     <section class="section" id="sec-wizard" style="display:none;">
-      <div class="section-head"><span class="n">14</span><h2>Contract Wizard</h2><div class="rule"></div></div>
+      <div class="section-head"><span class="n">14</span><h2>Contract Wizard</h2><div class="rule"></div><div class="dm-mount"></div></div>
       <div class="form-panel">
         <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:22px;">
           Answer a few questions and ContractForge builds the right contract for you — no need to know which section to use.
@@ -818,6 +817,7 @@
                   <option value="advanced">Advanced (300+ lines, full DeFi)</option>
                 </select>
               </div>
+              <div class="dm-mount" data-dm-note="Used by ContractForge when you compile and deploy. It is not sent to the AI and does not change what the AI writes."></div>
               <button type="button" class="ai-attach" data-onclick="aiChatAttachContext()" title="Adds the contract currently open in ContractForge to your message as reference data">Attach Current Contract</button>
             </div>
             <div class="ai-context" id="aiContextChip" hidden>

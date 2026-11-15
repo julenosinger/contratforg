@@ -699,7 +699,8 @@ const consoleText = (d) => [...d.querySelectorAll('#deployConsole .line')].map((
 ok(!/All features free|Tier gates/.test(doc.querySelector('.spine').textContent), 'stale tier text removed');
 ok(/multichain/.test(doc.getElementById('headVersion').textContent), 'version text updated');
 ok(/16 NETWORKS/.test(doc.querySelector('.head-meta').textContent), 'header counts networks', doc.querySelector('.head-meta').textContent);
-ok(!!doc.getElementById('themeBtn') && !!doc.getElementById('mcSelector') && !!doc.getElementById('sidenet'), 'sidebar controls kept');
+ok(!!doc.getElementById('themeBtn') && !!doc.getElementById('resetSavedBtn') && !!doc.getElementById('sidenet'), 'sidebar controls kept');
+ok(!doc.getElementById('mcSelector') && !doc.querySelector('.spine .mc-box, .spine .dm-mount'), 'the old multichain mode selector is gone from the sidebar');
 
 /* AI chat */
 {

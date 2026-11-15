@@ -246,12 +246,155 @@ function setMultichainMode(mode){
   if(typeof renderMultiDeployPanel === 'function') renderMultiDeployPanel();
 }
 
+/* ---------------- UI: deployment mode control (shared, Phase 8.4) ----------------
+   The mode lives in `multichainMode` and is changed only by setMultichainMode() above (same keys, same cf_mc_mode storage).
+   Every <div class="dm-mount"> in the page gets one compact trigger; they all open the same popover (#dmPopover, a single
+   element on <body>, so no parent can clip it) and they are all refreshed by renderModeSelector(), which setMultichainMode()
+   already calls. Choosing a mode only sets the mode: it never compiles, deploys, switches the wallet chain or touches sources. */
+const DM_ICONS = {
+  single:   ['M12 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M7 19h10', 'M12 12v7'],
+  portable: ['M4 8l8-4 8 4v8l-8 4-8-4z', 'M4 8l8 4 8-4', 'M12 12v8'],
+  multi:    ['M12 4v6', 'M12 10l-6 8', 'M12 10v8', 'M12 10l6 8'],
+  cross:    ['M4 8h14', 'M15 5l3 3-3 3', 'M20 16H6', 'M9 13l-3 3 3 3']
+};
+const DM_NOTE = 'Changing the mode only sets how the next contract is generated and deployed. Nothing is compiled or deployed, and your inputs are kept. Generate the contract again to apply it.';
+const dmState = { open: false, trigger: null, bound: false };
+
+function dmEl(tag, cls, text){
+  const el = document.createElement(tag);
+  if(cls) el.className = cls;
+  if(text !== undefined) el.textContent = text;
+  return el;
+}
+function dmSvg(paths, cls){
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.8'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', cls);
+  paths.forEach(d => { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', d); svg.appendChild(path); });
+  return svg;
+}
+
+function dmPopover(){
+  let pop = document.getElementById('dmPopover');
+  if(pop) return pop;
+  pop = dmEl('div', 'dm-pop');
+  pop.id = 'dmPopover'; pop.hidden = true; pop.tabIndex = -1;
+  pop.setAttribute('role', 'listbox'); pop.setAttribute('aria-label', 'Deployment mode');
+  Object.keys(MC_MODES).forEach(k => {
+    const opt = dmEl('button', 'dm-opt'); opt.type = 'button'; opt.tabIndex = -1;
+    opt.setAttribute('role', 'option'); opt.setAttribute('data-dm-mode', k);
+    const text = dmEl('span', 'dm-text');
+    text.appendChild(dmEl('b', '', MC_MODES[k].label));
+    text.appendChild(dmEl('span', 'dm-d', MC_MODES[k].desc));
+    opt.appendChild(dmSvg(DM_ICONS[k], 'dm-ico')); opt.appendChild(text); opt.appendChild(dmSvg(['M5 12l5 5 9-10'], 'dm-check'));
+    pop.appendChild(opt);
+  });
+  pop.appendChild(dmEl('p', 'dm-note'));
+  document.body.appendChild(pop);
+  return pop;
+}
+
+function dmClose(restoreFocus){
+  const pop = document.getElementById('dmPopover');
+  if(pop) pop.hidden = true;
+  const t = dmState.trigger;
+  if(t){ t.setAttribute('aria-expanded', 'false'); if(restoreFocus && t.focus) t.focus(); }
+  dmState.open = false; dmState.trigger = null;
+}
+
+function dmPlace(trigger, pop){
+  const r = trigger.getBoundingClientRect();
+  const vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+  const w = pop.offsetWidth || 340, h = pop.offsetHeight || 300;
+  const left = Math.max(8, Math.min(r.left, vw - w - 8));
+  const below = vh - r.bottom - 8 >= h || r.top < h + 8;
+  pop.style.left = left + 'px';
+  if(below){ pop.style.top = Math.max(8, r.bottom + 6) + 'px'; pop.style.bottom = 'auto'; }
+  else { pop.style.bottom = Math.max(8, vh - r.top + 6) + 'px'; pop.style.top = 'auto'; }
+}
+
+function dmOpen(trigger){
+  const pop = dmPopover();
+  if(dmState.open) dmClose(false);
+  pop.querySelectorAll('.dm-opt').forEach(o => o.setAttribute('aria-selected', String(o.getAttribute('data-dm-mode') === multichainMode)));
+  const mount = trigger.closest('.dm-mount');
+  pop.querySelector('.dm-note').textContent = (mount && mount.getAttribute('data-dm-note')) || DM_NOTE;
+  pop.hidden = false;
+  dmPlace(trigger, pop);
+  trigger.setAttribute('aria-expanded', 'true');
+  dmState.open = true; dmState.trigger = trigger;
+  const sel = pop.querySelector('.dm-opt[aria-selected="true"]') || pop.querySelector('.dm-opt');
+  if(sel) sel.focus();
+}
+
+function dmToggle(btn){
+  if(dmState.open && dmState.trigger === btn) dmClose(true);
+  else dmOpen(btn);
+}
+
+function dmBind(){
+  if(dmState.bound || typeof document === 'undefined') return;
+  dmState.bound = true;   // one set of listeners for the whole page, however many times the control is redrawn
+  document.addEventListener('click', (e) => {
+    const t = e.target && e.target.closest ? e.target : null;
+    if(!t) return;
+    const opt = t.closest('.dm-opt');
+    if(opt){ setMultichainMode(opt.getAttribute('data-dm-mode')); dmClose(true); return; }
+    if(dmState.open && !t.closest('#dmPopover') && !t.closest('.dm-trigger')) dmClose(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    const pop = document.getElementById('dmPopover');
+    if(!dmState.open){
+      const onTrigger = e.target && e.target.classList && e.target.classList.contains('dm-trigger');
+      if(onTrigger && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){ e.preventDefault(); dmOpen(e.target); }
+      return;
+    }
+    if(e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); dmClose(true); return; }
+    if(e.key === 'Tab'){ dmClose(true); return; }
+    const opts = [...pop.querySelectorAll('.dm-opt')];
+    const i = opts.indexOf(document.activeElement);
+    let next = -1;
+    if(e.key === 'ArrowDown') next = i < 0 ? 0 : (i + 1) % opts.length;
+    else if(e.key === 'ArrowUp') next = i < 0 ? opts.length - 1 : (i - 1 + opts.length) % opts.length;
+    else if(e.key === 'Home') next = 0;
+    else if(e.key === 'End') next = opts.length - 1;
+    if(next >= 0){ e.preventDefault(); opts[next].focus(); }
+  });
+  window.addEventListener('resize', () => { if(dmState.open) dmClose(false); });
+  document.addEventListener('scroll', (e) => { const pop = document.getElementById('dmPopover'); if(dmState.open && !(pop && e.target instanceof Node && pop.contains(e.target))) dmClose(false); }, true);
+}
+
 function renderModeSelector(){
-  const box = document.getElementById('mcSelector');
-  if(!box) return;
-  box.innerHTML = '<div class="mc-label">Multichain mode</div><div class="mc-seg" role="group" aria-label="Multichain mode">'
-    + Object.keys(MC_MODES).map(k=>'<button type="button" class="mc-btn'+(k===multichainMode?' active':'')+'" data-mode="'+k+'" aria-pressed="'+(k===multichainMode)+'" data-onclick="setMultichainMode(\''+k+'\')">'+MC_MODES[k].label+'</button>').join('')
-    + '</div><div class="mc-desc">'+escapeHtml(MC_MODES[multichainMode].desc)+'</div>';
+  if(typeof document === 'undefined') return;
+  const m = MC_MODES[multichainMode];
+  dmPopover(); dmBind();
+  document.querySelectorAll('.dm-mount').forEach(mount => {
+    let btn = mount.querySelector('.dm-trigger');
+    if(!btn){      // built once, then only updated, so focus and open state survive a mode change
+      btn = dmEl('button', 'dm-trigger'); btn.type = 'button';
+      btn.setAttribute('aria-haspopup', 'listbox'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 'dmPopover');
+      btn.setAttribute('data-onclick', 'dmToggle(this)');
+      btn.appendChild(dmSvg(DM_ICONS[multichainMode], 'dm-ico'));
+      btn.appendChild(dmEl('span', 'dm-k', 'Deployment Mode:'));
+      btn.appendChild(dmEl('b', 'dm-v'));
+      btn.appendChild(dmEl('span', 'dm-caret', '\u25BE')).setAttribute('aria-hidden', 'true');
+      mount.appendChild(btn);
+    }
+    btn.querySelector('.dm-v').textContent = m.label;
+    btn.setAttribute('aria-label', 'Deployment mode: ' + m.label + '. Change');
+    const paths = btn.querySelectorAll('svg.dm-ico path');
+    const want = DM_ICONS[multichainMode];
+    if(paths.length !== want.length){ const fresh = dmSvg(want, 'dm-ico'); btn.replaceChild(fresh, btn.querySelector('svg.dm-ico')); }
+    else paths.forEach((p, i) => p.setAttribute('d', want[i]));
+  });
+  const pop = document.getElementById('dmPopover');
+  pop.querySelectorAll('.dm-opt').forEach(o => o.setAttribute('aria-selected', String(o.getAttribute('data-dm-mode') === multichainMode)));
+  document.querySelectorAll('#homeModes .home-card[data-mode]').forEach(c => {      // the Home cards share the same state
+    const on = c.getAttribute('data-mode') === multichainMode;
+    c.classList.toggle('active', on); c.setAttribute('aria-pressed', String(on));
+  });
 }
 
 if(typeof document !== 'undefined') renderModeSelector();

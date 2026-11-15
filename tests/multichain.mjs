@@ -41,14 +41,15 @@ for (const mode of ['portable', 'multi', 'cross']) {
 /* 1b. mode selector and panels */
 {
   const app = loadApp(); const { ev, w } = app;
-  const btns = () => [...w.document.querySelectorAll('#mcSelector .mc-btn')];
-  eq(btns().map((b) => b.dataset.mode), ['single', 'portable', 'multi', 'cross'], 'selector buttons');
-  eq(btns().filter((b) => b.classList.contains('active')).map((b) => b.dataset.mode), ['single'], 'single is the default mode');
+  const btns = () => [...w.document.querySelectorAll('#dmPopover .dm-opt')];
+  const sel = () => btns().filter((b) => b.getAttribute('aria-selected') === 'true').map((b) => b.dataset.dmMode);
+  eq(btns().map((b) => b.dataset.dmMode), ['single', 'portable', 'multi', 'cross'], 'selector options');
+  eq(sel(), ['single'], 'single is the default mode');
   const panel = () => w.document.getElementById('multiDeployPanel').style.display;
   ok(panel() === 'none', 'multi-deploy panel hidden in single mode');
   btns()[1].click();
   eq(ev('multichainMode'), 'portable', 'clicking a button sets the mode');
-  eq(btns().filter((b) => b.classList.contains('active')).map((b) => b.dataset.mode), ['portable'], 'active button follows');
+  eq(sel(), ['portable'], 'selected option follows');
   eq(w.localStorage.getItem('cf_mc_mode'), 'portable', 'mode persisted');
   ok(panel() === 'none', 'multi-deploy panel hidden in portable mode');
   btns()[2].click();
