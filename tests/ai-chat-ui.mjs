@@ -36,6 +36,10 @@ const send = async (a, text) => { a.d.getElementById('aiComposer').value = text;
   ok(d.getElementById('aiComposer').getAttribute('aria-label') && d.getElementById('aiSendBtn').getAttribute('aria-label'), 'a11y: the composer and Send are labelled');
   eq(d.getElementById('aiComposer').getAttribute('maxlength'), '20000', 'the composer matches the proxy message limit');
   eq(d.getElementById('aiStatus').getAttribute('role'), 'status', 'a11y: the status line is a status region');
+  eq(d.getElementById('aiCount').textContent, '0 / 20000', 'composer: the character counter starts at zero');
+  d.getElementById('aiComposer').value = 'hello'; a.ev('aiAutoGrow(document.getElementById("aiComposer"))');
+  eq(d.getElementById('aiCount').textContent, '5 / 20000', 'composer: the counter follows the text');
+  d.getElementById('aiComposer').value = ''; a.ev('aiAutoGrow(document.getElementById("aiComposer"))');
   ok(/Enter to send/.test(d.getElementById('aiHint').textContent) && /Shift\+Enter/.test(d.getElementById('aiHint').textContent), 'keyboard guidance is shown');
   ok(/not audited/i.test(d.getElementById('aiHint').textContent), 'the composer says AI code is not audited');
 }

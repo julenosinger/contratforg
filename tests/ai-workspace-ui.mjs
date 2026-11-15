@@ -44,7 +44,12 @@ eq(cs('main', 'overflowY'), 'auto', 'AI: main scrolls by itself if the chat mini
 eq(cs('main', 'minWidth'), '0px', 'AI: main may shrink, so a long code line cannot widen the page');
 ok(/minmax\(0,\s*1fr\)|minmax\(0, 1fr\)/.test(cs('.app', 'gridTemplateColumns')), 'AI: the page grid column can shrink', cs('.app', 'gridTemplateColumns'));
 eq([cs('#sec-nlai', 'flexGrow'), cs('#sec-nlai', 'flexShrink')], ['1', '0'], 'AI: the chat section grows into free space but never shrinks below its content');
-eq(cs('.foot-note', 'flexShrink'), '0', 'AI: the footer note keeps its size and stays reachable');
+eq(cs('.foot-note', 'display'), 'none', 'AI: the technical footer note is not part of the AI screen (no empty space under the chat)');
+eq([cs('#sec-nlai', 'paddingTop'), cs('#sec-nlai', 'paddingBottom'), cs('#sec-nlai', 'paddingLeft'), cs('#sec-nlai', 'paddingRight')], ['0px', '0px', '0px', '0px'], 'AI: no padding around the workspace');
+ok(cs('#sec-nlai .ai-chat', 'borderTopWidth') === '0px' && /^0(px)?$/.test(cs('#sec-nlai .ai-chat', 'borderTopLeftRadius')), 'AI: no outer card (no border, no rounded corners)');
+eq(cs('#sec-nlai .ai-sidebar', 'width'), '260px', 'AI: the conversation panel is 260px');
+eq(cs('#sec-nlai .ai-composer', 'flexShrink'), '0', 'AI: the composer never shrinks');
+eq([cs('#sec-nlai .ai-thread', 'overflowY'), cs('#sec-nlai .ai-convs', 'overflowY')], ['auto', 'auto'], 'AI: the thread and the conversation list scroll on their own');
 ok(cs('.walletbar', 'display') !== 'none' && cs('#connectBtn', 'display') !== 'none', 'AI: the wallet bar and Connect Wallet stay');
 ok(cs('#sec-nlai .ai-sidebar', 'display') === 'flex' && cs('#sec-nlai .ai-main', 'display') === 'flex', 'AI: sidebar and main column are both there');
 
@@ -76,6 +81,7 @@ for (const sec of others) {
   ok(!inAi(), 'cycle: ' + sec + ' turns the workspace off');
   ok(cs('#netBanner', 'display') === 'flex' && cs('#currentContract', 'display') === 'flex', 'cycle: ' + sec + ' shows both bars again', cs('#netBanner', 'display') + '/' + cs('#currentContract', 'display'));
   ok(cs('main', 'display') !== 'flex' && cs('main', 'maxWidth') !== 'none' && cs('main', 'padding') !== '0px', 'cycle: ' + sec + ' gets the original main layout', cs('main', 'maxWidth') + ' ' + cs('main', 'padding'));
+  ok(cs('.foot-note', 'display') !== 'none', 'cycle: ' + sec + ' shows the footer note again', cs('.foot-note', 'display'));
   ok(cs('main', 'overflowY') === 'visible' && cs('.app', 'gridTemplateColumns') !== '280px minmax(0px, 1fr)', 'cycle: ' + sec + ' gets the original scrolling and grid back', cs('main', 'overflowY') + ' ' + cs('.app', 'gridTemplateColumns'));
 }
 // the exact sequence from the brief
@@ -121,9 +127,9 @@ ok(ws.length > 200, 'css: the workspace block exists');
 ok(/body\.ai-workspace #netBanner,body\.ai-workspace #currentContract,body\.ai-workspace #netPanel\{display:none !important;\}/.test(ws), 'css: exactly the two bars (and the network panel that hangs off the banner) are hidden');
 ok(!/walletbar|connectBtn|#walletStatus|balanceBadge|\.spine|\.nav-item/.test(ws), 'css: nothing here touches the wallet bar or the menu');
 ok(/100dvh/.test(ws) && !/calc\(100dvh/.test(ws), 'css: the workspace fills the viewport without a hand-tuned offset');
-ok(/body\.ai-workspace #sec-nlai \.ai-chat\{flex:1 1 0;height:auto;min-height:420px;min-width:0;max-width:100%;\}/.test(ws), 'css: the chat takes the remaining height');
+ok(/body\.ai-workspace #sec-nlai \.ai-chat\{flex:1 1 0;height:auto;min-height:360px;min-width:0;max-width:100%;border:0;border-radius:0;\}/.test(ws), 'css: the chat takes the remaining height, with no card');
 ok(!/body\.ai-workspace\s*\{/.test(ws) && ws.split('\n').filter((l) => /^[^\s\/@}]/.test(l) && !/^(body\.ai-workspace|#sec-nlai|\.light|\})/.test(l)).length === 0, 'css: every rule in the block is scoped');
-ok(/\.ai-chat\{[^}]*clamp\(540px/.test(css), 'css: the Phase 8 sizing stays as the fallback when the class is absent');
+ok(!/clamp\(540px|clamp\(480px|920px|900px/.test(css.slice(css.indexOf('/* ---- AI chat (section 15).'))), 'css: no fixed maximum height (920px/900px) or viewport-offset formula is left in the chat rules');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

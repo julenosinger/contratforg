@@ -4767,6 +4767,8 @@ function aiAutoGrow(ta){
   if (!ta) return;
   ta.style.height = 'auto';
   ta.style.height = Math.min(Math.max(ta.scrollHeight, 24), 240) + 'px';
+  const count = document.getElementById('aiCount');
+  if (count) count.textContent = ta.value.length + ' / ' + AI_MAX_MESSAGE;
   aiUpdateContextChip();
 }
 

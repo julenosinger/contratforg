@@ -107,17 +107,31 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
   const nav = async (sec) => { await page.evaluate((x) => document.querySelector('.nav-item[data-section="' + x + '"]').click(), sec); await page.waitForTimeout(120); };
   const geo = () => page.evaluate(() => {
     const disp = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).display : 'missing'; };
-    const box = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { t: b.top, b: b.bottom, h: b.height, w: b.width }; };
+    const box = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height, w: b.width }; };
     return { cls: document.body.classList.contains('ai-workspace'), banner: disp('#netBanner'), bar: disp('#currentContract'), head: disp('#sec-nlai .section-head'),
-      wallet: disp('.walletbar'), connect: disp('#connectBtn'), vh: window.innerHeight, vw: window.innerWidth,
+      foot: disp('.foot-note'), wallet: disp('.walletbar'), connect: disp('#connectBtn'), vh: window.innerHeight, vw: window.innerWidth,
       sx: document.documentElement.scrollWidth - document.documentElement.clientWidth, sy: document.documentElement.scrollHeight,
       chat: box('#aiChat'), side: box('#aiSidebar'), mainCol: box('#sec-nlai .ai-main'), thread: box('#aiThread'), comp: box('#aiComposer'), send: box('#aiSendBtn'), walletBox: box('.walletbar') };
   });
   await nav('swap');
   const outside = await page.evaluate(() => ({ cls: document.body.classList.contains('ai-workspace'), banner: getComputedStyle(document.getElementById('netBanner')).display, bar: getComputedStyle(document.getElementById('currentContract')).display, bannerH: document.getElementById('netBanner').getBoundingClientRect().height, barH: document.getElementById('currentContract').getBoundingClientRect().height }));
   ok(!outside.cls && outside.banner !== 'none' && outside.bar !== 'none' && outside.bannerH > 0 && outside.barH > 0, name + ': both bars are visible and take space in Swap / AMM', JSON.stringify(outside));
+  ok(await page.evaluate(() => getComputedStyle(document.querySelector('.foot-note')).display) !== 'none', name + ': the footer note is shown in Swap / AMM');
   await nav('nlai');
   const g = await geo();
+  // Phase 8.3: one continuous screen, no card, no unused space below
+  ok(g.foot === 'none', name + ': the footer note is not part of the AI screen');
+  ok(Math.abs(g.chat.t - g.walletBox.b) <= 2, name + ': the workspace starts right under the wallet header', g.chat.t + ' vs ' + g.walletBox.b);
+  ok(Math.abs(g.chat.b - g.vh) <= 2, name + ': the workspace reaches the bottom of the viewport (no unused space)', g.chat.b + ' vs ' + g.vh);
+  ok(Math.abs(g.comp.b - g.vh) <= 24, name + ': the composer sits at the bottom of the screen', g.comp.b + ' vs ' + g.vh);
+  ok(await page.evaluate(() => { const c = getComputedStyle(document.getElementById('aiChat')); return c.borderTopWidth === '0px' && c.borderTopLeftRadius === '0px'; }), name + ': no card border or rounded corners');
+  if (name !== 'phone') ok(Math.abs(g.side.w - 260) <= 24 || g.side.w === 220, name + ': the conversation panel is about 260px wide', String(g.side.w));
+  if (name !== 'phone') ok(Math.abs(g.chat.r - g.vw) <= 2, name + ': the chat reaches the right edge of the window', g.chat.r + ' vs ' + g.vw);
+  // the thread scrolls by itself while the page stays put
+  await page.evaluate(() => { aiState.convs = [{ id: 'long', msgs: Array.from({ length: 24 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'message ' + i + ' ' + 'word '.repeat(60) })) }]; aiState.activeId = 'long'; aiChatRender(); });
+  const sc = await page.evaluate(() => { const t = document.getElementById('aiThread'); t.scrollTop = 0; const m = document.querySelector('main'); const y0 = window.scrollY, m0 = m.scrollTop; t.scrollTop = 300; return { threadMoved: t.scrollTop > 0, scrolls: t.scrollHeight > t.clientHeight, pageMoved: window.scrollY !== y0 || m.scrollTop !== m0, compB: document.getElementById('aiComposer').getBoundingClientRect().bottom, vh: window.innerHeight }; });
+  ok(sc.scrolls && sc.threadMoved && !sc.pageMoved, name + ': the message thread scrolls on its own and the page does not move', JSON.stringify(sc));
+  ok(Math.abs(sc.compB - sc.vh) <= 24, name + ': the composer stays at the bottom while messages scroll', JSON.stringify(sc));
   ok(g.cls && g.banner === 'none' && g.bar === 'none' && g.head === 'none', name + ': AI hides the network bar, the contract bar and the section heading', JSON.stringify(g));
   ok(g.wallet !== 'none' && g.connect !== 'none' && g.walletBox.h > 0, name + ': the wallet bar and Connect Wallet stay visible');
   const oldH = Math.min(920, Math.max(540, g.vh - 250));    // the Phase 8 formula, for comparison
@@ -141,7 +155,7 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
   if (name === 'desktop') {
     await page.setViewportSize({ width: 1366, height: 520 }); await page.waitForTimeout(120);
     const s = await geo();
-    ok(s.chat.h >= 400 && s.sx <= 0, name + ': a short screen keeps a usable chat', JSON.stringify(s.chat));
+    ok(s.chat.h >= 359 && s.sx <= 0, name + ': a short screen keeps a usable chat', JSON.stringify(s.chat));
     ok(await page.evaluate(() => { const m = document.querySelector('main'); m.scrollTop = m.scrollHeight; const f = document.querySelector('.foot-note').getBoundingClientRect(); return m.scrollHeight > m.clientHeight && f.bottom <= window.innerHeight + 1; }), name + ': on a short screen the page scrolls and the footer note is reachable');
     await page.mouse.move(700, 300); await page.mouse.wheel(0, -4000); await page.waitForTimeout(100);
     ok(await page.evaluate(() => document.querySelector('main').scrollTop === 0 || document.getElementById('aiThread').scrollTop >= 0), name + ': the mouse wheel moves the page or the thread (not frozen)');

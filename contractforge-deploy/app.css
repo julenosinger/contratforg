@@ -852,12 +852,12 @@ label .req-star{color:#FF6A39;margin-left:3px;}
   --ai-text:#1B2622;--ai-muted:#5B6862;--ai-dim:#66726B;--ai-emerald:#0E9A6C;--ai-emerald-dim:#0E9A6C;
   --ai-user:#E7EFE9;--ai-warn:#9A6A10;--ai-err:#B2391E;
 }
-#sec-nlai .ai-chat{position:relative;display:flex;height:clamp(540px,calc(100vh - 250px),920px);height:clamp(540px,calc(100dvh - 250px),920px);
+#sec-nlai .ai-chat{position:relative;display:flex;height:80vh;height:80dvh;min-height:420px;
   background:var(--ai-bg);color:var(--ai-text);border:1px solid var(--ai-line);border-radius:14px;overflow:hidden;font-family:var(--body);}
 #sec-nlai button{font-family:inherit;}
 #sec-nlai button:focus-visible,#sec-nlai select:focus-visible,#sec-nlai input:focus-visible,#sec-nlai .ai-code:focus-visible,#sec-nlai summary:focus-visible{outline:2px solid var(--ai-emerald);outline-offset:2px;}
 /* sidebar */
-#sec-nlai .ai-sidebar{flex:0 0 264px;width:264px;display:flex;flex-direction:column;gap:10px;padding:14px 12px 12px;background:var(--ai-panel);border-right:1px solid var(--ai-line);min-height:0;transition:flex-basis .2s ease,width .2s ease,padding .2s ease,visibility .2s;}
+#sec-nlai .ai-sidebar{flex:0 0 260px;width:260px;display:flex;flex-direction:column;gap:10px;padding:14px 12px 12px;background:var(--ai-panel);border-right:1px solid var(--ai-line);min-height:0;transition:flex-basis .2s ease,width .2s ease,padding .2s ease,visibility .2s;}
 #sec-nlai .ai-sidebar.collapsed{flex-basis:0;width:0;padding-left:0;padding-right:0;border-right-width:0;visibility:hidden;overflow:hidden;}
 #sec-nlai .ai-sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 #sec-nlai .ai-side-title{font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:-.01em;}
@@ -956,7 +956,7 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 #sec-nlai .ai-act-primary:hover{background:#FF7E55;border-color:#FF7E55;}
 #sec-nlai .ai-chat.is-busy .ai-act{opacity:.45;pointer-events:none;}
 /* composer */
-#sec-nlai .ai-composer{padding:8px max(16px,calc((100% - 850px)/2)) max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--ai-line);background:var(--ai-bg);}
+#sec-nlai .ai-composer{flex-shrink:0;padding:8px max(16px,calc((100% - 850px)/2)) max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--ai-line);background:var(--ai-bg);}
 #sec-nlai .ai-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px;}
 #sec-nlai .ai-ctl{display:inline-flex;align-items:center;gap:6px;padding:0 4px 0 10px;min-height:34px;background:var(--ai-raise);border:1px solid var(--ai-line);border-radius:10px;font-size:12px;}
 #sec-nlai .ai-ctl label{font-size:11px;color:var(--ai-dim);white-space:nowrap;}
@@ -984,7 +984,7 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 @media (max-width:1100px){#sec-nlai .ai-sidebar{flex-basis:220px;width:220px;}#sec-nlai .ai-steps{grid-template-columns:1fr;}}
 /* mobile: the history becomes a drawer */
 @media (max-width:760px){
-  #sec-nlai .ai-chat{height:clamp(480px,calc(100vh - 210px),900px);height:clamp(480px,calc(100dvh - 210px),900px);border-radius:12px;}
+  #sec-nlai .ai-chat{border-radius:12px;}
   #sec-nlai .ai-sidebar{position:absolute;z-index:6;top:0;bottom:0;left:0;width:min(86%,320px);flex-basis:auto;box-shadow:8px 0 30px rgba(0,0,0,.45);transition:transform .2s ease,visibility .2s;}
   #sec-nlai .ai-sidebar.collapsed{width:min(86%,320px);padding:14px 12px 12px;transform:translateX(-102%);}
   #sec-nlai .ai-sidebar:not(.collapsed)~.ai-backdrop{display:block;position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);}
@@ -1011,18 +1011,20 @@ body.ai-workspace .app{grid-template-columns:280px minmax(0,1fr);}
 @media (max-width:980px){body.ai-workspace .app{grid-template-columns:minmax(0,1fr);}}
 /* main is exactly one screen tall and scrolls by itself when the chat's minimum height plus the footer does not fit, so nothing is clipped or overlapped */
 body.ai-workspace main{display:flex;flex-direction:column;height:100vh;height:100dvh;min-width:0;max-width:none;padding:0;overflow-x:hidden;overflow-y:auto;}
-body.ai-workspace .foot-note{flex:none;margin:8px 20px 0;padding-bottom:24px;}
+/* the technical footer note belongs to the scrolling pages; the AI screen is one fixed screen, so it is not shown here (it comes back with the other tabs) */
+body.ai-workspace .foot-note{display:none;}
 body.ai-workspace .sticky-top{flex:none;margin:0;}
 /* !important: the section's own display is an inline style written by the navigation code; it is only ever visible together with this class */
-body.ai-workspace #sec-nlai{display:flex !important;flex-direction:column;flex:1 0 auto;min-width:0;margin:0;padding:12px 20px 16px;}
+body.ai-workspace #sec-nlai{display:flex !important;flex-direction:column;flex:1 0 auto;min-width:0;margin:0;padding:0;}
 body.ai-workspace #sec-nlai .section-head{display:none;}
-body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:420px;min-width:0;max-width:100%;}
+/* no card: the chat is the screen. Three continuous panels (menu | conversations | chat) separated by hairlines */
+body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:360px;min-width:0;max-width:100%;border:0;border-radius:0;}
 #sec-nlai .ai-brand{display:flex;flex-direction:column;min-width:0;line-height:1.25;}
 #sec-nlai .ai-brand-title{margin:0;font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;color:var(--ai-text);}
 #sec-nlai .ai-brand-sub{font-size:11px;color:var(--ai-dim);white-space:nowrap;}
 #sec-nlai .ai-main-head .ai-main-title{font-weight:500;color:var(--ai-muted);padding-left:12px;border-left:1px solid var(--ai-line-2);}
 @media (max-width:760px){
-  body.ai-workspace #sec-nlai{padding:6px 6px max(6px,env(safe-area-inset-bottom));}
-  body.ai-workspace #sec-nlai .ai-chat{min-height:360px;}
+  body.ai-workspace #sec-nlai .ai-chat{min-height:320px;}
   #sec-nlai .ai-brand-sub{display:none;}
 }
+#sec-nlai .ai-count{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums;}
