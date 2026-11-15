@@ -67,8 +67,12 @@ const send = async (a, text) => { a.d.getElementById('aiComposer').value = text;
 {
   const a = fresh(); const d = a.d; const { ev, w } = a;
   ev('aiChatNew()'); ev('aiChatNew()');
-  eq(ev('aiState.convs.length'), 2, 'chats: New Chat adds a conversation each time');
-  ev("aiState.convs[0].msgs = [{ role: 'user', content: 'first chat about escrow' }, { role: 'assistant', content: 'ok' }]; aiState.convs[1].msgs = [{ role: 'user', content: 'second chat about staking' }, { role: 'assistant', content: 'ok' }]; aiSave(); aiChatRender();");
+  eq(ev('aiState.convs.length'), 1, 'chats: New Chat reuses the empty chat instead of adding a second one');
+  eq(w.localStorage.getItem(KEY), '[]', 'chats: an empty chat is never written to storage');
+  ev("aiState.convs[0].msgs = [{ role: 'user', content: 'second chat about staking' }, { role: 'assistant', content: 'ok' }]; aiSave();");
+  ev('aiChatNew()');
+  eq(ev('aiState.convs.length'), 2, 'chats: New Chat adds a conversation once the previous one has messages');
+  ev("aiState.convs[0].msgs = [{ role: 'user', content: 'first chat about escrow' }, { role: 'assistant', content: 'ok' }]; aiSave(); aiChatRender();");
   const rows = () => [...d.querySelectorAll('#aiConvs .ai-conv')];
   eq(rows().length, 2, 'chats: both are listed');
   ok(rows()[0].classList.contains('active') && rows()[0].querySelector('.ai-conv-title').getAttribute('aria-current') === 'true', 'chats: the active one is highlighted and marked aria-current');

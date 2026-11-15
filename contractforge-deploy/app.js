@@ -4468,7 +4468,7 @@ function aiLoad(){
 }
 function aiSave(){
   try {
-    const convs = aiState.convs.slice();
+    const convs = aiState.convs.filter((c) => c.msgs.length);   // an empty chat is not history: never stored
     for (const c of convs) { while (c.msgs.length > AI_MAX_MSGS) c.msgs.shift(); }
     const total = () => convs.reduce((n, c) => n + c.msgs.reduce((m, x) => m + x.content.length, 0), 0);
     while (convs.length > AI_MAX_CONVS) convs.shift();
@@ -4699,9 +4699,13 @@ function aiSetSidebar(collapsed){
   for (const t of document.querySelectorAll('.ai-sidebar-toggle')) t.setAttribute('aria-expanded', String(!collapsed));
 }
 
+/* At most one empty chat exists at a time: New Chat (and the first send from the welcome screen) reuse it. */
+function aiEmptyConv(){ return aiState.convs.find((c) => !c.msgs.length) || null; }
+
 function aiChatNew(){
-  const conv = { id: aiNewId(), msgs: [] };
-  aiState.convs.unshift(conv); aiState.activeId = conv.id;
+  let conv = aiEmptyConv();
+  if (!conv) { conv = { id: aiNewId(), msgs: [] }; aiState.convs.unshift(conv); }
+  aiState.activeId = conv.id;
   if (!aiState.sending) aiState.status = { state: 'ready', text: 'Ready' };
   aiSave(); aiChatRender();
   if (aiIsMobile()) aiSetSidebar(true);
@@ -4927,7 +4931,7 @@ async function aiChatSend(){
   if (!text) return;
   if (text.length > AI_MAX_MESSAGE) { aiSetStatus('error', 'Message is too long (max 20,000 characters)'); return; }
   let conv = aiState.convs.find((c) => c.id === aiState.activeId);
-  if (!conv) { conv = { id: aiNewId(), msgs: [] }; aiState.convs.unshift(conv); aiState.activeId = conv.id; }
+  if (!conv) { conv = aiEmptyConv(); if (!conv) { conv = { id: aiNewId(), msgs: [] }; aiState.convs.unshift(conv); } aiState.activeId = conv.id; }
   conv.msgs.push({ role: 'user', content: text });
   if (ta) { ta.value = ''; aiAutoGrow(ta); }
   aiState.sending = true; aiState.sendingId = conv.id;
@@ -4955,6 +4959,19 @@ async function aiChatSend(){
 /* Phase 8.2: while AI -> Solidity is the open section, the page is a full-height workspace (body.ai-workspace, see app.css).
    The section's own inline display is the single source of truth; every way of opening or leaving it (menu, Use in
    ContractForge, wizard, playground) writes it, so one observer covers them all. Nothing is removed or rebuilt. */
+/* Entering AI -> Solidity from another section shows the welcome screen (nothing is selected, nothing is deleted).
+   Work in progress is protected: a pending request or an unsent draft keeps the current session as it is. */
+function aiEnterFresh(){
+  if (aiState.sending) return;
+  const ta = document.getElementById('aiComposer');
+  if (ta && ta.value.trim()) return;
+  if (aiState.activeId === null && !aiEmptyConv()) return;
+  aiState.activeId = null;
+  aiState.convs = aiState.convs.filter((c) => c.msgs.length);   // drop the in-memory empty chat, it was never saved
+  aiState.status = { state: 'ready', text: 'Ready' };
+  aiChatRender();
+}
+
 function aiSyncWorkspace(){
   const sec = document.getElementById('sec-nlai');
   if (!sec || !document.body) return;
@@ -4962,6 +4979,7 @@ function aiSyncWorkspace(){
   const was = document.body.classList.contains('ai-workspace');
   document.body.classList.toggle('ai-workspace', on);
   if (on && !was) {
+    aiEnterFresh();
     const thread = document.getElementById('aiThread');
     if (thread) thread.scrollTop = thread.scrollHeight;
     // on a phone the menu is stacked above the page: bring the workspace itself to the top of the screen
@@ -4971,7 +4989,7 @@ function aiSyncWorkspace(){
 
 function initAiChat(){
   aiState.convs = aiLoad();
-  aiState.activeId = aiState.convs.length ? aiState.convs[0].id : null;
+  aiState.activeId = null;      // clean start: the welcome screen; every saved chat stays in the list until the user picks one
   aiChatRender();
   aiSetSidebar(aiIsMobile());
   const wsSection = document.getElementById('sec-nlai');

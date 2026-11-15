@@ -50,6 +50,10 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
   await page.addInitScript(([k, v]) => { try { if (!localStorage.getItem(k)) localStorage.setItem(k, v); } catch (_) {} }, ['cf_ai_chats_v1', JSON.stringify(CONVS)]);
   await page.goto(origin + '/');
   await page.evaluate(() => document.querySelector('.nav-item[data-section="nlai"]').click());
+  // Phase 8.3.1: a fresh visit opens clean (welcome screen, saved chats listed but not opened); then open the first one
+  await page.waitForSelector('#aiThread .ai-empty');
+  ok(await page.evaluate(() => document.querySelectorAll('#aiConvs .ai-conv').length === 6 && !document.querySelector('#aiThread .ai-msg') && document.getElementById('aiComposer').value === ''), name + ': a fresh visit shows the welcome screen with all six saved chats listed');
+  await page.evaluate(() => document.querySelector('#aiConvs .ai-conv-title').click());
   await page.waitForSelector('#aiThread .ai-code-block');
   await page.evaluate(() => document.getElementById('aiChat').scrollIntoView({ block: 'start' }));
   const m = await page.evaluate(() => {
