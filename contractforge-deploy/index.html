@@ -251,162 +251,317 @@
     </section>
 
     <!-- ============ 03 TREASURY ============ -->
-    <section class="section" id="sec-treasury" style="display:none;">
-      <div class="section-head"><span class="n">03</span><h2>Treasury (multisig + streaming)</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <div class="field-grid">
-          <div class="field">
-            <label>Treasury name</label>
-            <input id="tre_name" value="ArcTreasury" />
-          </div>
-          <div class="field">
-            <label>Approval threshold (M of N)</label>
-            <input id="tre_threshold" type="number" value="2" min="1" />
-          </div>
-          <div class="field full">
-            <label>Signers (one address per line)</label>
-            <textarea id="tre_signers" placeholder="0xAaa...&#10;0xBbb...&#10;0xCcc..." aria-required="true"></textarea>
-          </div>
-          <div class="field">
-            <label>Enable payment streaming</label>
-            <select id="tre_streaming">
-              <option value="yes">Yes — linear vesting/streams (Sablier-style)</option>
-              <option value="no">No — vault multisig only</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Accepted tokens</label>
-            <input id="tre_tokens" placeholder="USDC, EURC, USYC" value="USDC, EURC" />
+    <section class="section bld" id="sec-treasury" style="display:none;">
+      <div class="section-head"><span class="n">03</span><h2>Treasury Builder</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="bld-sub">Create a multisig treasury contract: every payment and every signer change needs M of N approvals, with optional linear payment streaming.</p>
+      <ol class="bld-stages" id="treStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="bld-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="bld-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="bld-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <div class="form-panel bld-panel">
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">1</span>Treasury Identity</h3>
+              <div class="field">
+                <label for="tre_name">Treasury name</label>
+                <input id="tre_name" value="ArcTreasury" autocomplete="off" />
+                <div class="hint">Becomes the contract and file name. Letters and digits only: other characters are removed.</div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">2</span>Signers &amp; Approval</h3>
+              <div class="bld-signers">
+                <div class="field">
+                  <label for="tre_signers">Signers (one address per line)</label>
+                  <textarea id="tre_signers" placeholder="0xAaa...&#10;0xBbb...&#10;0xCcc..." aria-required="true" spellcheck="false" autocomplete="off"></textarea>
+                </div>
+                <div class="field">
+                  <label for="tre_threshold">Approval threshold (M of N)</label>
+                  <div class="bld-feebox"><input id="tre_threshold" type="number" value="2" min="1" /><span class="bld-pct" id="treOf" aria-live="polite"></span></div>
+                  <div class="hint">How many different signers must approve before a proposal runs.</div>
+                </div>
+              </div>
+              <p class="bld-note" id="treSignersNote" role="note"></p>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">3</span>Treasury Features</h3>
+              <details class="adv bld-adv" open>
+                <summary>Advanced Options <span class="bld-count">2</span></summary>
+                <div class="bld-adv-grid">
+                  <div class="field">
+                    <label for="tre_streaming">Enable payment streaming</label>
+                    <select id="tre_streaming">
+                      <option value="yes">Yes — linear vesting/streams (Sablier-style)</option>
+                      <option value="no">No — vault multisig only</option>
+                    </select>
+                    <div class="bld-proto" id="treStream" aria-live="polite"></div>
+                  </div>
+                  <div class="field">
+                    <label for="tre_tokens">Accepted tokens</label>
+                    <input id="tre_tokens" placeholder="USDC, EURC, USYC" value="USDC, EURC" autocomplete="off" />
+                    <div class="hint">Not used by the generator: the contract is not limited to a list, a proposal names the token address (or the native currency). The field is kept so saved forms still load.</div>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="btnrow bld-actions">
+              <button class="btn btn-primary" data-onclick="genTreasury()">Generate contract</button>
+              <button class="btn btn-ghost" data-onclick="deployFromBuffer('treasury')">Deploy now</button>
+            </div>
+            <p class="bld-note bld-actnote">Generate only writes the Solidity below: nothing is compiled or deployed. If a required value is missing it still writes a DRAFT with a placeholder signer, and the deploy page refuses a draft until you fix it. Deploy now opens Compile &amp; Deploy, where you review the constructor arguments and confirm in your wallet.</p>
           </div>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="genTreasury()">Generate contract</button>
-          <button class="btn btn-ghost" data-onclick="deployFromBuffer('treasury')">Deploy now</button>
-        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="treSumH">
+            <h3 id="treSumH">Configuration Summary</h3>
+            <dl class="bld-sum" id="treSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="treProgH">
+            <h3 id="treProgH">Build Progress</h3>
+            <ol class="bld-prog" id="treProgress"></ol>
+          </section>
+        </aside>
       </div>
       <div class="codepanel" id="treasuryCode" style="display:none;"></div>
     </section>
 
     <!-- ============ 04 VAULT ============ -->
-    <section class="section" id="sec-vault" style="display:none;">
-      <div class="section-head"><span class="n">04</span><h2>Vault — ERC-4626</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <div class="field-grid">
-          <div class="field">
-            <label>Vault name</label>
-            <input id="vault_name" value="ArcYieldVault" />
-          </div>
-          <div class="field">
-            <label>Share symbol</label>
-            <input id="vault_symbol" value="avUSDC" />
-          </div>
-          <div class="field">
-            <label>Underlying asset (address)</label>
-            <input id="vault_asset" placeholder="0x... USDC" />
-          </div>
-          <div class="field">
-            <label>Performance fee (bps)</label>
-            <input id="vault_perf" type="number" value="1000" />
-            <div class="hint">1000 bps = 10% of generated yield.</div>
-          </div>
-          <div class="field">
-            <label>Strategy</label>
-            <select id="vault_strategy">
-              <option value="passthrough">Manual yield (assets sent to the vault raise the share price)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Deposit cap (in token units, 0 = unlimited)</label>
-            <input id="vault_cap" type="number" value="0" />
+    <section class="section bld" id="sec-vault" style="display:none;">
+      <div class="section-head"><span class="n">04</span><h2>Vault Builder</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="bld-sub">Create an ERC-4626-style vault: depositors receive proportional shares of one ERC-20 asset, and the owner collects a performance fee on the yield.</p>
+      <ol class="bld-stages" id="vltStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="bld-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="bld-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="bld-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <div class="form-panel bld-panel">
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">1</span>Vault Identity</h3>
+              <div class="bld-pair">
+                <div class="field">
+                  <label for="vault_name">Vault name</label>
+                  <input id="vault_name" value="ArcYieldVault" autocomplete="off" />
+                  <div class="hint">Becomes the contract and file name. Letters and digits only: other characters are removed.</div>
+                </div>
+                <div class="field">
+                  <label for="vault_symbol">Share symbol</label>
+                  <input id="vault_symbol" value="avUSDC" autocomplete="off" />
+                  <div class="hint">The symbol of the share token depositors receive.</div>
+                </div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">2</span>Underlying Asset</h3>
+              <div class="field">
+                <label for="vault_asset">Underlying asset (address)</label>
+                <input id="vault_asset" placeholder="0x... USDC" autocomplete="off" spellcheck="false" />
+              </div>
+              <p class="bld-note" id="vltAssetNote" role="note"></p>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">3</span>Strategy &amp; Parameters</h3>
+              <div class="field">
+                <label for="vault_strategy">Strategy</label>
+                <select id="vault_strategy">
+                  <option value="passthrough">Manual yield (assets sent to the vault raise the share price)</option>
+                </select>
+                <div class="bld-proto" id="vltStrategy" aria-live="polite"></div>
+              </div>
+              <details class="adv bld-adv" open>
+                <summary>Advanced Options <span class="bld-count">2</span></summary>
+                <div class="bld-adv-grid">
+                  <div class="field">
+                    <label for="vault_perf">Performance fee (bps)</label>
+                    <div class="bld-feebox"><input id="vault_perf" type="number" value="1000" /><span class="bld-pct" id="vltPct" aria-live="polite"></span></div>
+                    <div class="hint">1000 bps = 10% of generated yield. A whole number from 0 to 9999: anything else stops generation.</div>
+                  </div>
+                  <div class="field">
+                    <label for="vault_cap">Deposit cap (in token units, 0 = unlimited)</label>
+                    <input id="vault_cap" type="number" value="0" />
+                    <div class="hint" id="vltCapNote"></div>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="btnrow bld-actions">
+              <button class="btn btn-primary" data-onclick="genVault()">Generate contract</button>
+              <button class="btn btn-ghost" data-onclick="deployFromBuffer('vault')">Deploy now</button>
+            </div>
+            <p class="bld-note bld-actnote">Generate only writes the Solidity below: nothing is compiled or deployed. A performance fee outside 0 to 9999 stops generation. A missing asset still writes a DRAFT, and the deploy page refuses a draft until you fix it. Deploy now opens Compile &amp; Deploy, where you review the constructor arguments, choose the network and confirm in your wallet.</p>
           </div>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="genVault()">Generate contract</button>
-          <button class="btn btn-ghost" data-onclick="deployFromBuffer('vault')">Deploy now</button>
-        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="vltSumH">
+            <h3 id="vltSumH">Configuration Summary</h3>
+            <dl class="bld-sum" id="vltSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="vltProgH">
+            <h3 id="vltProgH">Build Progress</h3>
+            <ol class="bld-prog" id="vltProgress"></ol>
+          </section>
+        </aside>
       </div>
       <div class="codepanel" id="vaultCode" style="display:none;"></div>
     </section>
 
     <!-- ============ 05 MULTISEND ============ -->
-    <section class="section" id="sec-multisend" style="display:none;">
-      <div class="section-head"><span class="n">05</span><h2>MultiSend / Batch Payments</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <div class="field-grid">
-          <div class="field">
-            <label>Contract name</label>
-            <input id="ms_name" value="ArcMultiSend" />
-          </div>
-          <div class="field">
-            <label>Mode</label>
-            <select id="ms_mode">
-              <option value="erc20">ERC-20 (USDC/EURC) — batch transferFrom</option>
-              <option value="native">Native token (ETH/USDC-gas) — batch via msg.value</option>
-              <option value="both">Both (native + ERC-20)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Max recipients per tx</label>
-            <input id="ms_max" type="number" value="200" />
-          </div>
-          <div class="field">
-            <label>Service fee (bps, 0 = no fee)</label>
-            <input id="ms_fee" type="number" value="0" />
-          </div>
-          <div class="field">
-            <label>Fee owner</label>
-            <input id="ms_owner" placeholder="0x... (leave empty = deployer)" />
+    <section class="section bld" id="sec-multisend" style="display:none;">
+      <div class="section-head"><span class="n">05</span><h2>MultiSend Builder</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="bld-sub">Create a batch-payment contract: one transaction pays many recipients, in an ERC-20 token, in the network's native token, or both. An optional service fee goes to a fee recipient.</p>
+      <ol class="bld-stages" id="mslStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="bld-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="bld-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="bld-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <div class="form-panel bld-panel">
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">1</span>Contract Identity</h3>
+              <div class="field">
+                <label for="ms_name">Contract name</label>
+                <input id="ms_name" value="ArcMultiSend" autocomplete="off" />
+                <div class="hint">Becomes the contract and file name. Letters and digits only: other characters are removed.</div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">2</span>Payment Mode</h3>
+              <div class="field">
+                <label for="ms_mode">Mode</label>
+                <select id="ms_mode">
+                  <option value="erc20">ERC-20 (USDC/EURC) — batch transferFrom</option>
+                  <option value="native">Native token (ETH/USDC-gas) — batch via msg.value</option>
+                  <option value="both">Both (native + ERC-20)</option>
+                </select>
+                <div class="bld-proto" id="mslModeCard" aria-live="polite"></div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">3</span>Limits &amp; Fee</h3>
+              <details class="adv bld-adv" open>
+                <summary>Advanced Options <span class="bld-count">3</span></summary>
+                <div class="bld-adv-grid">
+                  <div class="field">
+                    <label for="ms_max">Max recipients per tx</label>
+                    <input id="ms_max" type="number" value="200" />
+                    <div class="hint" id="mslMaxNote"></div>
+                  </div>
+                  <div class="field">
+                    <label for="ms_fee">Service fee (bps, 0 = no fee)</label>
+                    <div class="bld-feebox"><input id="ms_fee" type="number" value="0" /><span class="bld-pct" id="mslPct" aria-live="polite"></span></div>
+                    <div class="hint">Charged on top of the amounts you send: the sender pays the batch total plus the fee.</div>
+                  </div>
+                  <div class="field bld-wide">
+                    <label for="ms_owner">Fee owner</label>
+                    <input id="ms_owner" placeholder="0x... (leave empty = deployer)" autocomplete="off" spellcheck="false" />
+                    <div class="hint" id="mslOwnerNote"></div>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="btnrow bld-actions">
+              <button class="btn btn-primary" data-onclick="genMultisend()">Generate contract</button>
+              <button class="btn btn-ghost" data-onclick="deployFromBuffer('multisend')">Deploy now</button>
+            </div>
+            <p class="bld-note bld-actnote">Generate only writes the Solidity below: nothing is compiled or deployed. A fee recipient that is not an address still writes a DRAFT, and the deploy page refuses a draft until you fix it. Deploy now opens Compile &amp; Deploy, where you choose the network and confirm in your wallet.</p>
           </div>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="genMultisend()">Generate contract</button>
-          <button class="btn btn-ghost" data-onclick="deployFromBuffer('multisend')">Deploy now</button>
-        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="mslSumH">
+            <h3 id="mslSumH">Configuration Summary</h3>
+            <dl class="bld-sum" id="mslSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="mslProgH">
+            <h3 id="mslProgH">Build Progress</h3>
+            <ol class="bld-prog" id="mslProgress"></ol>
+          </section>
+        </aside>
       </div>
       <div class="codepanel" id="multisendCode" style="display:none;"></div>
     </section>
 
     <!-- ============ 06 CROSSCHAIN ============ -->
-    <section class="section" id="sec-crosschain" style="display:none;">
-      <div class="section-head"><span class="n">06</span><h2>Crosschain Payments (CCTP)</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <div class="field-grid">
-          <div class="field">
-            <label>Contract name</label>
-            <input id="cc_name" value="ArcCrossPay" />
-          </div>
-          <div class="field">
-            <label>Token Messenger (CCTP, local address)</label>
-            <input id="cc_tokenmessenger" placeholder="auto from network" />
-          </div>
-          <div class="field">
-            <label>Message Transmitter (local address)</label>
-            <input id="cc_msgtransmitter" placeholder="auto from network" />
-          </div>
-          <div class="field">
-            <label>Local USDC (address)</label>
-            <input id="cc_usdc" placeholder="auto from network" />
-          </div>
-          <div class="field">
-            <label>Functionality</label>
-            <select id="cc_mode">
-              <option value="payment">Direct crosschain payment (burn + mint at destination)</option>
-              <option value="escrow">Crosschain escrow (releases after confirmation)</option>
-              <option value="recurring">Recurring crosschain payments (subscription)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Resume / retry interrupted burns</label>
-            <select id="cc_resume">
-              <option value="yes">Yes — store on-chain state to resume attestation</option>
-              <option value="no">No</option>
-            </select>
+    <section class="section bld" id="sec-crosschain" style="display:none;">
+      <div class="section-head"><span class="n">06</span><h2>Crosschain Builder (CCTP)</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="bld-sub">Create a contract that moves USDC between chains with Circle CCTP: it burns USDC on this chain and mints it on the destination chain after Circle's attestation. Single network mode writes a payments contract; the portable modes write the CCTP V2 bridge.</p>
+      <ol class="bld-stages" id="ccxStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="bld-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="bld-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="bld-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <div class="form-panel bld-panel">
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">1</span>Contract Identity</h3>
+              <div class="field">
+                <label for="cc_name">Contract name</label>
+                <input id="cc_name" value="ArcCrossPay" autocomplete="off" />
+                <div class="hint">Becomes the contract and file name. Letters and digits only: other characters are removed.</div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">2</span>Functionality</h3>
+              <div class="field">
+                <label for="cc_mode">Functionality</label>
+                <select id="cc_mode">
+                  <option value="payment">Direct crosschain payment (burn + mint at destination)</option>
+                  <option value="escrow">Crosschain escrow (releases after confirmation)</option>
+                  <option value="recurring">Recurring crosschain payments (subscription)</option>
+                </select>
+                <div class="bld-proto" id="ccxModeCard" aria-live="polite"></div>
+              </div>
+            </div>
+            <div class="bld-block">
+              <h3 class="bld-h"><span class="bld-n" aria-hidden="true">3</span>CCTP Setup</h3>
+              <p class="bld-note" id="ccxSetupNote" role="note"></p>
+              <details class="adv bld-adv" open>
+                <summary>Advanced Options <span class="bld-count">4</span></summary>
+                <div class="bld-adv-grid">
+                  <div class="field bld-wide">
+                    <label for="cc_tokenmessenger">Token Messenger (CCTP, local address)</label>
+                    <input id="cc_tokenmessenger" placeholder="auto from network" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div class="field bld-wide">
+                    <label for="cc_msgtransmitter">Message Transmitter (local address)</label>
+                    <input id="cc_msgtransmitter" placeholder="auto from network" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div class="field bld-wide">
+                    <label for="cc_usdc">Local USDC (address)</label>
+                    <input id="cc_usdc" placeholder="auto from network" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div class="field bld-wide">
+                    <label for="cc_resume">Resume / retry interrupted burns</label>
+                    <select id="cc_resume">
+                      <option value="yes">Yes — store on-chain state to resume attestation</option>
+                      <option value="no">No</option>
+                    </select>
+                    <div class="hint" id="ccxResumeNote"></div>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="btnrow bld-actions">
+              <button class="btn btn-primary" data-onclick="genCrosschain()">Generate contract</button>
+              <button class="btn btn-ghost" data-onclick="deployFromBuffer('crosschain')">Deploy now</button>
+            </div>
+            <p class="bld-note bld-actnote">Generate only writes the Solidity below: nothing is compiled or deployed. In Single network mode a missing CCTP address still writes a DRAFT, and the deploy page refuses a draft until you fix it. Deploy now opens Compile &amp; Deploy, where you review the constructor arguments, choose the network and confirm in your wallet.</p>
           </div>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="genCrosschain()">Generate contract</button>
-          <button class="btn btn-ghost" data-onclick="deployFromBuffer('crosschain')">Deploy now</button>
-        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="ccxSumH">
+            <h3 id="ccxSumH">Configuration Summary</h3>
+            <dl class="bld-sum" id="ccxSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="ccxProgH">
+            <h3 id="ccxProgH">Build Progress</h3>
+            <ol class="bld-prog" id="ccxProgress"></ol>
+          </section>
+        </aside>
       </div>
       <div class="codepanel" id="crosschainCode" style="display:none;"></div>
     </section>
@@ -977,6 +1132,7 @@
 
 <script src="vendor/ethers/ethers-5.7.2.umd.min.js"></script>
 <script src="handlers.js"></script>
+<script src="builder.js"></script>
 <script src="app.js"></script>
 <script src="multichain.js"></script>
 <script src="multideploy.js"></script>

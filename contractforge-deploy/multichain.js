@@ -395,7 +395,7 @@ function renderModeSelector(){
     const on = c.getAttribute('data-mode') === multichainMode;
     c.classList.toggle('active', on); c.setAttribute('aria-pressed', String(on));
   });
-  if(typeof swbRender === 'function') swbRender();      // the Swap / AMM overview shows the mode
+  if(typeof CFBuilder !== 'undefined') CFBuilder.renderAll();      // every builder overview shows the mode
 }
 
 if(typeof document !== 'undefined') renderModeSelector();

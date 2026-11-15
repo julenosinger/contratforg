@@ -1739,157 +1739,65 @@ function swbProblems(v){
 
 function swbSig(v){ return JSON.stringify([v.kind, v.multi, v.fee, v.rawA, v.rawB, v.rawName, typeof activeNetwork !== 'undefined' ? activeNetwork : '', v.mode]); }
 
-/* Has genSwap() produced the code on screen, and is it still the one in the deploy buffer and still matching the form? */
-function swbGenState(v){
-  const panel = document.getElementById('swapCode');
-  const pre = panel && panel.querySelector('pre');
-  if(!pre) return { s: 'todo' };
-  const fn = panel.querySelector('.filename');
-  const info = { file: fn ? fn.textContent : '', lines: pre.textContent.split('\n').length };
-  const inBuffer = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code === pre.textContent && /^swap-/.test(pendingSource.template || '');
-  if(!inBuffer) return { s: 'stale', why: 'buffer', ...info };
-  if(panel.getAttribute('data-sig') !== swbSig(v)) return { s: 'stale', why: 'inputs', ...info };
-  return { s: 'done', ...info };
-}
-
-/* A confirmed deployment: the app only writes the history after contract.deployed() resolved. */
-function swbDeployed(){
-  const panel = document.getElementById('swapCode');
-  const at = Number(panel && panel.getAttribute('data-gen-at'));
-  if(!at || typeof pendingSource === 'undefined' || !pendingSource || typeof loadDeployHistory !== 'function') return null;
-  return loadDeployHistory().find(e => e && e.timestamp >= at && e.name === pendingSource.name) || null;
-}
-
 function swbFeePercent(fee){
   if(!/^\d+$/.test(fee) || Number(fee) >= 10000) return null;
   return (Number(fee) / 100).toFixed(2) + '%';
 }
 
 
-function swbRender(){
-  const sum = document.getElementById('swbSummary');
-  if(!sum) return;
-  const v = swbRead();
-  const problems = swbProblems(v);
-  const gen = swbGenState(v);
-  const dep = swbDeployed();
-
-  // guidance that follows the real generator branches
-  const proto = SWB_PROTOCOLS[v.kind];
-  const box = document.getElementById('swbProto');
-  box.textContent = '';
-  box.appendChild(swbEl('b', '', proto.title)); box.appendChild(document.createTextNode(proto.text));
-  const pct = swbFeePercent(v.fee);
-  const pctEl = document.getElementById('swbFeePct');
-  pctEl.textContent = pct ? '= ' + pct : 'invalid'; pctEl.setAttribute('data-bad', pct ? '0' : '1');
-  document.getElementById('swbFeeHint').textContent = v.kind === 'amm'
-    ? 'Charged on every swap and kept in the pool for liquidity providers. 30 bps = 0.30%, the Uniswap V2 default. Whole number below 10000.'
-    : 'Charged in Token B on every fill and paid to the fee collector (the deployer). 30 bps = 0.30%. Whole number below 10000.';
-  document.getElementById('swbMultiHint').textContent = v.kind === 'orderbook'
-    ? 'Applies to the AMM only. An order book is always one contract, whatever is chosen here.'
-    : (v.multi === 'factory' ? 'A factory contract creates pairs on demand with createPair(tokenX, tokenY).' : 'One contract for one pair of tokens.');
-  const pairNote = document.getElementById('swbPairNote');
-  pairNote.setAttribute('data-kind', 'info');
-  if(v.kind === 'amm' && v.multi === 'factory') pairNote.textContent = 'A factory does not use these two fields: each pair is created later with createPair(tokenX, tokenY).';
-  else if(v.portable) pairNote.textContent = 'Deployment Mode is ' + v.mode + ': the token addresses are set as constructor arguments when you deploy. Anything typed here is only a default.';
-  else pairNote.textContent = 'Use ERC-20 token addresses on ' + (v.net ? v.net.label : 'the active network') + '. Token A and Token B must be different.';
-
-  // summary
-  sum.textContent = '';
-  const row = (label, value, state, flag, mono) => {
-    const r = swbEl('div', 'swb-row'); r.setAttribute('data-state', state || 'ok');
-    r.appendChild(swbEl('dt', '', label));
-    const dd = swbEl('dd', mono ? 'mono' : '', value);
-    if(flag) dd.appendChild(swbEl('span', 'swb-flag', flag));
-    r.appendChild(dd); sum.appendChild(r);
-  };
-  const tokenRow = (label, raw, shown) => {
-    const bad = typeof reqProblems === 'function' && v.needsTokens && !v.portable ? reqProblems([{ label, value: raw }]) : [];
-    if(!v.needsTokens) return row(label, 'Not used', 'ok', 'Pairs are created later by the factory');
-    if(bad.length) return row(label, shown, 'bad', 'Not a valid address', true);
-    if(!shown) return row(label, 'Not set', v.portable ? 'ok' : 'missing', v.portable ? 'Set at deploy time' : 'No default on this network', false);
-    return row(label, shown, 'ok', raw ? '' : 'Network default', true);
-  };
-  row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
-  row('Protocol', proto.title, 'ok');
-  tokenRow('Token A', v.rawA, v.tokenA);
-  tokenRow('Token B', v.rawB, v.tokenB);
-  row(v.kind === 'amm' ? 'Pool fee' : 'Fee', pct ? v.fee + ' bps (' + pct + ')' : (v.fee || '(empty)') + ' bps', pct ? 'ok' : 'bad', pct ? '' : 'Whole number below 10000');
-  row('Pair support', v.kind === 'orderbook' ? 'Single contract (order book)' : (v.multi === 'factory' ? 'Factory (multiple pairs)' : 'Single pair'), 'ok');
-  row('Network', v.net ? v.net.label + ' (' + v.net.chainIdDec + ')' : 'Unknown', v.net ? 'ok' : 'bad');
-  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
-
-  // progress: only what really happened
-  const prog = document.getElementById('swbProgress');
-  prog.textContent = '';
-  const step = (title, state, text) => {
-    const li = swbEl('li'); li.setAttribute('data-state', state);
-    const mark = swbEl('span', 'swb-mark', state === 'done' ? '\u2713' : (state === 'attention' || state === 'stale' ? '!' : ''));
-    mark.setAttribute('aria-hidden', 'true');
-    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'swb-t', text));
-    li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
-  };
-  step('Configuration', problems.length ? 'attention' : 'done', problems.length ? problems[0] + (problems.length > 1 ? ' (+' + (problems.length - 1) + ' more)' : '') : 'Parameters look valid for ' + (v.net ? v.net.label : 'the network') + '.');
-  step('Code Generation', gen.s === 'done' ? 'done' : (gen.s === 'stale' ? 'stale' : 'todo'),
-    gen.s === 'done' ? gen.file + ', ' + gen.lines + ' lines generated.'
-    : gen.s === 'stale' ? (gen.why === 'inputs' ? 'The form changed after this code was generated. Generate again.' : 'The deploy buffer now holds a different contract than this code. Generate again before deploying.')
-    : 'Press Generate contract to write the Solidity.');
-  step('Review & Audit', gen.s === 'todo' ? 'locked' : 'todo', gen.s === 'todo' ? 'Available once the code exists.' : 'Not audited. Review the Solidity and run the AI Auditor or the Test Lab: results are not tracked here.');
-  step('Deployment', dep ? 'done' : (gen.s === 'todo' ? 'locked' : 'todo'),
-    dep ? 'Confirmed on ' + ((typeof NETWORKS !== 'undefined' && NETWORKS[dep.network]) ? NETWORKS[dep.network].label : dep.network) + ' at ' + dep.address
-    : 'Nothing deployed yet. Deploy now opens Compile & Deploy.');
-
-  // header steps
-  const hs = { configure: problems.length ? 'current' : 'done', generate: gen.s === 'done' ? 'done' : (problems.length ? 'todo' : 'current'), deploy: dep ? 'done' : (gen.s === 'done' ? 'current' : 'todo') };
-  document.querySelectorAll('#swbStages li').forEach(li => {
-    const s = hs[li.getAttribute('data-step')];
-    li.setAttribute('data-state', s);
-    if(s === 'current') li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
-  });
-}
-
-/* Adds language, maturity and warnings to the head of the code panel that showCode() just filled. The Solidity itself is not touched. */
-function swbDecorateCode(){
-  const panel = document.getElementById('swapCode');
-  const head = panel && panel.querySelector('.codehead');
-  if(!head || head.querySelector('.swb-lang')) return;
-  head.appendChild(swbEl('span', 'swb-lang', 'Solidity'));
-  const tpl = typeof pendingSource !== 'undefined' && pendingSource ? pendingSource.template : '';
-  if(/^swap-/.test(tpl || '') && typeof matInfo === 'function' && typeof MATURITY_LEVELS !== 'undefined'){
-    const i = matInfo(tpl), L = MATURITY_LEVELS[i.level];
-    if(L){
-      const b = swbEl('span', 'mat-badge mat-' + i.level + ' mat-small'); b.title = L.title + '. ' + i.reason;
-      b.appendChild(swbEl('span', '', L.icon)); b.appendChild(document.createTextNode(' ' + L.label));
-      head.appendChild(b);
-      if(i.level === 'experimental') head.appendChild(swbEl('span', 'swb-warn', 'Not audited'));
-    }
+/* The Swap / AMM screen is one config for the shared engine in builder.js. The engine keeps the summary, the progress and the code head
+   in step with real state; everything specific to this tab (its fields, its checks, its wording) is below. */
+const SWB_CONFIG = {
+  key: 'swap', prefix: 'swb',
+  section: 'sec-swap', codePanel: 'swapCode', summary: 'swbSummary', progress: 'swbProgress', stages: 'swbStages',
+  isTemplate: (tpl) => /^swap-/.test(tpl || ''),
+  read: () => swbRead(),
+  problems: (v) => swbProblems(v),
+  signature: (v) => swbSig(v),
+  guidance(v){
+    // hints that follow the real generator branches
+    const proto = SWB_PROTOCOLS[v.kind];
+    const box = document.getElementById('swbProto');
+    box.textContent = '';
+    box.appendChild(swbEl('b', '', proto.title)); box.appendChild(document.createTextNode(proto.text));
+    const pct = swbFeePercent(v.fee);
+    const pctEl = document.getElementById('swbFeePct');
+    pctEl.textContent = pct ? '= ' + pct : 'invalid'; pctEl.setAttribute('data-bad', pct ? '0' : '1');
+    document.getElementById('swbFeeHint').textContent = v.kind === 'amm'
+      ? 'Charged on every swap and kept in the pool for liquidity providers. 30 bps = 0.30%, the Uniswap V2 default. Whole number below 10000.'
+      : 'Charged in Token B on every fill and paid to the fee collector (the deployer). 30 bps = 0.30%. Whole number below 10000.';
+    document.getElementById('swbMultiHint').textContent = v.kind === 'orderbook'
+      ? 'Applies to the AMM only. An order book is always one contract, whatever is chosen here.'
+      : (v.multi === 'factory' ? 'A factory contract creates pairs on demand with createPair(tokenX, tokenY).' : 'One contract for one pair of tokens.');
+    const pairNote = document.getElementById('swbPairNote');
+    pairNote.setAttribute('data-kind', 'info');
+    if(v.kind === 'amm' && v.multi === 'factory') pairNote.textContent = 'A factory does not use these two fields: each pair is created later with createPair(tokenX, tokenY).';
+    else if(v.portable) pairNote.textContent = 'Deployment Mode is ' + v.mode + ': the token addresses are set as constructor arguments when you deploy. Anything typed here is only a default.';
+    else pairNote.textContent = 'Use ERC-20 token addresses on ' + (v.net ? v.net.label : 'the active network') + '. Token A and Token B must be different.';
+  },
+  summaryRows(v, row){
+    const proto = SWB_PROTOCOLS[v.kind];
+    const pct = swbFeePercent(v.fee);
+    const tokenRow = (label, raw, shown) => {
+      const bad = typeof reqProblems === 'function' && v.needsTokens && !v.portable ? reqProblems([{ label, value: raw }]) : [];
+      if(!v.needsTokens) return row(label, 'Not used', 'ok', 'Pairs are created later by the factory');
+      if(bad.length) return row(label, shown, 'bad', 'Not a valid address', true);
+      if(!shown) return row(label, 'Not set', v.portable ? 'ok' : 'missing', v.portable ? 'Set at deploy time' : 'No default on this network', false);
+      return row(label, shown, 'ok', raw ? '' : 'Network default', true);
+    };
+    row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+    row('Protocol', proto.title, 'ok');
+    tokenRow('Token A', v.rawA, v.tokenA);
+    tokenRow('Token B', v.rawB, v.tokenB);
+    row(v.kind === 'amm' ? 'Pool fee' : 'Fee', pct ? v.fee + ' bps (' + pct + ')' : (v.fee || '(empty)') + ' bps', pct ? 'ok' : 'bad', pct ? '' : 'Whole number below 10000');
+    row('Pair support', v.kind === 'orderbook' ? 'Single contract (order book)' : (v.multi === 'factory' ? 'Factory (multiple pairs)' : 'Single pair'), 'ok');
+    CFBuilder.networkRow(row, v.net);
+    row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
   }
-}
+};
+const swbBuilder = CFBuilder.register(SWB_CONFIG);
+function swbRender(){ CFBuilder.render('swap'); }
 
-function swbOnGenerated(){
-  const panel = document.getElementById('swapCode');
-  if(!panel || !panel.querySelector('pre')) return;
-  panel.setAttribute('data-sig', swbSig(swbRead()));
-  panel.setAttribute('data-gen-at', String(Date.now()));
-  swbDecorateCode();
-  swbRender();
-}
-
-function swbInit(){
-  const sec = document.getElementById('sec-swap');
-  if(!sec) return;
-  sec.addEventListener('input', swbRender);
-  sec.addEventListener('change', swbRender);
-  if(typeof MutationObserver !== 'function') return;
-  const code = document.getElementById('swapCode');
-  if(code) new MutationObserver(swbOnGenerated).observe(code, { childList: true });
-  new MutationObserver(swbRender).observe(sec, { attributes: true, attributeFilter: ['style'] });       // entering the section refreshes it
-  const side = document.getElementById('sidenet');
-  if(side) new MutationObserver(swbRender).observe(side, { childList: true, characterData: true, subtree: true });  // the active network changed
-  const hist = document.getElementById('historyList');
-  if(hist) new MutationObserver(swbRender).observe(hist, { childList: true });                                    // a deployment was recorded
-}
-if(typeof document !== 'undefined') swbInit();
 
 /* ======================================================================
    SECTION 03 — TREASURY
@@ -2181,6 +2089,96 @@ ${streaming?`
 }
 
 /* ======================================================================
+   TREASURY BUILDER VIEW (section 03, Phase 9.1) — presentation only, on the shared engine in builder.js.
+   Reads the form, activeNetwork, multichainMode and the deploy buffer; writes none of them. genTreasury() and Deploy now are untouched.
+   Particularities of this tab: the generator never refuses, it writes a DRAFT (placeholder signer, pendingSource.problems) that the deploy page
+   blocks; "Accepted tokens" (tre_tokens) is not read by the generator; the gas-token alias is a constructor argument in the portable modes.
+   ====================================================================== */
+const TRE_STREAMING = {
+  yes: { title: 'Payment streaming enabled', text: 'Adds Stream and CloseStream proposals next to Transfer and ReplaceSigner: a linear payout to a recipient over time. Stream totals are reserved, so proposals cannot spend funds that are owed to stream recipients.' },
+  no:  { title: 'Vault multisig only', text: 'Proposals can Transfer funds and ReplaceSigner. There are no streams.' }
+};
+
+function treRead(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value) : ''; };
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const signersRaw = g('tre_signers').split('\n').map(s => s.trim()).filter(Boolean);
+  return {
+    net, signersRaw,
+    signersField: g('tre_signers'),
+    rawName: g('tre_name'),
+    name: (g('tre_name') || 'ArcTreasury').replace(/[^A-Za-z0-9]/g, ''),
+    threshold: (g('tre_threshold') || '1'), thresholdField: g('tre_threshold'),
+    streaming: g('tre_streaming') === 'yes',
+    portable: typeof isPortable === 'function' ? isPortable() : false,
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '',
+    alias: (net && net.gasSymbol === 'USDC' && net.usdc) ? net.usdc : ''     // the same rule as genTreasury()
+  };
+}
+
+/* What genTreasury() puts in pendingSource.problems, plus the checks that decide whether the contract compiles and its constructor accepts the threshold. */
+function treSignerProblems(v){
+  const out = typeof reqProblems === 'function' ? reqProblems(v.signersRaw.map((a, i) => ({ label: 'Signer ' + (i + 1), value: a, required: true })), true) : [];
+  if(!v.signersRaw.length) out.push('Signers are required: enter one address per line');
+  else if(Number.isInteger(Number(v.threshold)) && Number(v.threshold) > v.signersRaw.length) out.push('The threshold (' + v.threshold + ') is higher than the number of signers (' + v.signersRaw.length + ')');
+  return out;
+}
+function treThresholdProblem(v){
+  const T = String(v.threshold).trim();
+  return (/^\d+$/.test(T) && Number(T) >= 1) ? '' : 'The approval threshold must be a whole number of at least 1, otherwise the contract does not compile or its constructor reverts';
+}
+function treProblems(v){ const out = treSignerProblems(v); const t = treThresholdProblem(v); if(t) out.push(t); return out; }
+function treSig(v){ return JSON.stringify([v.rawName, v.thresholdField, v.signersField, v.streaming, typeof activeNetwork !== 'undefined' ? activeNetwork : '', v.mode]); }
+
+const TRE_CONFIG = {
+  key: 'treasury', prefix: 'bld',
+  section: 'sec-treasury', codePanel: 'treasuryCode', summary: 'treSummary', progress: 'treProgress', stages: 'treStages',
+  isTemplate: (tpl) => tpl === 'treasury',
+  read: () => treRead(),
+  problems: (v) => treProblems(v),
+  signature: (v) => treSig(v),
+  // the draft that is in the deploy buffer: the same list the deploy page uses to refuse it
+  draft: () => (typeof pendingSource !== 'undefined' && pendingSource && pendingSource.template === 'treasury' && Array.isArray(pendingSource.problems)) ? pendingSource.problems : [],
+  guidance(v){
+    const n = v.signersRaw.length;
+    const sp = treSignerProblems(v);
+    const tp = treThresholdProblem(v);
+    const note = document.getElementById('treSignersNote');
+    if(!n){ note.textContent = 'Add at least one signer. If you generate anyway you get a DRAFT with a placeholder signer, and the deploy page refuses it.'; note.setAttribute('data-kind', 'warn'); }
+    else if(sp.length){ note.textContent = sp[0] + (sp.length > 1 ? ' (+' + (sp.length - 1) + ' more)' : '') + '.'; note.setAttribute('data-kind', 'warn'); }
+    else { note.textContent = n + (n === 1 ? ' signer.' : ' signers.') + ' Replacing a lost or compromised key is a proposal that needs the normal threshold, and approvals from a replaced signer stop counting.'; note.setAttribute('data-kind', 'info'); }
+    const of = document.getElementById('treOf');
+    const bad = !!tp || !n || Number(v.threshold) > n;
+    of.textContent = (tp ? 'invalid' : v.threshold + ' of ' + n); of.setAttribute('data-bad', bad ? '1' : '0');
+    const box = document.getElementById('treStream');
+    const st = TRE_STREAMING[v.streaming ? 'yes' : 'no'];
+    box.textContent = ''; box.appendChild(swbEl('b', '', st.title)); box.appendChild(document.createTextNode(st.text));
+  },
+  summaryRows(v, row){
+    const n = v.signersRaw.length;
+    const sp = treSignerProblems(v);
+    const items = v.signersRaw.map((a, i) => ({ label: 'Signer ' + (i + 1), value: a, required: true }));
+    const invalid = typeof reqProblems === 'function' ? reqProblems(items).length : 0;
+    row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+    if(!n) row('Signers', 'None yet', 'missing', 'Required: one address per line');
+    else if(sp.length && (invalid || sp.some(p => /must be different/.test(p)))) row('Signers', invalid ? (n - invalid) + ' of ' + n + ' valid' : n + ' signers', 'bad', sp[0]);
+    else row('Signers', n + (n === 1 ? ' signer' : ' signers'), 'ok');
+    const tp = treThresholdProblem(v);
+    if(tp) row('Approval', v.threshold + ' of ' + n, 'bad', 'Must be a whole number of at least 1');
+    else if(!n) row('Approval', v.threshold + ' of 0', 'missing', 'Needs at least one signer');
+    else if(Number(v.threshold) > n) row('Approval', v.threshold + ' of ' + n, 'bad', 'Higher than the number of signers');
+    else row('Approval', v.threshold + ' of ' + n, 'ok', Number(v.threshold) === 1 && n > 1 ? 'A single signer can approve alone' : '');
+    row('Streaming', v.streaming ? 'Enabled' : 'Disabled', 'ok');
+    if(v.portable) row('Gas-token alias', 'Set at deploy time', 'ok', 'Constructor argument in ' + v.mode + ' mode');
+    else if(v.alias) row('Gas-token alias', v.alias, 'ok', 'Payments must use the native currency, this ERC-20 address is refused', true);
+    else row('Gas-token alias', 'None', 'ok', 'This network\'s gas token has no ERC-20 address');
+    CFBuilder.networkRow(row, v.net);
+    row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  }
+};
+CFBuilder.register(TRE_CONFIG);
+
+/* ======================================================================
    SECTION 04 — VAULT (ERC-4626 minimal)
    ====================================================================== */
 function genVault(){
@@ -2384,6 +2382,108 @@ contract ${name} {
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
 
+/* ---- The Vault screen: one config for the shared engine (Phase 9.2). Read-only: it mirrors what genVault() checks and what the Solidity
+   needs in order to compile, and never writes to the form or the buffer. Everything network-specific comes from NETWORKS. ---- */
+const VLT_STRATEGY = {
+  title: 'Manual yield',
+  text: 'The contract does not earn yield by itself. Assets sent to the vault raise the share price, and performance fees accrue in the vault for the owner to collect with claimFees().'
+};
+const VLT_PERF_MSG = 'Performance fee must be a whole number of basis points from 0 to 9999 (1000 = 10%).';
+
+function vltRead(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value) : ''; };
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const assetRaw = g('vault_asset').trim();
+  const portable = typeof isPortable === 'function' ? isPortable() : false;
+  return {
+    net, assetRaw, portable,
+    assetField: g('vault_asset'),
+    asset: assetRaw || (net && net.usdc) || '',                     // the same rule as resolveToken(value, 'usdc')
+    rawName: g('vault_name'), name: (g('vault_name') || 'ArcYieldVault').replace(/[^A-Za-z0-9]/g, ''),
+    symbolField: g('vault_symbol'), symbol: g('vault_symbol') || 'avTKN',
+    perfField: g('vault_perf'), perf: g('vault_perf') || '0',
+    capField: g('vault_cap'), cap: g('vault_cap') || '0',
+    strategy: g('vault_strategy'),
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : ''
+  };
+}
+
+function vltPerfProblem(v){ return (!/^\d+$/.test(String(v.perf).trim()) || Number(v.perf) > 9999) ? VLT_PERF_MSG : ''; }
+function vltAssetProblem(v){
+  return (typeof reqTokenProblem === 'function' && v.net) ? reqTokenProblem('Asset', v.assetField, v.asset, v.net.label) : '';
+}
+function vltSymbolProblem(v){
+  return /["\\]/.test(v.symbol) ? 'Share symbol must not contain quotes or backslashes: it is written into a Solidity string and the contract would not compile.' : '';
+}
+/* The portable modes scale the cap with the asset's own decimals when the constructor runs and accept only digits with an optional decimal part
+   (anything else makes genVault() throw); the single mode writes cap * 10**6, which compiles only for a non-negative value with at most 6 decimals. */
+function vltCapProblem(v){
+  const c = String(v.cap).trim();
+  if(v.portable) return /^\d+(\.\d+)?$/.test(c) ? '' : 'Deposit cap must be a plain number such as 500 or 1.5: any other form stops generation in the portable modes.';
+  const n = Number(c);
+  return (Number.isFinite(n) && n >= 0 && Math.abs(n * 1e6 - Math.round(n * 1e6)) < 1e-6) ? '' : 'Deposit cap must be at least 0 with at most 6 decimals: it is multiplied by 10^6 in the Solidity.';
+}
+function vltProblems(v){
+  return [vltPerfProblem(v), vltCapProblem(v) && v.portable ? vltCapProblem(v) : '', vltAssetProblem(v), vltSymbolProblem(v), !v.portable ? vltCapProblem(v) : ''].filter(Boolean);
+}
+function vltSig(v){ return JSON.stringify([v.rawName, v.symbolField, v.assetField, v.perfField, v.capField, v.strategy, typeof activeNetwork !== 'undefined' ? activeNetwork : '', typeof multichainMode !== 'undefined' ? multichainMode : '']); }
+/* Decimals of the network's own default USDC: the Solidity assumes 6 (deposit cap in the single mode, share pricing in every mode). */
+function vltDecimalsNote(v){
+  if(v.assetRaw || !v.net || !v.net.usdc || v.net.usdcDecimals === 6) return '';
+  return 'The default asset on ' + v.net.label + ' has ' + v.net.usdcDecimals + ' decimals; the generated vault assumes 6.';
+}
+
+const VLT_CONFIG = {
+  key: 'vault', prefix: 'bld',
+  section: 'sec-vault', codePanel: 'vaultCode', summary: 'vltSummary', progress: 'vltProgress', stages: 'vltStages',
+  isTemplate: (tpl) => tpl === 'vault',
+  read: () => vltRead(),
+  problems: (v) => vltProblems(v),
+  signature: (v) => vltSig(v),
+  draft: () => (typeof pendingSource !== 'undefined' && pendingSource && pendingSource.template === 'vault' && Array.isArray(pendingSource.problems)) ? pendingSource.problems : [],
+  guidance(v){
+    const net = v.net ? v.net.label : 'this network';
+    const note = document.getElementById('vltAssetNote');
+    const ap = vltAssetProblem(v), dn = vltDecimalsNote(v);
+    let t, kind = 'info';
+    if(v.portable){ t = 'The portable modes ask for the asset as a constructor argument at deploy time, per network. What you type here (or the network default) is only the starting value.'; }
+    else if(v.assetRaw){ t = ap ? ap + '.' : 'The vault holds this token. It must be an ERC-20 contract on ' + net + '.'; if(ap) kind = 'warn'; }
+    else if(v.asset){ t = 'Empty: the vault uses USDC on ' + net + ' (' + v.asset + ').'; }
+    else { t = net + ' has no default asset: enter the token address. Generating anyway writes a DRAFT that cannot be deployed.'; kind = 'warn'; }
+    t += ' Share pricing assumes a 6-decimal asset.';
+    if(dn){ t += ' ' + dn; kind = 'warn'; }
+    note.textContent = t; note.setAttribute('data-kind', kind);
+    const pct = swbFeePercent(String(v.perf).trim());
+    const chip = document.getElementById('vltPct');
+    chip.textContent = pct ? '= ' + pct : 'invalid'; chip.setAttribute('data-bad', pct ? '0' : '1');
+    const cn = document.getElementById('vltCapNote'), cp = vltCapProblem(v);
+    const n = String(v.cap).trim();
+    if(cp) cn.textContent = cp;
+    else if(Number(n) === 0) cn.textContent = 'Unlimited: no deposit cap.';
+    else cn.textContent = v.portable ? 'Cap: ' + n + ' tokens, multiplied by the asset\'s decimals() when the constructor runs.' : 'Cap: ' + n + ' tokens, written as ' + n + ' × 10^6 (it assumes a 6-decimal asset).';
+    const box = document.getElementById('vltStrategy');
+    box.textContent = ''; box.appendChild(swbEl('b', '', VLT_STRATEGY.title)); box.appendChild(document.createTextNode(VLT_STRATEGY.text));
+  },
+  summaryRows(v, row){
+    row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+    const sp = vltSymbolProblem(v);
+    row('Share symbol', v.symbol, sp ? 'bad' : 'ok', sp ? 'No quotes or backslashes' : '');
+    const ap = vltAssetProblem(v), dn = vltDecimalsNote(v);
+    if(v.portable) row('Asset', v.asset || 'Set at deploy time', ap ? 'bad' : 'ok', ap || 'Constructor argument, set per network at deploy time', !!v.asset);
+    else if(ap) row('Asset', v.assetRaw || 'Missing', v.assetRaw ? 'bad' : 'missing', ap, !!v.assetRaw);
+    else row('Asset', v.asset, 'ok', dn || (v.assetRaw ? '' : 'Network default (USDC)'), true);
+    const pct = swbFeePercent(String(v.perf).trim());
+    row('Performance fee', pct ? v.perf + ' bps (' + pct + ')' : (v.perf || '(empty)') + ' bps', pct ? 'ok' : 'bad', pct ? '' : 'Whole number from 0 to 9999: generation is refused otherwise');
+    const cp = vltCapProblem(v), n = String(v.cap).trim();
+    if(cp) row('Deposit cap', n || '(empty)', 'bad', cp);
+    else row('Deposit cap', Number(n) === 0 ? 'Unlimited' : n + ' tokens', 'ok', Number(n) === 0 ? '' : (v.portable ? 'Scaled by the asset decimals at deploy' : 'Written as ' + n + ' × 10^6'));
+    row('Strategy', VLT_STRATEGY.title, 'ok');
+    CFBuilder.networkRow(row, v.net);
+    row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  }
+};
+CFBuilder.register(VLT_CONFIG);
+
 /* ======================================================================
    SECTION 05 — MULTISEND
    ====================================================================== */
@@ -2492,6 +2592,80 @@ ${(mode==='native' || mode==='both') ? `    /// @notice Gas given to each recipi
   renderCtorArgs();
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
 }
+
+/* ---- The MultiSend screen: one config for the shared engine (Phase 9.3). Read-only: it mirrors what genMultisend() checks and what the
+   Solidity needs in order to compile. The contract has no token address and no network logic of its own: the token is an argument of each
+   call, the network only appears in a comment, and the Deployment Mode does not change it (no constructor argument in any mode). ---- */
+const MSL_MODES = {
+  erc20: { label: 'ERC-20 only', title: 'ERC-20 batch (multiSendToken)', text: 'Pays many recipients in any ERC-20 with one call. The sender approves this contract first, and the tokens go straight from the sender to each recipient: the contract never holds them. If one transfer fails, the whole batch reverts.' },
+  native: { label: 'Native token only', title: 'Native-token batch (multiSendNative)', text: 'Pays many recipients in the network\'s gas token with one call. The sender sends msg.value covering the amounts plus the fee, and any change is returned. Each recipient gets a fixed gas allowance, so a recipient that burns gas fails its own payment.' },
+  both:   { label: 'Native + ERC-20', title: 'Both batches', text: 'Includes multiSendToken and multiSendNative, each working as described for its mode.' }
+};
+
+function mslRead(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value) : ''; };
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const mode = MSL_MODES[g('ms_mode')] ? g('ms_mode') : 'erc20';
+  return {
+    net, mode,
+    rawName: g('ms_name'), name: (g('ms_name') || 'ArcMultiSend').replace(/[^A-Za-z0-9]/g, ''),
+    maxField: g('ms_max'), max: (g('ms_max') || '200').trim(),
+    feeField: g('ms_fee'), fee: (g('ms_fee') || '0').trim(),
+    ownerField: g('ms_owner'), owner: g('ms_owner').trim(),
+    dmode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : ''
+  };
+}
+const mslWhole = (s) => /^\d+$/.test(s);
+function mslOwnerProblems(v){ return typeof reqProblems === 'function' ? reqProblems([{ label: 'Fee recipient', value: v.owner }]) : []; }
+function mslMaxProblem(v){
+  if(!mslWhole(v.max)) return 'Max recipients must be a whole number of at least 1: the value is written into the Solidity as it is, and anything else does not compile.';
+  return Number(v.max) < 1 ? 'Max recipients of 0 means no batch could ever be sent: use at least 1.' : '';
+}
+function mslFeeProblem(v){ return mslWhole(v.fee) ? '' : 'Service fee must be a whole number of basis points: the value is written into the Solidity as it is, and anything else does not compile.'; }
+function mslProblems(v){ return [...mslOwnerProblems(v), mslMaxProblem(v), mslFeeProblem(v)].filter(Boolean); }
+function mslSig(v){ return JSON.stringify([v.rawName, v.mode, v.maxField, v.feeField, v.ownerField, typeof activeNetwork !== 'undefined' ? activeNetwork : '', typeof multichainMode !== 'undefined' ? multichainMode : '']); }
+const mslPercent = (fee) => mslWhole(fee) ? (Number(fee) / 100).toFixed(2) + '%' : null;
+
+const MSL_CONFIG = {
+  key: 'multisend', prefix: 'bld',
+  section: 'sec-multisend', codePanel: 'multisendCode', summary: 'mslSummary', progress: 'mslProgress', stages: 'mslStages',
+  isTemplate: (tpl) => tpl === 'multisend',
+  read: () => mslRead(),
+  problems: (v) => mslProblems(v),
+  signature: (v) => mslSig(v),
+  draft: () => (typeof pendingSource !== 'undefined' && pendingSource && pendingSource.template === 'multisend' && Array.isArray(pendingSource.problems)) ? pendingSource.problems : [],
+  guidance(v){
+    const m = MSL_MODES[v.mode], card = document.getElementById('mslModeCard');
+    card.textContent = ''; card.appendChild(swbEl('b', '', m.title)); card.appendChild(document.createTextNode(m.text));
+    const pct = mslPercent(v.fee), chip = document.getElementById('mslPct');
+    chip.textContent = pct ? '= ' + pct : 'invalid'; chip.setAttribute('data-bad', pct ? '0' : '1');
+    const mp = mslMaxProblem(v);
+    document.getElementById('mslMaxNote').textContent = mp || 'At most ' + v.max + ' recipients per transaction. A larger batch costs more gas and has to fit in one block.';
+    const op = mslOwnerProblems(v), note = document.getElementById('mslOwnerNote');
+    if(op.length) note.textContent = op[0] + '.';
+    else if(!v.owner) note.textContent = 'Empty: the deployer receives the fee. The contract has no function to change the fee recipient later.';
+    else note.textContent = 'This address receives the fee. The contract has no function to change it later.';
+  },
+  summaryRows(v, row){
+    const m = MSL_MODES[v.mode], net = v.net;
+    row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+    row('Payment mode', m.label, 'ok', v.mode === 'erc20' ? '' : 'The sender pays with msg.value');
+    row('Native token', v.mode === 'erc20' ? 'Not used' : (net ? net.gasSymbol : 'Unknown'), 'ok', v.mode !== 'erc20' && net && net.gasSymbol === 'USDC' ? 'On this network the gas token is USDC' : '');
+    const mp = mslMaxProblem(v);
+    row('Max recipients', mp ? (v.max || '(empty)') : v.max + ' per transaction', mp ? 'bad' : 'ok', mp);
+    const fp = mslFeeProblem(v), pct = mslPercent(v.fee);
+    if(fp) row('Service fee', v.fee || '(empty)', 'bad', fp);
+    else if(Number(v.fee) === 0) row('Service fee', 'No fee', 'ok');
+    else row('Service fee', v.fee + ' bps (' + pct + ')', 'ok', Number(v.fee) > 10000 ? 'More than 100% of the batch total, charged on top' : 'Charged on top of the batch total');
+    const op = mslOwnerProblems(v);
+    if(Number(v.fee) === 0 && !op.length) row('Fee recipient', v.owner || 'Not used (no fee)', 'ok', v.owner ? 'Not used while the fee is 0' : '', !!v.owner);
+    else if(op.length) row('Fee recipient', v.owner, 'bad', op[0], true);
+    else row('Fee recipient', v.owner || 'The deployer', 'ok', v.owner ? 'Fixed at deploy time' : 'The account that deploys: fixed at deploy time', !!v.owner);
+    CFBuilder.networkRow(row, v.net);
+    row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad', v.dmode ? 'This contract is the same in every mode' : '');
+  }
+};
+CFBuilder.register(MSL_CONFIG);
 
 /* ======================================================================
    SECTION 06 — CROSSCHAIN PAYMENTS (CCTP)
@@ -2782,6 +2956,103 @@ contract ${name} {
   document.getElementById('pendingContractLabel').value = name+'.sol  ('+net.label+')';
   renderCtorArgs();
 }
+
+/* ---- The Crosschain screen: one config for the shared engine (Phase 9.4). Read-only: it mirrors what genCrosschain() does in each mode.
+   Single network mode writes the payments contract (template 'crosschain'): CCTP V1 addresses from NETWORKS[*].cctp, three functionalities,
+   optional resume, and a draft when an address is missing. Every other mode writes the CCTP V2 bridge (template 'bridge'), which does NOT use
+   the functionality or the resume choice, takes the three addresses as constructor arguments and has CCTP V2 data only for the networks in
+   CCTP_DOMAINS. ---- */
+const CCX_MODES = {
+  payment:   { label: 'Direct payment', title: 'Direct crosschain payment', text: 'sendCrossChain burns USDC here and CCTP mints it to the recipient on the destination chain. The destination domain and the recipient are arguments of each call.' },
+  escrow:    { label: 'Escrow', title: 'Crosschain escrow', text: 'createEscrow holds the USDC for a beneficiary and releaseEscrow burns it towards the destination chain once the escrow is released.' },
+  recurring: { label: 'Recurring payments', title: 'Recurring crosschain payments', text: 'createSubscription sets up a payment every period and charge burns each instalment towards the destination chain. The payer can cancel.' }
+};
+const CCX_BRIDGE = { title: 'CCTP V2 bridge', text: 'The portable modes write the CCTP V2 bridge. It does not use this choice: payment, escrow and recurring payments only exist in Single network mode.' };
+
+function ccxRead(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value) : ''; };
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const portable = typeof isPortable === 'function' ? isPortable() : false;
+  const v2 = (typeof cctpV2 === 'function' && net) ? cctpV2(activeNetwork) : null;
+  const cctp = (net && net.cctp) || {};
+  const tmField = g('cc_tokenmessenger'), mtField = g('cc_msgtransmitter'), usdcField = g('cc_usdc');
+  return {
+    net, portable, v2,
+    rawName: g('cc_name'), name: (g('cc_name') || 'ArcCrossPay').replace(/[^A-Za-z0-9]/g, ''),
+    mode: CCX_MODES[g('cc_mode')] ? g('cc_mode') : 'payment',
+    resume: g('cc_resume') === 'yes',
+    tmField, mtField, usdcField,
+    tm: tmField.trim(), mt: mtField.trim(), usdc: usdcField.trim(),
+    defTm: cctp.tokenMessenger || '', defMt: cctp.messageTransmitter || '', defUsdc: (net && net.usdc) || '',
+    dmode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : ''
+  };
+}
+/* What genCrosschain() records: in the single mode the three addresses are required (typed, or the network's V1 table, or the USDC default);
+   in the portable modes only a typed, malformed address is a problem. */
+function ccxProblems(v){
+  if(typeof reqProblems !== 'function' || !v.net) return [];
+  if(v.portable) return reqProblems([{ label: 'Token Messenger', value: v.tm }, { label: 'Message Transmitter', value: v.mt }, { label: 'USDC', value: v.usdc }]);
+  return reqProblems([
+    { label: 'Token Messenger', value: v.tm || v.defTm, required: true },
+    { label: 'Message Transmitter', value: v.mt || v.defMt, required: true },
+    { label: 'USDC', value: v.usdc || v.defUsdc, required: true }
+  ]).map(p => p.replace(/ is required$/, ' is required: ' + v.net.label + ' has no default for it'));
+}
+function ccxSig(v){ return JSON.stringify([v.rawName, v.mode, v.resume, v.tmField, v.mtField, v.usdcField, typeof activeNetwork !== 'undefined' ? activeNetwork : '', typeof multichainMode !== 'undefined' ? multichainMode : '']); }
+
+const CCX_CONFIG = {
+  key: 'crosschain', prefix: 'bld',
+  section: 'sec-crosschain', codePanel: 'crosschainCode', summary: 'ccxSummary', progress: 'ccxProgress', stages: 'ccxStages',
+  isTemplate: (tpl) => tpl === 'crosschain' || tpl === 'bridge',
+  read: () => ccxRead(),
+  problems: (v) => ccxProblems(v),
+  signature: (v) => ccxSig(v),
+  draft: () => (typeof pendingSource !== 'undefined' && pendingSource && (pendingSource.template === 'crosschain' || pendingSource.template === 'bridge') && Array.isArray(pendingSource.problems)) ? pendingSource.problems : [],
+  guidance(v){
+    const net = v.net ? v.net.label : 'this network';
+    const card = document.getElementById('ccxModeCard'), m = v.portable ? CCX_BRIDGE : CCX_MODES[v.mode];
+    card.textContent = ''; card.appendChild(swbEl('b', '', m.title)); card.appendChild(document.createTextNode(m.text));
+    const note = document.getElementById('ccxSetupNote'); let t, kind = 'info';
+    if(v.portable){
+      t = 'The CCTP V2 bridge takes the three addresses as constructor arguments, set per network at deploy time. What you type below is only the starting value.';
+      t += v.v2 ? ' ' + net + ' has CCTP V2 (domain ' + v.v2.domain + '): its Circle addresses are filled in on the deploy page.' : ' ' + net + ' has no CCTP V2 deployment in this app: you will have to enter the TokenMessenger and MessageTransmitter on the deploy page.';
+      if(!v.v2) kind = 'warn';
+    } else if(v.defTm && v.defMt){
+      t = 'Single network mode uses the CCTP V1 addresses this app has for ' + net + '. Typing an address overrides it.';
+    } else {
+      t = net + ' is not in this app\'s CCTP V1 address table: enter the TokenMessenger and MessageTransmitter, or generate a DRAFT that cannot be deployed.';
+      if(v.v2) t += ' The portable modes use CCTP V2, which ' + net + ' has.';
+      kind = 'warn';
+    }
+    note.textContent = t; note.setAttribute('data-kind', kind);
+    document.getElementById('ccxResumeNote').textContent = v.portable ? 'Not used by the CCTP V2 bridge: it only applies to the payments contract in Single network mode.' : 'Keeps the burn in contract storage so an interrupted transfer can be resumed once the attestation is ready.';
+  },
+  summaryRows(v, row){
+    const net = v.net;
+    row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+    row('Contract', v.portable ? 'CCTP V2 bridge' : CCX_MODES[v.mode].title, 'ok', v.portable ? 'Portable modes write the bridge' : 'Single network mode');
+    if(v.portable){ row('Functionality', 'Not used', 'ok', 'The V2 bridge has no payment, escrow or recurring choice'); row('Resume burns', 'Not used', 'ok'); }
+    else { row('Functionality', CCX_MODES[v.mode].label, 'ok'); row('Resume burns', v.resume ? 'Yes' : 'No', 'ok'); }
+    row('CCTP V2', v.v2 ? 'Supported (domain ' + v.v2.domain + ')' : 'Not available', v.v2 ? 'ok' : 'missing', v.v2 ? '' : 'No CCTP V2 deployment for this network in the app');
+    const addr = (label, typed, def, v2val, problemLabel) => {
+      if(v.portable){
+        if(typed) row(label, typed, 'ok', 'Starting value for the constructor argument', true);
+        else if(v2val) row(label, v2val, 'ok', 'CCTP V2 default, set per network at deploy time', true);
+        else row(label, 'Enter on the deploy page', 'missing', 'No default for this network');
+      } else {
+        const probs = ccxProblems(v).filter(p => p.indexOf(problemLabel) === 0);
+        if(probs.length) row(label, typed || 'Missing', typed ? 'bad' : 'missing', probs[0], !!typed);
+        else row(label, typed || def, 'ok', typed ? '' : 'Network default', true);
+      }
+    };
+    addr('Token Messenger', v.tm, v.defTm, v.v2 && v.v2.tokenMessenger, 'Token Messenger');
+    addr('Message Transmitter', v.mt, v.defMt, v.v2 && v.v2.messageTransmitter, 'Message Transmitter');
+    addr('Local USDC', v.usdc, v.defUsdc, v.defUsdc, 'USDC');
+    CFBuilder.networkRow(row, v.net);
+    row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
+  }
+};
+CFBuilder.register(CCX_CONFIG);
 
 /* ======================================================================
    CODE DISPLAY / DOWNLOAD
