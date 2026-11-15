@@ -1686,6 +1686,212 @@ contract ${name} {
 }
 
 /* ======================================================================
+   SWAP / AMM BUILDER VIEW (section 02, Phase 8.5) — presentation only.
+   Reads the form (swap_*), activeNetwork, multichainMode, pendingSource and the deploy history; writes none of them.
+   genSwap() and the Deploy now button are untouched. Nothing here compiles, deploys, or reports a result that did not happen.
+   ====================================================================== */
+const SWB_PROTOCOLS = {
+  amm:       { title: 'Constant-product AMM (x*y=k)', text: 'Liquidity pools. Providers add and remove liquidity and traders swap both ways. The swap fee stays in the pool for the liquidity providers.' },
+  orderbook: { title: 'Order-book / limit swap (StableFX-style)', text: 'Peer-to-peer orders, no pools and no AMM. A maker posts Token A at a price in Token B and takers fill it, fully or in part. The fee is paid in Token B to the fee collector, which is the deployer.' }
+};
+
+function swbEl(tag, cls, text){
+  const el = document.createElement(tag);
+  if(cls) el.className = cls;
+  if(text !== undefined) el.textContent = text;
+  return el;
+}
+
+/* The form as genSwap() reads it, plus the app state it depends on. */
+function swbRead(){
+  const g = (id) => { const el = document.getElementById(id); return el ? String(el.value) : ''; };
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const kind = g('swap_kind') === 'orderbook' ? 'orderbook' : 'amm';
+  const multi = g('swap_multi') === 'factory' ? 'factory' : 'single';
+  const rawA = g('swap_tokenA').trim(), rawB = g('swap_tokenB').trim();
+  const portable = typeof isPortable === 'function' ? isPortable() : false;
+  return {
+    net, kind, multi, portable,
+    name: (g('swap_name') || 'ArcSwapAMM').replace(/[^A-Za-z0-9]/g, ''),
+    rawA, rawB, rawName: g('swap_name'),
+    tokenA: rawA || (net && net.usdc) || '', tokenB: rawB || (net && net.eurc) || '',
+    fee: (g('swap_fee') || '30').trim(),
+    needsTokens: !(kind === 'amm' && multi === 'factory'),
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : ''
+  };
+}
+
+/* The same checks genSwap() makes before it generates, without its alerts. */
+function swbProblems(v){
+  const out = [];
+  if(!/^\d+$/.test(v.fee) || Number(v.fee) >= 10000) out.push('Pool fee must be a whole number of basis points below 10000');
+  if(v.needsTokens && !v.portable){
+    const bad = typeof reqProblems === 'function' ? reqProblems([{ label: 'Token A', value: v.rawA }, { label: 'Token B', value: v.rawB }]) : [];
+    bad.forEach(p => out.push(p));
+    if(!bad.length){
+      if(!v.tokenA) out.push('Token A: no default for ' + (v.net ? v.net.label : 'this network') + ', enter an address');
+      if(!v.tokenB) out.push('Token B: no default for ' + (v.net ? v.net.label : 'this network') + ', enter an address');
+      if(v.tokenA && v.tokenB && v.tokenA.toLowerCase() === v.tokenB.toLowerCase()) out.push('Token A and Token B must be different');
+    }
+  }
+  return out;
+}
+
+function swbSig(v){ return JSON.stringify([v.kind, v.multi, v.fee, v.rawA, v.rawB, v.rawName, typeof activeNetwork !== 'undefined' ? activeNetwork : '', v.mode]); }
+
+/* Has genSwap() produced the code on screen, and is it still the one in the deploy buffer and still matching the form? */
+function swbGenState(v){
+  const panel = document.getElementById('swapCode');
+  const pre = panel && panel.querySelector('pre');
+  if(!pre) return { s: 'todo' };
+  const fn = panel.querySelector('.filename');
+  const info = { file: fn ? fn.textContent : '', lines: pre.textContent.split('\n').length };
+  const inBuffer = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code === pre.textContent && /^swap-/.test(pendingSource.template || '');
+  if(!inBuffer) return { s: 'stale', why: 'buffer', ...info };
+  if(panel.getAttribute('data-sig') !== swbSig(v)) return { s: 'stale', why: 'inputs', ...info };
+  return { s: 'done', ...info };
+}
+
+/* A confirmed deployment: the app only writes the history after contract.deployed() resolved. */
+function swbDeployed(){
+  const panel = document.getElementById('swapCode');
+  const at = Number(panel && panel.getAttribute('data-gen-at'));
+  if(!at || typeof pendingSource === 'undefined' || !pendingSource || typeof loadDeployHistory !== 'function') return null;
+  return loadDeployHistory().find(e => e && e.timestamp >= at && e.name === pendingSource.name) || null;
+}
+
+function swbFeePercent(fee){
+  if(!/^\d+$/.test(fee) || Number(fee) >= 10000) return null;
+  return (Number(fee) / 100).toFixed(2) + '%';
+}
+
+
+function swbRender(){
+  const sum = document.getElementById('swbSummary');
+  if(!sum) return;
+  const v = swbRead();
+  const problems = swbProblems(v);
+  const gen = swbGenState(v);
+  const dep = swbDeployed();
+
+  // guidance that follows the real generator branches
+  const proto = SWB_PROTOCOLS[v.kind];
+  const box = document.getElementById('swbProto');
+  box.textContent = '';
+  box.appendChild(swbEl('b', '', proto.title)); box.appendChild(document.createTextNode(proto.text));
+  const pct = swbFeePercent(v.fee);
+  const pctEl = document.getElementById('swbFeePct');
+  pctEl.textContent = pct ? '= ' + pct : 'invalid'; pctEl.setAttribute('data-bad', pct ? '0' : '1');
+  document.getElementById('swbFeeHint').textContent = v.kind === 'amm'
+    ? 'Charged on every swap and kept in the pool for liquidity providers. 30 bps = 0.30%, the Uniswap V2 default. Whole number below 10000.'
+    : 'Charged in Token B on every fill and paid to the fee collector (the deployer). 30 bps = 0.30%. Whole number below 10000.';
+  document.getElementById('swbMultiHint').textContent = v.kind === 'orderbook'
+    ? 'Applies to the AMM only. An order book is always one contract, whatever is chosen here.'
+    : (v.multi === 'factory' ? 'A factory contract creates pairs on demand with createPair(tokenX, tokenY).' : 'One contract for one pair of tokens.');
+  const pairNote = document.getElementById('swbPairNote');
+  pairNote.setAttribute('data-kind', 'info');
+  if(v.kind === 'amm' && v.multi === 'factory') pairNote.textContent = 'A factory does not use these two fields: each pair is created later with createPair(tokenX, tokenY).';
+  else if(v.portable) pairNote.textContent = 'Deployment Mode is ' + v.mode + ': the token addresses are set as constructor arguments when you deploy. Anything typed here is only a default.';
+  else pairNote.textContent = 'Use ERC-20 token addresses on ' + (v.net ? v.net.label : 'the active network') + '. Token A and Token B must be different.';
+
+  // summary
+  sum.textContent = '';
+  const row = (label, value, state, flag, mono) => {
+    const r = swbEl('div', 'swb-row'); r.setAttribute('data-state', state || 'ok');
+    r.appendChild(swbEl('dt', '', label));
+    const dd = swbEl('dd', mono ? 'mono' : '', value);
+    if(flag) dd.appendChild(swbEl('span', 'swb-flag', flag));
+    r.appendChild(dd); sum.appendChild(r);
+  };
+  const tokenRow = (label, raw, shown) => {
+    const bad = typeof reqProblems === 'function' && v.needsTokens && !v.portable ? reqProblems([{ label, value: raw }]) : [];
+    if(!v.needsTokens) return row(label, 'Not used', 'ok', 'Pairs are created later by the factory');
+    if(bad.length) return row(label, shown, 'bad', 'Not a valid address', true);
+    if(!shown) return row(label, 'Not set', v.portable ? 'ok' : 'missing', v.portable ? 'Set at deploy time' : 'No default on this network', false);
+    return row(label, shown, 'ok', raw ? '' : 'Network default', true);
+  };
+  row('Project', v.name || '(empty)', v.name ? 'ok' : 'bad', v.name ? '' : 'Enter a name');
+  row('Protocol', proto.title, 'ok');
+  tokenRow('Token A', v.rawA, v.tokenA);
+  tokenRow('Token B', v.rawB, v.tokenB);
+  row(v.kind === 'amm' ? 'Pool fee' : 'Fee', pct ? v.fee + ' bps (' + pct + ')' : (v.fee || '(empty)') + ' bps', pct ? 'ok' : 'bad', pct ? '' : 'Whole number below 10000');
+  row('Pair support', v.kind === 'orderbook' ? 'Single contract (order book)' : (v.multi === 'factory' ? 'Factory (multiple pairs)' : 'Single pair'), 'ok');
+  row('Network', v.net ? v.net.label + ' (' + v.net.chainIdDec + ')' : 'Unknown', v.net ? 'ok' : 'bad');
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+
+  // progress: only what really happened
+  const prog = document.getElementById('swbProgress');
+  prog.textContent = '';
+  const step = (title, state, text) => {
+    const li = swbEl('li'); li.setAttribute('data-state', state);
+    const mark = swbEl('span', 'swb-mark', state === 'done' ? '\u2713' : (state === 'attention' || state === 'stale' ? '!' : ''));
+    mark.setAttribute('aria-hidden', 'true');
+    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'swb-t', text));
+    li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
+  };
+  step('Configuration', problems.length ? 'attention' : 'done', problems.length ? problems[0] + (problems.length > 1 ? ' (+' + (problems.length - 1) + ' more)' : '') : 'Parameters look valid for ' + (v.net ? v.net.label : 'the network') + '.');
+  step('Code Generation', gen.s === 'done' ? 'done' : (gen.s === 'stale' ? 'stale' : 'todo'),
+    gen.s === 'done' ? gen.file + ', ' + gen.lines + ' lines generated.'
+    : gen.s === 'stale' ? (gen.why === 'inputs' ? 'The form changed after this code was generated. Generate again.' : 'The deploy buffer now holds a different contract than this code. Generate again before deploying.')
+    : 'Press Generate contract to write the Solidity.');
+  step('Review & Audit', gen.s === 'todo' ? 'locked' : 'todo', gen.s === 'todo' ? 'Available once the code exists.' : 'Not audited. Review the Solidity and run the AI Auditor or the Test Lab: results are not tracked here.');
+  step('Deployment', dep ? 'done' : (gen.s === 'todo' ? 'locked' : 'todo'),
+    dep ? 'Confirmed on ' + ((typeof NETWORKS !== 'undefined' && NETWORKS[dep.network]) ? NETWORKS[dep.network].label : dep.network) + ' at ' + dep.address
+    : 'Nothing deployed yet. Deploy now opens Compile & Deploy.');
+
+  // header steps
+  const hs = { configure: problems.length ? 'current' : 'done', generate: gen.s === 'done' ? 'done' : (problems.length ? 'todo' : 'current'), deploy: dep ? 'done' : (gen.s === 'done' ? 'current' : 'todo') };
+  document.querySelectorAll('#swbStages li').forEach(li => {
+    const s = hs[li.getAttribute('data-step')];
+    li.setAttribute('data-state', s);
+    if(s === 'current') li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+  });
+}
+
+/* Adds language, maturity and warnings to the head of the code panel that showCode() just filled. The Solidity itself is not touched. */
+function swbDecorateCode(){
+  const panel = document.getElementById('swapCode');
+  const head = panel && panel.querySelector('.codehead');
+  if(!head || head.querySelector('.swb-lang')) return;
+  head.appendChild(swbEl('span', 'swb-lang', 'Solidity'));
+  const tpl = typeof pendingSource !== 'undefined' && pendingSource ? pendingSource.template : '';
+  if(/^swap-/.test(tpl || '') && typeof matInfo === 'function' && typeof MATURITY_LEVELS !== 'undefined'){
+    const i = matInfo(tpl), L = MATURITY_LEVELS[i.level];
+    if(L){
+      const b = swbEl('span', 'mat-badge mat-' + i.level + ' mat-small'); b.title = L.title + '. ' + i.reason;
+      b.appendChild(swbEl('span', '', L.icon)); b.appendChild(document.createTextNode(' ' + L.label));
+      head.appendChild(b);
+      if(i.level === 'experimental') head.appendChild(swbEl('span', 'swb-warn', 'Not audited'));
+    }
+  }
+}
+
+function swbOnGenerated(){
+  const panel = document.getElementById('swapCode');
+  if(!panel || !panel.querySelector('pre')) return;
+  panel.setAttribute('data-sig', swbSig(swbRead()));
+  panel.setAttribute('data-gen-at', String(Date.now()));
+  swbDecorateCode();
+  swbRender();
+}
+
+function swbInit(){
+  const sec = document.getElementById('sec-swap');
+  if(!sec) return;
+  sec.addEventListener('input', swbRender);
+  sec.addEventListener('change', swbRender);
+  if(typeof MutationObserver !== 'function') return;
+  const code = document.getElementById('swapCode');
+  if(code) new MutationObserver(swbOnGenerated).observe(code, { childList: true });
+  new MutationObserver(swbRender).observe(sec, { attributes: true, attributeFilter: ['style'] });       // entering the section refreshes it
+  const side = document.getElementById('sidenet');
+  if(side) new MutationObserver(swbRender).observe(side, { childList: true, characterData: true, subtree: true });  // the active network changed
+  const hist = document.getElementById('historyList');
+  if(hist) new MutationObserver(swbRender).observe(hist, { childList: true });                                    // a deployment was recorded
+}
+if(typeof document !== 'undefined') swbInit();
+
+/* ======================================================================
    SECTION 03 — TREASURY
    ====================================================================== */
 function genTreasury(){

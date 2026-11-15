@@ -165,46 +165,87 @@
 
     <!-- ============ 02 SWAP / AMM ============ -->
     <section class="section" id="sec-swap" style="display:none;">
-      <div class="section-head"><span class="n">02</span><h2>Swap / AMM (Uniswap V2-style)</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <div class="field-grid">
-          <div class="field">
-            <label>Pair / project name</label>
-            <input id="swap_name" value="ArcSwapAMM" />
-          </div>
-          <div class="field">
-            <label>Token A (address)</label>
-            <input id="swap_tokenA" placeholder="0x... USDC" />
-            <div class="hint">Default: native USDC (ERC-20) of the active network, if left empty.</div>
-          </div>
-          <div class="field">
-            <label>Token B (address)</label>
-            <input id="swap_tokenB" placeholder="0x... EURC" />
-          </div>
-          <div class="field">
-            <label>Pool fee (bps)</label>
-            <input id="swap_fee" type="number" value="30" />
-            <div class="hint">30 bps = 0.30% per swap, Uniswap V2 default.</div>
-          </div>
-          <div class="field">
-            <label>Protocol</label>
-            <select id="swap_kind">
-              <option value="amm">Constant-product AMM (x*y=k)</option>
-              <option value="orderbook">Order-book / limit swap (StableFX-style)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Multi-pair support</label>
-            <select id="swap_multi">
-              <option value="single">Single pair</option>
-              <option value="factory">Factory (multiple pairs)</option>
-            </select>
+      <div class="section-head"><span class="n">02</span><h2>Swap / AMM Builder</h2><div class="rule"></div><div class="dm-mount"></div></div>
+      <p class="swb-sub">Create a decentralized exchange smart contract: a constant-product AMM (x*y=k) or an order-book limit swap.</p>
+      <ol class="swb-stages" id="swbStages" aria-label="Builder steps">
+        <li data-step="configure"><span class="swb-dot" aria-hidden="true">1</span><span>Configure</span></li>
+        <li data-step="generate"><span class="swb-dot" aria-hidden="true">2</span><span>Generate</span></li>
+        <li data-step="deploy"><span class="swb-dot" aria-hidden="true">3</span><span>Review &amp; Deploy</span></li>
+      </ol>
+      <div class="swb">
+        <div class="swb-main">
+          <div class="form-panel swb-panel">
+            <div class="swb-block">
+              <h3 class="swb-h"><span class="swb-n" aria-hidden="true">1</span>Contract Identity</h3>
+              <div class="field">
+                <label for="swap_name">Pair / project name</label>
+                <input id="swap_name" value="ArcSwapAMM" autocomplete="off" />
+                <div class="hint">Becomes the contract and file name. Letters and digits only: other characters are removed.</div>
+              </div>
+            </div>
+            <div class="swb-block">
+              <h3 class="swb-h"><span class="swb-n" aria-hidden="true">2</span>Trading Pair</h3>
+              <div class="swb-pair">
+                <div class="field">
+                  <label for="swap_tokenA">Token A (address)</label>
+                  <input id="swap_tokenA" placeholder="0x... USDC" autocomplete="off" spellcheck="false" />
+                  <div class="hint">Default: native USDC (ERC-20) of the active network, if left empty.</div>
+                </div>
+                <span class="swb-arrows" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14"/><path d="M15 5l3 3-3 3"/><path d="M20 16H6"/><path d="M9 13l-3 3 3 3"/></svg></span>
+                <div class="field">
+                  <label for="swap_tokenB">Token B (address)</label>
+                  <input id="swap_tokenB" placeholder="0x... EURC" autocomplete="off" spellcheck="false" />
+                  <div class="hint">Default: EURC of the active network, if it has one and the field is left empty.</div>
+                </div>
+              </div>
+              <p class="swb-note" id="swbPairNote" role="note"></p>
+            </div>
+            <div class="swb-block">
+              <h3 class="swb-h"><span class="swb-n" aria-hidden="true">3</span>Protocol Configuration</h3>
+              <div class="field">
+                <label for="swap_kind">Protocol</label>
+                <select id="swap_kind">
+                  <option value="amm">Constant-product AMM (x*y=k)</option>
+                  <option value="orderbook">Order-book / limit swap (StableFX-style)</option>
+                </select>
+              </div>
+              <div class="swb-proto" id="swbProto" aria-live="polite"></div>
+              <details class="adv swb-adv" open>
+                <summary>Advanced Options <span class="swb-count">2</span></summary>
+                <div class="swb-adv-grid">
+                  <div class="field">
+                    <label for="swap_fee">Pool fee (bps)</label>
+                    <div class="swb-feebox"><input id="swap_fee" type="number" value="30" /><span class="swb-pct" id="swbFeePct" aria-live="polite"></span></div>
+                    <div class="hint" id="swbFeeHint">30 bps = 0.30% per swap, Uniswap V2 default.</div>
+                  </div>
+                  <div class="field">
+                    <label for="swap_multi">Multi-pair support</label>
+                    <select id="swap_multi">
+                      <option value="single">Single pair</option>
+                      <option value="factory">Factory (multiple pairs)</option>
+                    </select>
+                    <div class="hint" id="swbMultiHint"></div>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="btnrow swb-actions">
+              <button class="btn btn-primary" data-onclick="genSwap()">Generate contract</button>
+              <button class="btn btn-ghost" data-onclick="deployFromBuffer('swap')">Deploy now</button>
+            </div>
+            <p class="swb-note swb-actnote">Generate only writes the Solidity below: nothing is compiled or deployed. Deploy now opens Compile &amp; Deploy, where you review the constructor arguments and confirm in your wallet.</p>
           </div>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="genSwap()">Generate contract</button>
-          <button class="btn btn-ghost" data-onclick="deployFromBuffer('swap')">Deploy now</button>
-        </div>
+        <aside class="swb-side" aria-label="Contract overview">
+          <section class="swb-card" aria-labelledby="swbSumH">
+            <h3 id="swbSumH">Configuration Summary</h3>
+            <dl class="swb-sum" id="swbSummary"></dl>
+          </section>
+          <section class="swb-card" aria-labelledby="swbProgH">
+            <h3 id="swbProgH">Build Progress</h3>
+            <ol class="swb-prog" id="swbProgress"></ol>
+          </section>
+        </aside>
       </div>
       <div class="codepanel" id="swapCode" style="display:none;"></div>
     </section>
