@@ -142,6 +142,9 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
     await page.setViewportSize({ width: 1366, height: 520 }); await page.waitForTimeout(120);
     const s = await geo();
     ok(s.chat.h >= 400 && s.sx <= 0, name + ': a short screen keeps a usable chat', JSON.stringify(s.chat));
+    ok(await page.evaluate(() => { const m = document.querySelector('main'); m.scrollTop = m.scrollHeight; const f = document.querySelector('.foot-note').getBoundingClientRect(); return m.scrollHeight > m.clientHeight && f.bottom <= window.innerHeight + 1; }), name + ': on a short screen the page scrolls and the footer note is reachable');
+    await page.mouse.move(700, 300); await page.mouse.wheel(0, -4000); await page.waitForTimeout(100);
+    ok(await page.evaluate(() => document.querySelector('main').scrollTop === 0 || document.getElementById('aiThread').scrollTop >= 0), name + ': the mouse wheel moves the page or the thread (not frozen)');
     await page.evaluate(() => document.getElementById('aiComposer').scrollIntoView({ block: 'nearest' }));
     ok(await page.evaluate(() => { const b = document.getElementById('aiComposer').getBoundingClientRect(); return b.bottom <= window.innerHeight + 1 && b.top >= 0; }), name + ': and the composer can be reached');
     await page.setViewportSize(vp); await page.waitForTimeout(120);
