@@ -22,7 +22,9 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ok(JSON.stringify(s('500')) === JSON.stringify({ digits: '500', scale: 0, isZero: false }), 'scaleAmount: a whole number');
   ok(JSON.stringify(s('1.5')) === JSON.stringify({ digits: '15', scale: 1, isZero: false }), 'scaleAmount: a fractional number');
   ok(JSON.stringify(s('1000.25')) === JSON.stringify({ digits: '100025', scale: 2, isZero: false }), 'scaleAmount: two fractional digits');
-  ok(JSON.stringify(s('0')) === JSON.stringify({ digits: '0', scale: 0, isZero: true }), 'scaleAmount: zero');
+  ok(JSON.stringify(s('0')) === JSON.stringify({ digits: '', scale: 0, isZero: true }), 'scaleAmount: zero');
+  ok(JSON.stringify(s('0.000001')) === JSON.stringify({ digits: '1', scale: 6, isZero: false }), 'scaleAmount: leading zeros are stripped (0.000001 -> digits "1", scale 6)');
+  ok(JSON.stringify(s('0.0000001')) === JSON.stringify({ digits: '1', scale: 7, isZero: false }), 'scaleAmount: seven fractional digits (0.0000001 -> digits "1", scale 7)');
   ok(/is not a number/.test(s('1e3').err || ''), 'scaleAmount: rejects a non-number', JSON.stringify(s('1e3')));
   ok(/is not a number/.test(s('abc').err || ''), 'scaleAmount: rejects text');
 }
@@ -70,6 +72,31 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ok(/require\(assets > 0, "zero deposit"\)/.test(code), 'accounting: a zero deposit is refused');
   ok(/require\(held >= shares, "insufficient shares"\)/.test(code), 'accounting: redeeming more shares than held is refused');
   ok(/assetsOut = grossAssets - perfFee/.test(code), 'accounting: the performance fee is taken from the gross, never from the principal');
+}
+
+/* ---- 6. positive-cap safety: a cap that truncates to zero is rejected, never treated as unlimited ---- */
+{
+  ev("setMultichainMode('single')"); d.getElementById('vault_asset').value = '';
+  // zero = unlimited: no guard emitted
+  d.getElementById('vault_cap').value = '0'; ev('genVault()');
+  ok(!/deposit cap is not representable/.test(ev('pendingSource.code')), 'cap: an explicit zero cap (unlimited) emits no guard');
+  // positive representable: guard present and compiles
+  d.getElementById('vault_cap').value = '500'; ev('genVault()');
+  const c500 = ev('pendingSource.code');
+  ok(/require\(depositCap > 0, "deposit cap is not representable"\)/.test(c500), 'cap: a positive cap emits the not-representable guard');
+  ok(/require\(asset\.decimals\(\) <= 38, "asset decimals out of range"\)/.test(c500), 'cap: a positive cap bounds the asset decimals');
+  ok(compile(c500).length === 0, 'cap: the guarded single vault compiles');
+  // positive sub-unit cap: written exactly, the require guards it at runtime
+  d.getElementById('vault_cap').value = '0.0000001'; ev('genVault()');
+  const cSub = ev('pendingSource.code');
+  ok(/depositCap = 1 \* 10\*\*uint256\(asset\.decimals\(\)\) \/ 10\*\*7/.test(cSub), 'cap: a sub-unit cap is written exactly (1 * 10**decimals() / 10**7)');
+  ok(/require\(depositCap > 0, "deposit cap is not representable"\)/.test(cSub), 'cap: the sub-unit cap still carries the guard');
+  ok(compile(cSub).length === 0, 'cap: the sub-unit cap compiles (the require guards it at runtime)');
+  // portable: the same guard, using the constructor asset
+  ev("setMultichainMode('portable')"); d.getElementById('vault_cap').value = '500'; ev('genVault()');
+  const p = ev('pendingSource.code');
+  ok(/require\(IERC20\(asset_\)\.decimals\(\) <= 38, "asset decimals out of range"\)/.test(p) && /require\(depositCap > 0, "deposit cap is not representable"\)/.test(p), 'cap: the portable vault emits the same guard for the constructor asset');
+  ok(compile(p).length === 0, 'cap: the guarded portable vault compiles');
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

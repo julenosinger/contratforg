@@ -104,6 +104,9 @@ M=[
  # ---- phase 11.2: vault decimal integrity
  ('vault: the deposit cap reverts to hardcoded six decimals','contractforge-deploy/app.js',"  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**uint256(asset.decimals())' + (capS.scale ? ' / 10**' + capS.scale : ''));","  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**6' + (capS.scale ? ' / 10**' + capS.scale : ''));",'vault-decimals.mjs'),
  ('vault: the deposit cap ignores the assets already held','contractforge-deploy/app.js',"        if (depositCap > 0) require(assetsBefore + assets <= depositCap, \"exceeds deposit cap\");","        if (depositCap > 0) require(assets <= depositCap, \"exceeds deposit cap\");",'vault-decimals.mjs'),
+ # ---- phase 11.2.1: positive-cap safety
+ ('vault: a positive cap can truncate to unlimited again','contractforge-deploy/app.js',"  const capGuardLines = (capS.isZero || (typeof isPortable === 'function' && isPortable()))","  const capGuardLines = (true)",'vault-decimals.mjs'),
+ ('vault: leading zeros are not stripped again','contractforge-deploy/app.js',"  const digits = (m[1] + (m[2] || '')).replace(/^0+/, '');","  const digits = m[1] + (m[2] || '');",'vault-decimals.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

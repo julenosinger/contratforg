@@ -50,7 +50,9 @@ contract ArcYieldVault {
         _locked = 1;
     }
 
-    constructor() { owner = msg.sender; }
+    constructor() {
+        owner = msg.sender;
+    }
 
     /// @notice Total assets that belong to share holders (unclaimed performance fees are excluded)
     function totalAssets() public view returns (uint256) {
