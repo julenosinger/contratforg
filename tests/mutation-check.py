@@ -85,6 +85,8 @@ M=[
  ('oracle: the Emscripten build is accepted as native','tests/native-solc-version.mjs','if (/Emscripten/i.test(v)) return false;','if (/Emscripten/i.test(v)) return true;','native-solc-oracle.mjs'),
  ('foundry: a getter is used without parentheses again','tests/solidity/test/Erc20.t.sol','require(h.token().owner() != address(0), "owner became zero without a renounce");','require(h.token.owner() != address(0), "owner became zero without a renounce");','compile-foundry-tests.mjs'),
  ('chat: consecutive same-role messages are not merged','contractforge-deploy/app.js',"    if (last && last.role === m.role) last.content += '\\n\\n' + m.content;\n    else merged.push({ role: m.role, content: m.content });","    merged.push({ role: m.role, content: m.content });",'ui.mjs'),
+ # ---- phase 11.1: deterministic contract resolution
+ ('resolve: the first contract is silently chosen again','contractforge-deploy/app.js',"  const target = resolveContract(contracts, requested);","  const target = (requested && Object.prototype.hasOwnProperty.call(contracts, requested)) ? requested : Object.keys(contracts)[0];",'contract-resolution.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
