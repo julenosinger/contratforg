@@ -248,10 +248,10 @@
   },
   {
    "file": "ui.js",
-   "hash": "33ed27be5935",
+   "hash": "fa2dd58d3715",
    "category": "E",
-   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
-   "excerpt": "'<div>Continue where you left off: <b>' + escapeHtml(pendingSource.name) + '.sol</b></div>' + '<div class=\"hc-"
+   "why": "The active-contract card on the Home page. The contract name, the template, the network label and the mode label go through escapeHtml; the maturity badge is the program's own static markup; the Continue target comes from a fixed table in uiBuilderFor (a navigation id, never text from outside); the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs and tests/header-home-ui.mjs.",
+   "excerpt": "'<div class=\"hc-main\"><span class=\"hc-label\">Active contract</span><b class=\"hc-name\">' + escapeHtml(ps.name) + '.sol</b>' + '<div class=\"hc-meta\">' + ((typeof "
   },
   {
    "file": "ui.js",
@@ -283,10 +283,10 @@
   },
   {
    "file": "ui.js",
-   "hash": "11cff45f418f",
+   "hash": "a67453319544",
    "category": "E",
-   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
-   "excerpt": "'<div class=\"cc-info\"><span class=\"cc-label\">Current contract</span><b>' + escapeHtml(pendingSource.name) + '."
+   "why": "The contract bar and its Actions menu. The contract name and the DRAFT reason go through escapeHtml; the maturity chip is the program's own static markup; the line count and the argument count are numbers; the menu items are literals with the same fixed handlers as before. Exercised with hostile payloads by tests/xss.mjs and tests/header-home-ui.mjs.",
+   "excerpt": "'<div class=\"cc-info\"><span class=\"cc-label\">Current contract</span><b>' + escapeHtml(pendingSource.name) + '.sol</b>' + matChip + draftChip + '<span>' + lines "
   },
   {
    "file": "ui.js",

@@ -37,7 +37,7 @@ function fresh(loadOpts) {
   eq(d.querySelectorAll('#sec-nlai .ai-controls .dm-mount .dm-trigger').length, 1, 'placement: the AI composer toolbar has one control');
   const kids = [...d.querySelector('#sec-nlai .ai-controls').children].map((c) => c.className.split(' ')[0]);
   eq(kids, ['ai-ctl', 'ai-ctl', 'dm-mount', 'ai-attach'], 'placement: AI toolbar order is Network, Complexity, Deployment Mode, Attach');
-  eq(d.querySelectorAll('.dm-mount').length, 8, 'placement: eight places in total, all from one shared renderer');
+  eq(d.querySelectorAll('.dm-mount').length, 9, 'placement: nine places in total (the global bar and eight builders), all from one shared renderer');
   eq(d.querySelectorAll('#dmPopover').length, 1, 'placement: one popover for all of them');
   eq(d.querySelector('#dmPopover').parentElement, d.body, 'placement: the popover lives on body (no parent can clip it)');
   ok(['deploy', 'auditor', 'playground', 'history', 'tests'].every((s) => !d.querySelector(`#sec-${s} .dm-mount`)), 'placement: not added to non-creation sections');
@@ -72,7 +72,7 @@ function fresh(loadOpts) {
   eq(a.mode(), 'multi', 'state: choosing Multi-deploy sets the existing multichainMode');
   eq(w.localStorage.getItem('cf_mc_mode'), 'multi', 'state: and the existing cf_mc_mode storage key');
   ok(a.pop().hidden, 'state: the popover closes after choosing');
-  ok(a.labels().length === 8 && a.labels().every((l) => l === 'Multi-deploy'), 'sync: all eight controls show Multi-deploy', JSON.stringify(a.labels()));
+  ok(a.labels().length === 9 && a.labels().every((l) => l === 'Multi-deploy'), 'sync: all nine controls show Multi-deploy', JSON.stringify(a.labels()));
   ok(/Multi-deploy mode/.test(d.getElementById('netBanner').textContent), 'sync: the network banner follows (existing behaviour)');
   eq(d.getElementById('multiDeployPanel').style.display, 'block', 'sync: the multi-deploy panel appears (existing behaviour)');
   ok(d.querySelector('#homeModes .home-card.active') && d.querySelector('#homeModes .home-card.active').dataset.mode === 'multi', 'sync: the Home cards follow too');
@@ -110,8 +110,8 @@ function fresh(loadOpts) {
   for (let i = 0; i < 8; i++) ev(`setMultichainMode('${KEYS[i % 4]}')`);
   a.triggers()[0].click(); a.key(a.opts()[0], 'Escape'); a.triggers()[1].click(); a.opts()[1].click(); await tick();
   eq(adds, 0, 'listeners: redrawing, switching, opening and closing adds no listener');
-  eq(d.querySelectorAll('.dm-trigger').length, 8, 'listeners: still exactly one trigger per place after many redraws');
-  eq(d.querySelectorAll('.dm-trigger .dm-v').length, 8, 'listeners: and no duplicated content inside them');
+  eq(d.querySelectorAll('.dm-trigger').length, 9, 'listeners: still exactly one trigger per place after many redraws');
+  eq(d.querySelectorAll('.dm-trigger .dm-v').length, 9, 'listeners: and no duplicated content inside them');
   eq(d.querySelectorAll('#dmPopover .dm-opt').length, 4, 'listeners: still four options');
   a.triggers()[2].click();
   ok(!a.pop().hidden, 'listeners: one click opens it (a doubled handler would toggle it shut again)');

@@ -50,6 +50,19 @@ function toggleNetPanel(force){
   if(open && typeof renderNetBar === 'function') renderNetBar();
 }
 
+/* Where "Continue" goes: the builder that makes the contract in the buffer (a fixed table; anything else continues at the deploy page). */
+function uiBuilderFor(tpl){
+  const t = String(tpl || '');
+  if(/^swap/.test(t)) return 'swap';
+  if(t === 'treasury') return 'treasury';
+  if(t === 'vault') return 'vault';
+  if(t === 'multisend') return 'multisend';
+  if(t === 'crosschain' || t === 'bridge') return 'crosschain';
+  if(['erc20', 'erc721', 'escrow', 'vesting', 'paywall', 'dao', 'smartwallet', 'staking'].indexOf(t) >= 0) return 'simple';
+  if(t === 'ai') return 'nlai';
+  return 'deploy';
+}
+
 /* ---- Home page ---- */
 function renderHome(){
   if(typeof NETWORKS === 'undefined') return;
@@ -58,9 +71,20 @@ function renderHome(){
     const has = typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code;
     if(has){
       cont.style.display = 'flex';
-      cont.innerHTML = '<div>Continue where you left off: <b>' + escapeHtml(pendingSource.name) + '.sol</b></div>'
-        + '<div class="hc-actions"><button type="button" class="btn btn-ghost" data-go="auditor">Audit</button>'
-        + '<button type="button" class="btn btn-primary" data-go="deploy">Publish</button></div>';
+      const ps = pendingSource, tpl = String(ps.template || ''), net = NETWORKS[activeNetwork] || { label: String(activeNetwork), isMainnet: false };
+      const nA = (typeof pendingCtorArgs !== 'undefined') ? pendingCtorArgs.length : 0;
+      const why = (typeof reqBlockReason === 'function') ? reqBlockReason() : '';
+      const modeLabel = (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '';
+      cont.innerHTML = '<div class="hc-main"><span class="hc-label">Active contract</span><b class="hc-name">' + escapeHtml(ps.name) + '.sol</b>'
+        + '<div class="hc-meta">' + ((typeof matBadgeHtml === 'function') ? matBadgeHtml(ps.template) : '')
+        + (why ? '<span class="cc-chip draft">DRAFT: ' + ((typeof reqCurrentProblems === 'function' && reqCurrentProblems().length) || 1) + ' to fix</span>' : '')
+        + (tpl ? '<span class="hc-tag">' + escapeHtml(tpl) + '</span>' : '')
+        + '<span class="hc-tag">' + escapeHtml(net.label) + (net.isMainnet ? ' <span class="md-live">LIVE</span>' : '') + '</span>'
+        + (modeLabel ? '<span class="hc-tag">' + escapeHtml(modeLabel) + '</span>' : '')
+        + '<span class="hc-tag">' + (nA ? nA + ' constructor argument' + (nA === 1 ? '' : 's') : 'No constructor arguments') + '</span></div></div>'
+        + '<div class="hc-actions"><button type="button" class="btn btn-ghost" data-go="' + uiBuilderFor(tpl) + '">Continue</button>'
+        + '<button type="button" class="btn btn-ghost" data-go="auditor">Audit</button>'
+        + '<button type="button" class="btn btn-primary" data-go="deploy">Review &amp; Deploy</button></div>';
     } else { cont.style.display = 'none'; cont.innerHTML = ''; }
   }
   const recentBox = document.getElementById('homeRecentBox'), recent = document.getElementById('homeRecent');
@@ -184,17 +208,59 @@ function renderCurrentContract(){
   el.innerHTML = '<div class="cc-info"><span class="cc-label">Current contract</span><b>' + escapeHtml(pendingSource.name) + '.sol</b>'
     + matChip + draftChip + '<span>' + lines + ' lines</span>' + modeChip
     + (nArgs ? '<span class="cc-chip warn">' + nArgs + ' constructor argument' + (nArgs === 1 ? '' : 's') + ' to review</span>' : '')
-    + '</div><div class="cc-actions">'
-    + '<button type="button" class="btn btn-ghost" data-onclick="ccTest()"' + dis + '>Test</button>'
-    + '<button type="button" class="btn btn-ghost" data-onclick="ccAudit()">Audit</button>'
-    + '<button type="button" class="btn btn-ghost" data-onclick="copySource()"' + dis + '>Copy</button>'
-    + '<button type="button" class="btn btn-ghost" data-onclick="downloadSource()"' + dis + '>Download</button>'
-    + '<button type="button" class="btn btn-ghost" data-onclick="ccDiscard()">Discard</button>'
+    + '</div><div class="cc-actions"><div class="cc-menu">'
+    + '<button type="button" class="btn btn-ghost cc-menubtn" id="ccMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="ccMenu" data-onclick="ccMenuToggle()">Actions</button>'
+    + '<div class="cc-menulist" id="ccMenu" role="menu" aria-label="Contract actions" hidden>'
+    + '<button type="button" role="menuitem" data-onclick="ccTest()"' + dis + '>Test</button>'
+    + '<button type="button" role="menuitem" data-onclick="ccAudit()">Audit</button>'
+    + '<button type="button" role="menuitem" data-onclick="copySource()"' + dis + '>Copy</button>'
+    + '<button type="button" role="menuitem" data-onclick="downloadSource()"' + dis + '>Download</button>'
+    + '<button type="button" role="menuitem" data-onclick="ccDiscard()">Discard</button></div></div>'
     + '<button type="button" class="btn btn-primary" data-onclick="ccPublish()"' + dis + '>Publish</button></div>'
     + (why ? '<div class="cc-why" role="alert">' + escapeHtml(why) + '</div>' : '');
   if(typeof reqApplyDraftState === 'function') reqApplyDraftState();
   uiMarkRequired();
 }
+/* ---- The Actions menu of the contract bar (Phase 10.4): only opens and closes the list. The five items are the buttons the bar always had, with the
+   same handlers and the same disabled states; one set of document listeners serves every redraw of the bar. ---- */
+function ccMenuEls(){ return { m: document.getElementById('ccMenu'), b: document.getElementById('ccMenuBtn') }; }
+function ccMenuIsOpen(){ const { m } = ccMenuEls(); return !!(m && !m.hidden); }
+function ccMenuOpen(){
+  const { m, b } = ccMenuEls(); if(!m || !b) return;
+  m.hidden = false; b.setAttribute('aria-expanded', 'true');
+  const first = m.querySelector('button:not([disabled])'); if(first) first.focus();
+}
+function ccMenuClose(restore){
+  const { m, b } = ccMenuEls(); if(!m || !b) return;
+  m.hidden = true; b.setAttribute('aria-expanded', 'false');
+  if(restore) b.focus();
+}
+function ccMenuToggle(){ if(ccMenuIsOpen()) ccMenuClose(true); else ccMenuOpen(); }
+(function ccMenuInit(){
+  if(typeof document === 'undefined') return;
+  document.addEventListener('click', (e) => {
+    if(!ccMenuIsOpen()) return;
+    const t = e.target && e.target.closest ? e.target : null;
+    if(t && t.closest('#ccMenuBtn')) return;                                   // the button toggles it itself
+    if(t && t.closest('#ccMenu')) { ccMenuClose(false); return; }              // a choice was made: the item's own handler has run
+    ccMenuClose(false);                                                         // a click anywhere else
+  });
+  document.addEventListener('keydown', (e) => {
+    const { m, b } = ccMenuEls(); if(!m || !b) return;
+    if(!ccMenuIsOpen()){
+      if((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement === b){ e.preventDefault(); ccMenuOpen(); }
+      return;
+    }
+    const items = [...m.querySelectorAll('button:not([disabled])')];
+    const at = items.indexOf(document.activeElement);
+    if(e.key === 'Escape'){ e.preventDefault(); ccMenuClose(true); }
+    else if(e.key === 'ArrowDown'){ e.preventDefault(); if(items.length) items[(at + 1) % items.length].focus(); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); if(items.length) items[(at - 1 + items.length) % items.length].focus(); }
+    else if(e.key === 'Home'){ e.preventDefault(); if(items.length) items[0].focus(); }
+    else if(e.key === 'End'){ e.preventDefault(); if(items.length) items[items.length - 1].focus(); }
+    else if(e.key === 'Tab'){ ccMenuClose(false); }
+  });
+})();
 function ccPublish(){ if(typeof reqBlockReason === 'function' && reqBlockReason()) return; deployFromBuffer(); }
 function ccTest(){
   if(typeof reqBlockReason === 'function' && reqBlockReason()) return;

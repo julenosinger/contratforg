@@ -295,5 +295,15 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   ok(/imported/.test(fs.readFileSync(path.join(here, '../contractforge-deploy/app.js'), 'utf8').split('function loadFromUrlHash')[1].slice(0, 1400)), 'share: a link never names its own template (it loads as "imported")');
 }
 
+
+/* Phase 10.4: the header and Home facts the new layout relies on */
+{
+  const a = loadApp(); const { ev, w } = a; const d = w.document;
+  eq([...d.querySelector('.sticky-top').children].map((c) => c.id), ['globalBar', 'currentContract', 'netPanel'], 'header: two levels and the network panel');
+  eq(['netBanner', 'walletStatus', 'balanceBadge', 'connectBtn', 'gbarMode', 'netPanel', 'currentContract'].every((id) => d.querySelectorAll('#' + id).length === 1), true, 'header: the ids the rest of the app uses exist once');
+  eq([...d.querySelectorAll('#sec-home .home-cat')].map((c) => [...c.querySelectorAll('.home-card')].map((x) => x.dataset.go)), [['simple'], ['swap', 'treasury', 'vault'], ['multisend', 'crosschain']], 'home: six builders in Simple, DeFi and Payments');
+  eq(JSON.parse(ev("JSON.stringify(['swap-amm-single','swap-orderbook-factory','treasury','vault','multisend','crosschain','bridge','erc20','dao','ai','imported'].map(uiBuilderFor))")), ['swap', 'swap', 'treasury', 'vault', 'multisend', 'crosschain', 'crosschain', 'simple', 'simple', 'nlai', 'deploy'], 'home: Continue goes to the builder that makes each template');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

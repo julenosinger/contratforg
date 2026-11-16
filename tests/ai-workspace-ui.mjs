@@ -26,7 +26,7 @@ const snap = () => Object.fromEntries(['netBanner', 'currentContract', 'netPanel
 const before = snap();
 const inlineBefore = Object.fromEntries(Object.entries(before).map(([k, v]) => [k, v.getAttribute('style')]));
 const barHtml = before.currentContract.innerHTML;
-ok(/Wizard\.sol/.test(barHtml) && before.currentContract.querySelectorAll('button').length === 6, 'setup: the contract bar has its six actions');
+ok(/Wizard\.sol/.test(barHtml) && before.currentContract.querySelectorAll('button').length === 7, 'setup: the contract bar has its Actions menu button, five items and Publish');
 
 /* 1. state follows the open section */
 ok(!inAi(), 'state: off at start (Home)');

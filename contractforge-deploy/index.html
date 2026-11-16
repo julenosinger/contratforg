@@ -81,17 +81,23 @@
   <main>
 
     <div class="sticky-top">
-      <!-- WALLET BAR -->
-      <div class="walletbar">
-        <div class="status" id="walletStatus">
-          <span class="dot"></span> Wallet not connected
+      <!-- LEVEL 1: the global bar. The network (the banner is the selector: it opens the panel below), the deployment mode, and the wallet. -->
+      <div class="gbar" id="globalBar">
+        <div class="gbar-left" id="gbarLeft">
+          <div class="net-banner testnet" id="netBanner" role="status" aria-live="polite"></div>
+          <div class="dm-mount" id="gbarMode"></div>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <span class="badge" id="balanceBadge">— USDC</span>
-          <button class="btn btn-ghost" id="connectBtn" data-onclick="connectWallet()">Connect Wallet</button>
+        <div class="walletbar">
+          <div class="status" id="walletStatus">
+            <span class="dot"></span> Wallet not connected
+          </div>
+          <div class="wb-actions">
+            <span class="badge" id="balanceBadge">— USDC</span>
+            <button class="btn btn-ghost" id="connectBtn" data-onclick="connectWallet()">Connect Wallet</button>
+          </div>
         </div>
       </div>
-      <div class="net-banner testnet" id="netBanner" role="status" aria-live="polite"></div>
+      <!-- LEVEL 2: the contract in the buffer (shown only when there is one) -->
       <div class="cc-bar" id="currentContract" style="display:none;"></div>
 
       <!-- NETWORK SELECTOR (opens from the banner) -->
@@ -106,15 +112,15 @@
 
     <!-- ============ 00 HOME ============ -->
     <section class="section" id="sec-home">
-      <div class="page-head">
+      <div class="page-head home-hero">
         <div>
           <div class="eyebrow">Stablecoin-native · multi-chain · no mock data</div>
-          <h1>Contract Foundry</h1>
-          <p>Build, audit, and deploy Solidity contracts — from simple tokens to vaults, treasuries, AMMs, multisend, and CCTP crosschain bridges. Features AI security auditing, ABI playground, deploy history, gas estimation, source verification, and shareable config URLs. Supports Arc Testnet, Robinhood Chain Testnet, and all major EVM testnets.</p>
+          <h1>Build something powerful.</h1>
+          <p>Create, audit and deploy Solidity contracts on testnets and mainnets, from simple tokens to vaults, treasuries, AMMs and CCTP crosschain bridges.</p>
           <div class="home-cta">
-            <button type="button" class="btn btn-primary" data-go="wizard">Start with the Wizard</button>
-            <button type="button" class="btn btn-ghost" data-go="nlai">Describe it with AI</button>
-            <button type="button" class="btn btn-ghost" data-go="simple">Browse contracts</button>
+            <button type="button" class="btn btn-primary" data-go="wizard">Create Contract</button>
+            <button type="button" class="btn btn-ghost" data-go="nlai">Build with AI</button>
+            <button type="button" class="btn btn-ghost" data-go="simple">Explore Templates</button>
           </div>
         </div>
         <div class="head-meta">
@@ -130,13 +136,28 @@
       </div>
 
       <div class="section-head"><h2>What do you want to build?</h2><div class="rule"></div></div>
-      <div class="home-grid">
-        <button type="button" class="home-card" data-go="simple"><span class="hc-num">01</span><b>Token, Escrow, NFT</b><span>ERC-20, ERC-721, escrow, vesting, subscriptions, DAO, smart wallet and staking.</span></button>
-        <button type="button" class="home-card" data-go="swap"><span class="hc-num">02</span><b>Swap / AMM</b><span>Constant-product pool or order book for a pair of tokens.</span></button>
-        <button type="button" class="home-card" data-go="treasury"><span class="hc-num">03</span><b>Treasury</b><span>Multisig with approvals and optional payment streaming.</span></button>
-        <button type="button" class="home-card" data-go="vault"><span class="hc-num">04</span><b>Vault (ERC-4626)</b><span>Deposit an asset and receive shares of a yield vault.</span></button>
-        <button type="button" class="home-card" data-go="multisend"><span class="hc-num">05</span><b>MultiSend</b><span>Pay many recipients in one transaction.</span></button>
-        <button type="button" class="home-card" data-go="crosschain"><span class="hc-num">06</span><b>Crosschain (CCTP)</b><span>Move USDC between chains with Circle CCTP.</span></button>
+      <div class="home-cats">
+        <div class="home-cat">
+          <h3 class="home-cat-h">Simple</h3>
+          <div class="home-grid">
+            <button type="button" class="home-card" data-go="simple"><span class="hc-num">01</span><b>Token, Escrow, NFT</b><span>ERC-20, ERC-721, escrow, vesting, subscriptions, DAO, smart wallet and staking.</span></button>
+          </div>
+        </div>
+        <div class="home-cat">
+          <h3 class="home-cat-h">DeFi</h3>
+          <div class="home-grid">
+            <button type="button" class="home-card" data-go="swap"><span class="hc-num">02</span><b>Swap / AMM</b><span>Constant-product pool or order book for a pair of tokens.</span></button>
+            <button type="button" class="home-card" data-go="treasury"><span class="hc-num">03</span><b>Treasury</b><span>Multisig with approvals and optional payment streaming.</span></button>
+            <button type="button" class="home-card" data-go="vault"><span class="hc-num">04</span><b>Vault (ERC-4626)</b><span>Deposit an asset and receive shares of a yield vault.</span></button>
+          </div>
+        </div>
+        <div class="home-cat">
+          <h3 class="home-cat-h">Payments</h3>
+          <div class="home-grid">
+            <button type="button" class="home-card" data-go="multisend"><span class="hc-num">05</span><b>MultiSend</b><span>Pay many recipients in one transaction.</span></button>
+            <button type="button" class="home-card" data-go="crosschain"><span class="hc-num">06</span><b>Crosschain (CCTP)</b><span>Move USDC between chains with Circle CCTP.</span></button>
+          </div>
+        </div>
       </div>
 
       <div class="section-head"><h2>How it works</h2><div class="rule"></div></div>
@@ -147,11 +168,15 @@
         <li><b>Publish</b><span>Compile in the browser and deploy with your wallet, then verify.</span></li>
       </ol>
 
-      <div class="section-head"><h2>How should it deploy?</h2><div class="rule"></div></div>
-      <div class="home-grid home-modes" id="homeModes"></div>
+      <details class="home-fold" open>
+        <summary><h2>How should it deploy?</h2><span class="rule"></span></summary>
+        <div class="home-grid home-modes" id="homeModes"></div>
+      </details>
 
-      <div class="section-head"><h2>Supported networks</h2><div class="rule"></div></div>
-      <div class="home-networks" id="homeNetworks"></div>
+      <details class="home-fold" open>
+        <summary><h2>Supported networks</h2><span class="rule"></span></summary>
+        <div class="home-networks" id="homeNetworks"></div>
+      </details>
     </section>
 
     <!-- ============ 01 SIMPLE CONTRACTS ============ -->

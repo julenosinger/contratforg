@@ -32,7 +32,8 @@ eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current i
 {
   const top = doc.querySelector('.sticky-top');
   const kids = [...top.children].map((c) => c.id || c.className.split(' ')[0]);
-  eq(kids.slice(0, 3), ['walletbar', 'netBanner', 'currentContract'], 'wallet bar, network banner and contract bar share the top bar');
+  eq(kids.slice(0, 3), ['globalBar', 'currentContract', 'netPanel'], 'the top bar has two levels: the global bar (network, mode, wallet) and the contract bar');
+  ok(!!top.querySelector('#globalBar > .gbar-left #netBanner') && !!top.querySelector('#globalBar > .gbar-left #gbarMode.dm-mount') && !!top.querySelector('#globalBar > .walletbar'), 'level 1 holds the network banner, the deployment mode and the wallet');
   ok(!!top.querySelector('#connectBtn') && !!top.querySelector('#walletStatus') && !!top.querySelector('#balanceBadge'), 'connect wallet, status and balance are in the top bar');
   ok(!doc.getElementById('sec-home').querySelector('.walletbar, #netbar'), 'Home no longer carries the wallet bar or the network selector');
   const panel = doc.getElementById('netPanel'), change = doc.getElementById('netChangeBtn');
@@ -55,8 +56,8 @@ eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current i
 /* home */
 {
   const home = doc.getElementById('sec-home');
-  eq(home.querySelector('h1').textContent, 'Contract Foundry', 'Home has the title');
-  ok(/Build, audit, and deploy Solidity contracts/.test(home.textContent), 'Home keeps the introduction text');
+  eq(home.querySelector('h1').textContent, 'Build something powerful.', 'Home has the title');
+  ok(/Create, audit and deploy Solidity contracts on testnets and mainnets/.test(home.textContent), 'Home has the introduction text');
   ok(/16 NETWORKS/.test(home.querySelector('.head-meta').textContent), 'Home shows the network count');
   eq(home.querySelectorAll('.home-grid:not(.home-modes) .home-card').length, 6, 'six contract families');
   eq(home.querySelectorAll('#homeNetworks .home-net').length, 16, 'every network is listed');
@@ -199,7 +200,7 @@ ok(bar.style.display === 'none', 'bar hidden before anything is generated');
 ev("renderSimpleForm('erc20')"); ev("genSimple('erc20')");
 ok(bar.style.display === 'flex' && /ArcDollar\.sol/.test(bar.textContent), 'bar shows the generated contract', bar.textContent);
 ok(!/constructor argument/.test(bar.textContent), 'no constructor chip when there are none');
-eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Test', 'Audit', 'Copy', 'Download', 'Discard', 'Publish'], 'bar actions');
+eq([...bar.querySelectorAll('button')].map((b) => b.textContent), ['Actions', 'Test', 'Audit', 'Copy', 'Download', 'Discard', 'Publish'], 'bar actions: the Actions menu button, its five items and Publish');
 doc.querySelector('.nav-item[data-section="swap"]').click();
 [...bar.querySelectorAll('button')].find((b) => b.textContent === 'Publish').click();
 eq(visible(), ['sec-deploy'], 'Publish opens Compile & Deploy from any section');

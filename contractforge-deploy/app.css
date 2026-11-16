@@ -841,6 +841,85 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 label .req-star{color:#FF6A39;margin-left:3px;}
 .light .req-reason{background:#FBE3DA;color:#8A2A10;}
 
+/* ---- Unified header and Home (Phase 10.4). Level 1 is .gbar (network, deployment mode, wallet), level 2 is the contract bar. The elements keep their ids; this only lays them out. ---- */
+.sticky-top .gbar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;padding:9px 44px;min-height:60px;background:rgba(10,16,14,.97);border-bottom:1px solid #1F2A26;backdrop-filter:blur(6px);}
+.gbar .gbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;}
+.sticky-top .gbar .walletbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:0;padding:0;border:0;border-radius:0;background:none;backdrop-filter:none;}
+.gbar .walletbar .wb-actions{display:contents;}
+.gbar .walletbar #balanceBadge{order:1;display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #2A3A34;border-radius:12px;background:#0B1210;color:#DCE5E0;font-size:12px;letter-spacing:.04em;text-transform:none;}
+.gbar .walletbar .status{order:2;padding:8px 12px;border:1px solid #1F2D28;border-radius:12px;background:#0B1210;font-size:12px;}
+.gbar .walletbar #connectBtn{order:3;padding:9px 16px;border-radius:12px;font-weight:600;background:var(--signal);border-color:transparent;color:#1a0a04;}
+.gbar .walletbar .status.connected ~ .wb-actions #connectBtn{background:transparent;border-color:#2A3A34;color:#DCE5E0;}
+.gbar .walletbar #connectBtn:focus-visible,.gbar .nb-change:focus-visible{outline:2px solid #34D399;outline-offset:2px;}
+.gbar .dm-mount .dm-trigger{min-height:44px;border-radius:12px;}
+.gbar .dm-mount .dm-trigger .dm-k{display:none;}
+/* the network banner is the selector: a compact card; the whole card is the (transparent) Change network button */
+.sticky-top .net-banner{position:relative;display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:1px;min-width:190px;padding:6px 38px 6px 14px;min-height:44px;border:1px solid;border-radius:12px;backdrop-filter:none;font-size:11px;}
+.sticky-top .net-banner .nb-net{order:1;flex:1 0 100%;font-size:13px;line-height:1.25;}
+.sticky-top .net-banner .nb-tag{order:2;padding:1px 6px;border-radius:4px;font-size:9px;letter-spacing:.12em;}
+.sticky-top .net-banner .nb-sep{order:3;}
+.sticky-top .net-banner .nb-chain{order:4;}
+.sticky-top .net-banner .nb-chain ~ .nb-sep,.sticky-top .net-banner .nb-mode{display:none;}
+.sticky-top .net-banner .nb-change{position:absolute;inset:0;width:100%;margin:0;padding:0;border:0;border-radius:12px;background:transparent;color:transparent;font-size:0;opacity:1;cursor:pointer;}
+.sticky-top .net-banner::after{content:"";position:absolute;right:15px;top:50%;width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-70%) rotate(45deg);opacity:.8;transition:transform .15s;}
+.sticky-top .net-banner:has(.nb-change[aria-expanded="true"])::after{transform:translateY(-30%) rotate(225deg);}
+.sticky-top .net-banner.testnet .nb-note{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.sticky-top .net-banner.mainnet .nb-note{order:5;flex:1 0 100%;margin:2px 0 0;font-weight:600;color:#FFB07A;}
+/* level 2: the contract bar */
+.sticky-top .cc-bar{padding:8px 44px;gap:8px 14px;}
+.cc-info b{font-size:14px;}
+.cc-chip{border-radius:999px;padding:3px 10px;}
+.cc-actions{align-items:center;flex-wrap:nowrap;}
+.cc-menu{position:relative;}
+.cc-menubtn::after{content:"";display:inline-block;width:6px;height:6px;margin-left:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg);}
+.cc-menubtn[aria-expanded="true"]::after{transform:translateY(1px) rotate(225deg);}
+.cc-menulist{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:170px;display:grid;gap:2px;padding:6px;background:#0E1715;border:1px solid #2A3A34;border-radius:10px;box-shadow:0 14px 34px rgba(0,0,0,.5);}
+.cc-menulist[hidden]{display:none;}
+.cc-menulist button{text-align:left;padding:8px 12px;border:0;border-radius:7px;background:transparent;color:#DCE5E0;font-family:var(--mono);font-size:12px;cursor:pointer;}
+.cc-menulist button:hover:not(:disabled),.cc-menulist button:focus-visible{background:rgba(52,211,153,.12);outline:none;}
+.cc-menulist button:focus-visible{box-shadow:inset 0 0 0 2px #34D399;}
+.cc-menulist button:disabled{opacity:.4;cursor:not-allowed;}
+.light .sticky-top .gbar{background:rgba(244,241,232,.97);border-color:#D8D2C2;}
+.light .gbar .walletbar #balanceBadge,.light .gbar .walletbar .status{background:#F8F5EC;border-color:#D0C9B8;color:#26302B;}
+.light .cc-menulist{background:#FBF9F2;border-color:#D0C9B8;}
+.light .cc-menulist button{color:#26302B;}
+@media (max-width:900px){.sticky-top .gbar{padding:8px 16px;}.sticky-top .cc-bar{padding:8px 16px;}}
+@media (max-width:640px){.gbar .gbar-left{width:100%;}.gbar .gbar-left .net-banner{flex:1 1 200px;}.sticky-top .gbar .walletbar{width:100%;justify-content:space-between;}.gbar .walletbar .status{flex:1 1 auto;min-width:0;}.cc-actions{width:100%;justify-content:space-between;}.cc-actions .btn-primary{flex:1;justify-content:center;}.cc-menulist{left:0;right:auto;}}
+/* Home */
+.home-hero{padding:26px 28px;margin-bottom:22px;border:1px solid #1F2D28;border-radius:16px;background:linear-gradient(135deg,#0E1715 0%,#0A100E 70%);}
+.home-hero h1{font-size:clamp(28px,4vw,42px);}
+.home-hero p{max-width:60ch;}
+.home-continue{align-items:stretch;padding:16px 20px;border-radius:14px;margin-bottom:26px;}
+.home-continue .hc-main{display:grid;gap:6px;min-width:0;flex:1 1 320px;}
+.home-continue .hc-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#8E9D96;}
+.home-continue .hc-name{font-size:18px;font-family:var(--display);overflow-wrap:anywhere;}
+.home-continue .hc-meta{display:flex;flex-wrap:wrap;gap:6px;}
+.home-continue .hc-tag{padding:3px 10px;border:1px solid #2a3a33;border-radius:999px;font-family:var(--mono);font-size:10.5px;color:#C9D3CE;}
+.home-continue .hc-actions{align-self:center;}
+.home-cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-bottom:30px;}
+.home-cat .home-cat-h{margin:0 0 10px;font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#7E8C86;}
+.home-cat .home-grid{grid-template-columns:minmax(0,1fr);gap:10px;margin-bottom:0;}
+.home-cat .home-card{padding:12px 14px;}
+.home-steps{margin-bottom:26px;gap:10px;}
+.home-steps li{padding:10px 14px;}
+.home-fold{margin:0 0 22px;}
+.home-fold>summary{display:flex;align-items:center;gap:14px;margin:0 0 14px;cursor:pointer;list-style:none;}
+.home-fold>summary::-webkit-details-marker{display:none;}
+.home-fold>summary h2{margin:0;font-family:var(--display);font-size:22px;font-weight:600;}
+.home-fold>summary::before{content:"";width:7px;height:7px;border-right:2px solid #34D399;border-bottom:2px solid #34D399;transform:rotate(-45deg);transition:transform .15s;}
+.home-fold[open]>summary::before{transform:rotate(45deg);}
+.home-fold>summary .rule{flex:1;height:1px;background:#24322D;}
+.home-fold>summary:focus-visible{outline:2px solid #34D399;outline-offset:3px;border-radius:6px;}
+.home-fold .home-grid{margin-bottom:10px;}
+.home-recent{border:0;display:grid;gap:8px;}
+.home-recent-row{border:1px solid #1F2D28;border-radius:12px;background:#0B1210;padding:11px 16px;}
+.home-recent-row:last-child{border-bottom:1px solid #1F2D28;}
+.light .home-hero{background:linear-gradient(135deg,#FBF9F2,#F4F1E8);border-color:#D8D2C2;}
+.light .home-continue .hc-tag{color:#26302B;border-color:#D0C9B8;}
+.light .home-recent-row{background:#FBF9F2;border-color:#D8D2C2;}
+.light .home-fold>summary .rule{background:#D8D2C2;}
+@media (max-width:640px){.home-hero{padding:18px 16px;}.home-continue .hc-actions{width:100%;}.home-continue .hc-actions .btn{flex:1;justify-content:center;}}
+
 /* ---- Deploy History (section 10). Every rule is scoped to #sec-history; the records themselves are untouched. ---- */
 #sec-history .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
 #sec-history .hist-intro{font-size:13px;color:#92A199;line-height:1.6;margin:0 0 16px;}
@@ -1344,6 +1423,8 @@ label .req-star{color:#FF6A39;margin-left:3px;}
    removes it as soon as another section opens. The network bar, the current-contract bar and the section heading are only
    hidden here (never removed), so every other section keeps them unchanged. The wallet bar stays. ---- */
 body.ai-workspace #netBanner,body.ai-workspace #currentContract,body.ai-workspace #netPanel{display:none !important;}
+body.ai-workspace .gbar-left{display:none;}
+body.ai-workspace .sticky-top .gbar{justify-content:flex-end;}
 /* the grid column must be allowed to shrink (minmax(0,1fr)): otherwise one long line of code in a reply widens the whole page */
 body.ai-workspace .app{grid-template-columns:280px minmax(0,1fr);}
 @media (max-width:980px){body.ai-workspace .app{grid-template-columns:minmax(0,1fr);}}
