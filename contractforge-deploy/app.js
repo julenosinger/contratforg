@@ -3445,20 +3445,20 @@ function assertOpUnchanged(op, opts){
 
 async function compileAndDeploy(){
   if(deployInFlight){ logConsole('warn','A deployment is already in progress.'); return; }
-  if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
-  if(!signer){ logConsole('err','Connect your wallet first.'); return; }
-  const draftReason = reqBlockReason();   // on every network: a draft is never compiled or deployed
-  if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return; }
-  const sameAsDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
-  if(sameAsDeployer){ logConsole('err','Deploy blocked. '+sameAsDeployer.label+' cannot be the wallet that deploys the contract. Use another address and generate again.'); return; }
-  if(!(await matGate([activeNetwork], pendingSource))){ logConsole('warn','Mainnet deployment cancelled (maturity check not confirmed).'); return; }
-
-  if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
-  logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
-
-  deployInFlight = true;
-  const op = deployOpSnapshot();
+  deployInFlight = true;                    // acquired synchronously, before the first await (the maturity gate)
+  const op = deployOpSnapshot();            // the intent at click time
   try{
+    if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
+    if(!signer){ logConsole('err','Connect your wallet first.'); return; }
+    const draftReason = reqBlockReason();   // on every network: a draft is never compiled or deployed
+    if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return; }
+    const sameAsDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
+    if(sameAsDeployer){ logConsole('err','Deploy blocked. '+sameAsDeployer.label+' cannot be the wallet that deploys the contract. Use another address and generate again.'); return; }
+    if(!(await matGate([activeNetwork], pendingSource))){ logConsole('warn','Mainnet deployment cancelled (maturity check not confirmed).'); return; }
+
+    if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
+    logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
+
     const compiled = await compilePendingResolved();
     if(!compiled){ logConsole('warn','Deployment cancelled (no contract selected).'); return; }
     await finishDeploy(compiled, op);

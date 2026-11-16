@@ -175,9 +175,11 @@ function syncCtorArgsFromSource(){
 function syncCtorArgsFromAbi(ctorInputs){
   ctorInputs = ctorInputs || [];
   const prev = pendingCtorArgs || [];
-  const names = ctorInputs.map((inp) => inp.name || '');
-  const prevNames = prev.map((a) => a.param || '');
-  const same = names.length === prevNames.length && names.every((n, i) => n === prevNames[i]);
+  // Canonical ABI type (uint -> uint256, int -> int256) so source-level shorthand matches the compiler's canonical form.
+  const canon = (t) => (t === 'uint' ? 'uint256' : (t === 'int' ? 'int256' : (t || '')));
+  // In sync only when every parameter matches by position, name and canonical type.
+  const same = ctorInputs.length === prev.length
+    && ctorInputs.every((inp, i) => (inp.name || '') === (prev[i].param || '') && canon(inp.type) === canon(prev[i].type));
   if(same) return;
   if(!ctorInputs.length){
     if(prev.length){ pendingCtorArgs = []; renderCtorArgs(); }
@@ -185,8 +187,11 @@ function syncCtorArgsFromAbi(ctorInputs){
   }
   pendingCtorArgs = ctorInputs.map((inp, i) => {
     const name = inp.name || ('arg' + i);
-    const match = prev.find((a) => (a.param || '') === name);
-    return match ? { ...match, type: inp.type } : { param: name, type: inp.type, hint:'static', value:'', userSet:false, genNetwork:activeNetwork };
+    // Preserve a value only when the same position, name and canonical type still match; otherwise clear it (never
+    // silently carry a value across an incompatible parameter).
+    const prevAt = prev[i];
+    const match = prevAt && (prevAt.param || '') === name && canon(prevAt.type) === canon(inp.type);
+    return match ? { ...prevAt, type: inp.type } : { param: name, type: inp.type, hint:'static', value:'', userSet:false, genNetwork:activeNetwork };
   });
   renderCtorArgs();
 }

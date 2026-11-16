@@ -209,32 +209,44 @@ async function mdWaitForChain(key){
   return false;
 }
 
+/* Fail closed immediately before signing on `key`: the wallet must still be on the expected chain, the intended account
+   must still be connected, and the operation's source/mode/account identity must be unchanged. mdWaitForChain (above)
+   absorbs a delayed chain-change event; this is the final, single-shot verification right before the signature. */
+async function mdAssertReady(key, op){
+  if(!account || !signer) throw new Error('Wallet disconnected before signing on '+NETWORKS[key].label+'.');
+  assertOpUnchanged(op, { allowNetworkChange: true });
+  const want = NETWORKS[key].chainIdDec;
+  let got = null;
+  try{ got = (await provider.getNetwork()).chainId; }catch(_){ /* wallet unreachable */ }
+  if(got !== want) throw new Error('The wallet is on '+(got === null ? 'an unknown chain' : 'chainId '+got)+' but '+NETWORKS[key].label+' needs chainId '+want+'.');
+}
+
 async function multiDeploy(){
   if(deployInFlight || mdState.running) return;
-  if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
-  if(!signer || !account){ logConsole('err','Connect your wallet first.'); return; }
-  const keys = [...mdState.selected].filter(k => NETWORKS[k]);
-  if(!keys.length){ logConsole('err','Select at least one network.'); return; }
-  const draftReason = reqBlockReason();
-  if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return; }
-  const notDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
-  if(notDeployer){ logConsole('err','Deploy blocked. '+notDeployer.label+' cannot be the wallet that deploys the contract.'); return; }
-
-  const mains = keys.filter(k => NETWORKS[k].isMainnet);
-  const bname = pendingSource.name + 'Bridge';
-  const wantBridgeEarly = multichainMode === 'cross' && mdState.includeBridge;
-  const bridgeCode = wantBridgeEarly ? matStamp(bridgeV2Source(bname, NETWORKS[activeNetwork]), 'bridge') : '';
-  if(mains.length){
-    if(!(await matGate(mains, pendingSource))){ logConsole('warn','Multi-deploy cancelled (maturity check not confirmed).'); return; }
-    if(wantBridgeEarly && !(await matGate(mains, { name: bname, code: bridgeCode, template: 'bridge' }))){ logConsole('warn','Multi-deploy cancelled (the bridge was not confirmed).'); return; }
-  }
-
-  mdSetRunning(true);
-  deployInFlight = true;
-  const op = deployOpSnapshot();
+  deployInFlight = true;                    // acquired synchronously, before the first await (the maturity gate)
+  const op = deployOpSnapshot();            // the intent at click time
   const original = activeNetwork;
   const results = [];
   try{
+    if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return results; }
+    if(!signer || !account){ logConsole('err','Connect your wallet first.'); return results; }
+    const keys = [...mdState.selected].filter(k => NETWORKS[k]);
+    if(!keys.length){ logConsole('err','Select at least one network.'); return results; }
+    const draftReason = reqBlockReason();
+    if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return results; }
+    const notDeployer = (pendingSource.notDeployer || []).find(x => reqAddressProblem(x.value, { notDeployer:true }) === 'cannot be the wallet that deploys the contract');
+    if(notDeployer){ logConsole('err','Deploy blocked. '+notDeployer.label+' cannot be the wallet that deploys the contract.'); return results; }
+
+    const mains = keys.filter(k => NETWORKS[k].isMainnet);
+    const bname = pendingSource.name + 'Bridge';
+    const wantBridgeEarly = multichainMode === 'cross' && mdState.includeBridge;
+    const bridgeCode = wantBridgeEarly ? matStamp(bridgeV2Source(bname, NETWORKS[activeNetwork]), 'bridge') : '';
+    if(mains.length){
+      if(!(await matGate(mains, pendingSource))){ logConsole('warn','Multi-deploy cancelled (maturity check not confirmed).'); return results; }
+      if(wantBridgeEarly && !(await matGate(mains, { name: bname, code: bridgeCode, template: 'bridge' }))){ logConsole('warn','Multi-deploy cancelled (the bridge was not confirmed).'); return results; }
+    }
+
+    mdSetRunning(true);
     if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
     logConsole('step','Multi-deploy: compiling '+pendingSource.name+'.sol once…');
     const main = await compilePendingResolved();
@@ -256,6 +268,7 @@ async function multiDeploy(){
         if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true, maturity: matDialogInfo(pendingSource.template), facts: (typeof compilerFacts === 'function' ? compilerFacts(main) : []).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }
+        await mdAssertReady(key, op);   // expected chain + intended account + identity, immediately before signing
         const values = mdRowValues(key, mainInputs);
         const c = await deployCompiled(main, values, key);
         results.push([net.label, c.address]);
