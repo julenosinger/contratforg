@@ -2183,6 +2183,15 @@ CFBuilder.register(TRE_CONFIG);
 /* ======================================================================
    SECTION 04 — VAULT (ERC-4626 minimal)
    ====================================================================== */
+/* Parses a human-readable amount ("500" or "1.5") into the digits and fractional scale needed to express it in the
+   token's base units as `digits * 10**decimals() / 10**scale`. Throws for a non-numeric amount. */
+function scaleAmount(amount){
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(String(amount).trim());
+  if(!m) throw new Error('portabilize: "' + amount + '" is not a number');
+  const digits = m[1] + (m[2] || ''), scale = (m[2] || '').length;
+  return { digits, scale, isZero: /^0+$/.test(digits) };
+}
+
 function genVault(){
   const net=NETWORKS[activeNetwork];
   const name=(document.getElementById('vault_name').value||'ArcYieldVault').replace(/[^A-Za-z0-9]/g,'');
@@ -2192,6 +2201,9 @@ function genVault(){
   const perf=document.getElementById('vault_perf').value||'0';
   const strategy=document.getElementById('vault_strategy').value;
   const cap=document.getElementById('vault_cap').value||'0';
+  // The cap is human-readable asset units, scaled to base units by the asset's own decimals at deployment (never a fixed 6).
+  const capS = scaleAmount(cap);
+  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**uint256(asset.decimals())' + (capS.scale ? ' / 10**' + capS.scale : ''));
 
   if(!/^\d+$/.test(String(perf).trim()) || Number(perf) > 9999){
     alert('Performance fee must be a whole number of basis points from 0 to 9999 (1000 = 10%).');
@@ -2205,6 +2217,7 @@ interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function decimals() external view returns (uint8);
 }
 
 /// @title ${name} — ERC-4626-style Vault (deposit/withdraw with proportional shares)
@@ -2220,9 +2233,9 @@ contract ${name} {
 
     IERC20 public asset = IERC20(${asset});
     uint256 public totalSupply;      // total shares issued
-    uint256 public depositCap = ${cap} * 10**6; // 0 = unlimited (assumes a 6-decimal asset)
+    uint256 public depositCap = ${capExpr}; // 0 = unlimited (scaled by the asset's own decimals)
     uint256 public constant PERF_FEE_BPS = ${perf};
-    /// @dev Virtual shares: 1e12 shares per smallest asset unit when the vault is empty (a 6-decimal asset maps to 18-decimal shares).
+    /// @dev Virtual shares: 1e12 shares per smallest asset unit when the vault is empty (a fixed precision offset, independent of the asset's decimals).
     uint256 private constant SHARE_OFFSET = 1e12;
     address public owner;
     address public pendingOwner;
@@ -2417,22 +2430,18 @@ function vltAssetProblem(v){
 function vltSymbolProblem(v){
   return /["\\]/.test(v.symbol) ? 'Share symbol must not contain quotes or backslashes: it is written into a Solidity string and the contract would not compile.' : '';
 }
-/* The portable modes scale the cap with the asset's own decimals when the constructor runs and accept only digits with an optional decimal part
-   (anything else makes genVault() throw); the single mode writes cap * 10**6, which compiles only for a non-negative value with at most 6 decimals. */
+/* Every mode scales the cap with the asset's own decimals at deployment; it accepts only digits with an optional decimal part (anything else makes genVault() throw). */
 function vltCapProblem(v){
   const c = String(v.cap).trim();
-  if(v.portable) return /^\d+(\.\d+)?$/.test(c) ? '' : 'Deposit cap must be a plain number such as 500 or 1.5: any other form stops generation in the portable modes.';
-  const n = Number(c);
-  return (Number.isFinite(n) && n >= 0 && Math.abs(n * 1e6 - Math.round(n * 1e6)) < 1e-6) ? '' : 'Deposit cap must be at least 0 with at most 6 decimals: it is multiplied by 10^6 in the Solidity.';
+  return /^\d+(\.\d+)?$/.test(c) ? '' : 'Deposit cap must be a plain number such as 500 or 1.5: any other form stops generation.';
 }
 function vltProblems(v){
   return [vltPerfProblem(v), vltCapProblem(v) && v.portable ? vltCapProblem(v) : '', vltAssetProblem(v), vltSymbolProblem(v), !v.portable ? vltCapProblem(v) : ''].filter(Boolean);
 }
 function vltSig(v){ return JSON.stringify([v.rawName, v.symbolField, v.assetField, v.perfField, v.capField, v.strategy, typeof activeNetwork !== 'undefined' ? activeNetwork : '', typeof multichainMode !== 'undefined' ? multichainMode : '']); }
-/* Decimals of the network's own default USDC: the Solidity assumes 6 (deposit cap in the single mode, share pricing in every mode). */
+/* The vault scales amounts by the asset's own decimals, so no network-specific decimal warning is needed. */
 function vltDecimalsNote(v){
-  if(v.assetRaw || !v.net || !v.net.usdc || v.net.usdcDecimals === 6) return '';
-  return 'The default asset on ' + v.net.label + ' has ' + v.net.usdcDecimals + ' decimals; the generated vault assumes 6.';
+  return '';
 }
 
 const VLT_CONFIG = {
@@ -2452,7 +2461,6 @@ const VLT_CONFIG = {
     else if(v.assetRaw){ t = ap ? ap + '.' : 'The vault holds this token. It must be an ERC-20 contract on ' + net + '.'; if(ap) kind = 'warn'; }
     else if(v.asset){ t = 'Empty: the vault uses USDC on ' + net + ' (' + v.asset + ').'; }
     else { t = net + ' has no default asset: enter the token address. Generating anyway writes a DRAFT that cannot be deployed.'; kind = 'warn'; }
-    t += ' Share pricing assumes a 6-decimal asset.';
     if(dn){ t += ' ' + dn; kind = 'warn'; }
     note.textContent = t; note.setAttribute('data-kind', kind);
     const pct = swbFeePercent(String(v.perf).trim());
@@ -2462,7 +2470,7 @@ const VLT_CONFIG = {
     const n = String(v.cap).trim();
     if(cp) cn.textContent = cp;
     else if(Number(n) === 0) cn.textContent = 'Unlimited: no deposit cap.';
-    else cn.textContent = v.portable ? 'Cap: ' + n + ' tokens, multiplied by the asset\'s decimals() when the constructor runs.' : 'Cap: ' + n + ' tokens, written as ' + n + ' × 10^6 (it assumes a 6-decimal asset).';
+    else cn.textContent = 'Cap: ' + n + ' tokens, multiplied by the asset\'s decimals() when the constructor runs.';
     const box = document.getElementById('vltStrategy');
     box.textContent = ''; box.appendChild(swbEl('b', '', VLT_STRATEGY.title)); box.appendChild(document.createTextNode(VLT_STRATEGY.text));
   },
@@ -2478,7 +2486,7 @@ const VLT_CONFIG = {
     row('Performance fee', pct ? v.perf + ' bps (' + pct + ')' : (v.perf || '(empty)') + ' bps', pct ? 'ok' : 'bad', pct ? '' : 'Whole number from 0 to 9999: generation is refused otherwise');
     const cp = vltCapProblem(v), n = String(v.cap).trim();
     if(cp) row('Deposit cap', n || '(empty)', 'bad', cp);
-    else row('Deposit cap', Number(n) === 0 ? 'Unlimited' : n + ' tokens', 'ok', Number(n) === 0 ? '' : (v.portable ? 'Scaled by the asset decimals at deploy' : 'Written as ' + n + ' × 10^6'));
+    else row('Deposit cap', Number(n) === 0 ? 'Unlimited' : n + ' tokens', 'ok', Number(n) === 0 ? '' : 'Scaled by the asset decimals at deploy');
     row('Strategy', VLT_STRATEGY.title, 'ok');
     CFBuilder.networkRow(row, v.net);
     row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');

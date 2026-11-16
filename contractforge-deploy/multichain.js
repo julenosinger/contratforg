@@ -103,15 +103,13 @@ function portabilize(code, specs){
         args.push({ param: sp.param, type:'address', allowZero: !!sp.allowZero, hint: sp.hint || 'static', value: sp.argValue !== undefined ? sp.argValue : sp.value, userSet: !!sp.userSet, genNetwork: activeNetwork, optional: !!sp.optional });
       }
     } else if(sp.kind === 'scaled'){
-      const re = new RegExp('^([ \\t]*)uint256(\\s+public)\\s+' + sp.name + '\\s*=\\s*' + escRe(sp.expr) + '\\s*\\*\\s*10\\*\\*6;[^\\n]*', 'm');
+      const re = new RegExp('^([ \\t]*)uint256(\\s+public)\\s+' + sp.name + '\\s*=\\s*[^;]*;[^\\n]*', 'm');
       if(!re.test(code)) throw new Error('portabilize: declaration of "' + sp.name + '" not found');
       code = code.replace(re, (m, ind, pub) => `${ind}uint256${pub} ${sp.name};`);
-      const m = /^(\d+)(?:\.(\d+))?$/.exec(String(sp.expr).trim());
-      if(!m) throw new Error('portabilize: "' + sp.expr + '" is not a number');
-      const digits = m[1] + (m[2] || ''), scale = (m[2] || '').length;
-      if(/^0+$/.test(digits)) continue; // zero stays zero, no token call needed
+      const s = scaleAmount(sp.expr);
+      if(s.isZero) continue; // zero stays zero, no token call needed
       needsDecimals = true;
-      assigns.push(`${sp.name} = ${digits} * 10**uint256(IERC20(${sp.tokenParam}).decimals())${scale ? ' / 10**' + scale : ''};`);
+      assigns.push(`${sp.name} = ${s.digits} * 10**uint256(IERC20(${sp.tokenParam}).decimals())${s.scale ? ' / 10**' + s.scale : ''};`);
     } else if(sp.kind === 'uint'){
       const re = new RegExp('^([ \\t]*)uint256\\s+public\\s+constant\\s+' + sp.name + '(\\s*)=\\s*' + escRe(sp.rhs) + ';', 'm');
       if(!re.test(code)) throw new Error('portabilize: declaration of "' + sp.name + '" not found');
