@@ -90,6 +90,10 @@ M=[
  # ---- phase 11.1.1: deploy integrity (library linking, async guards)
  ('resolve: an unlinked library is deployed again','contractforge-deploy/app.js',"    const libs = unresolvedLibraries(c);\n    if (libs.length) throw libraryLinkError(requestedName, libs);\n    return requestedName;","    return requestedName;",'deploy-integrity.mjs'),
  ('async: a changed source no longer aborts the deploy','contractforge-deploy/app.js',"  if(op.sourceHash && pendingSource && pendingSource.code && matHash(pendingSource.code) !== op.sourceHash){","  if(false){",'deploy-integrity.mjs'),
+ # ---- phase 11.1.2: concurrency lock, constructor compatibility, network transition
+ ('lock: two deploys can overlap again','contractforge-deploy/app.js',"  if(deployInFlight){ logConsole('warn','A deployment is already in progress.'); return; }","  if(false){",'deploy-concurrency.mjs'),
+ ('ctor: a value survives a type change again','contractforge-deploy/multichain.js',"    const match = prevAt && (prevAt.param || '') === name && canon(prevAt.type) === canon(inp.type);","    const match = prevAt && (prevAt.param || '') === name;",'deploy-concurrency.mjs'),
+ ('net: a wrong chain no longer blocks signing','contractforge-deploy/multideploy.js',"  if(got !== want) throw new Error('The wallet is on '+(got === null ? 'an unknown chain' : 'chainId '+got)+' but '+NETWORKS[key].label+' needs chainId '+want+'.');","  // no chain check",'deploy-concurrency.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
