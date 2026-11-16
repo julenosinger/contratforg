@@ -6,6 +6,7 @@ interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
+    function decimals() external view returns (uint8);
 }
 
 /// @title ArcYieldVault — ERC-4626-style Vault (deposit/withdraw with proportional shares)
@@ -21,9 +22,9 @@ contract ArcYieldVault {
 
     IERC20 public asset = IERC20(0x1715845657031418236618493247352301630348);
     uint256 public totalSupply;      // total shares issued
-    uint256 public depositCap = 0 * 10**6; // 0 = unlimited (assumes a 6-decimal asset)
+    uint256 public depositCap = 0; // 0 = unlimited (scaled by the asset's own decimals)
     uint256 public constant PERF_FEE_BPS = 1000;
-    /// @dev Virtual shares: 1e12 shares per smallest asset unit when the vault is empty (a 6-decimal asset maps to 18-decimal shares).
+    /// @dev Virtual shares: 1e12 shares per smallest asset unit when the vault is empty (a fixed precision offset, independent of the asset's decimals).
     uint256 private constant SHARE_OFFSET = 1e12;
     address public owner;
     address public pendingOwner;

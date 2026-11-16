@@ -156,11 +156,11 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   ev("activeNetwork = 'arc'; updateSideNet()");
   gen({ vault_perf: '10000' }); ok(alerts === 1 && ev('pendingSource.code') === '', 'vault: a fee above 9999 is refused with an alert and no buffer');
   gen({ vault_symbol: 'a"b' }); ok(/symbol = "a"b"/.test(ev('pendingSource.code')) && ev('pendingSource.problems.length') === 0, 'vault: the symbol is written raw into the Solidity');
-  gen({ vault_cap: '500' }); ok(/depositCap = 500 \* 10\*\*6;/.test(ev('pendingSource.code')), 'vault (single): the cap is cap x 10**6');
+  gen({ vault_cap: '500' }); ok(/depositCap = 500 \* 10\*\*uint256\(asset\.decimals\(\)\);/.test(ev('pendingSource.code')), 'vault (single): the cap is scaled by the asset\'s own decimals');
   ev("setMultichainMode('portable')");
   ok(/is not a number/.test(gen({ vault_cap: '1e3' })), 'vault (portable): a cap that is not digits with an optional decimal part makes the generator throw');
   gen({ vault_cap: '500' }); ok(/IERC20\(asset_\)\.decimals\(\)/.test(ev('pendingSource.code')) && ev('pendingCtorArgs.map((a) => a.param).join()') === 'asset_', 'vault (portable): the asset is a constructor argument and the cap is scaled by its decimals');
-  ok(/SHARE_OFFSET = 1e12/.test(ev('pendingSource.code')), 'vault: share pricing assumes a 6-decimal asset in every mode');
+  ok(/SHARE_OFFSET = 1e12/.test(ev('pendingSource.code')), 'vault: a fixed virtual-share precision offset in every mode (not a decimal assumption)');
   eq(ev("NETWORKS.bnb.usdcDecimals"), 18, 'networks: the default USDC on BNB Chain has 18 decimals, every other default has 6');
   eq(JSON.parse(ev("JSON.stringify(Object.entries(NETWORKS).filter(([, n]) => n.usdc && n.usdcDecimals !== 6).map(([k]) => k))")), ['bnb'], 'networks: bnb is the only network whose default USDC is not 6-decimal');
 }

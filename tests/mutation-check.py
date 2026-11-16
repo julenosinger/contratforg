@@ -101,6 +101,9 @@ M=[
  # ---- phase 11.1.4: authoritative wallet identity, truthful batch status
  ('identity: the authorized account is no longer verified','contractforge-deploy/app.js',"  if((op.account || '').toLowerCase() !== current.accounts[0]){","  if(false){",'deploy-final.mjs'),
  ('status: an aborted batch is reported as success','contractforge-deploy/multideploy.js',"  if(aborted) return 'aborted';","  if(false) return 'aborted';",'deploy-final.mjs'),
+ # ---- phase 11.2: vault decimal integrity
+ ('vault: the deposit cap reverts to hardcoded six decimals','contractforge-deploy/app.js',"  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**uint256(asset.decimals())' + (capS.scale ? ' / 10**' + capS.scale : ''));","  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**6' + (capS.scale ? ' / 10**' + capS.scale : ''));",'vault-decimals.mjs'),
+ ('vault: the deposit cap ignores the assets already held','contractforge-deploy/app.js',"        if (depositCap > 0) require(assetsBefore + assets <= depositCap, \"exceeds deposit cap\");","        if (depositCap > 0) require(assets <= depositCap, \"exceeds deposit cap\");",'vault-decimals.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

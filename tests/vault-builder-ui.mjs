@@ -1,7 +1,7 @@
 // Phase 9.2: the Vault builder (section 04). The page is reorganised; genVault(), the deploy buffer and the deploy page are not.
 // The app is multichain and has mainnets, so the networks are part of the test: every network in NETWORKS, in the single and the portable modes.
-// What the Phase 9.0 audit recorded stays true: a missing asset writes a DRAFT, a performance fee outside 0..9999 is refused, the
-// portable modes turn the asset into a constructor argument, and the Solidity assumes a 6-decimal asset.
+// What the Phase 9.0 audit recorded stays true: a missing asset writes a DRAFT, a performance fee outside 0..9999 is refused, and the
+// portable modes turn the asset into a constructor argument (the deposit cap is scaled by the asset's own decimals in every mode).
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadApp, root, addrFor } from './harness.mjs';
@@ -125,10 +125,10 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
 {
   const a = fresh(); const { d, ev } = a;
   eq([a.rows()['Deposit cap'].text, d.getElementById('vltCapNote').textContent], ['Unlimited', 'Unlimited: no deposit cap.'], 'cap: 0 is unlimited');
-  a.set('vault_cap', '500'); eq([a.rows()['Deposit cap'].text, a.rows()['Deposit cap'].flag], ['500 tokens', 'Written as 500 × 10^6'], 'cap (single): written as cap × 10^6');
-  ok(/assumes a 6-decimal asset/.test(d.getElementById('vltCapNote').textContent), 'cap (single): says what it assumes');
-  await a.gen(); ok(/depositCap = 500 \* 10\*\*6;/.test(ev('pendingSource.code')), 'cap (single): the Solidity says exactly that');
-  for (const bad of ['-5', '0.0000001']) { a.set('vault_cap', bad); eq(a.rows()['Deposit cap'].state, 'bad', `cap (single): ${bad} would not compile and is flagged`); }
+  a.set('vault_cap', '500'); eq([a.rows()['Deposit cap'].text, a.rows()['Deposit cap'].flag], ['500 tokens', 'Scaled by the asset decimals at deploy'], 'cap (single): scaled by the asset decimals');
+  ok(/decimals\(\) when the constructor runs/.test(d.getElementById('vltCapNote').textContent), 'cap (single): says how it is scaled');
+  await a.gen(); ok(/depositCap = 500 \* 10\*\*uint256\(asset\.decimals\(\)\);/.test(ev('pendingSource.code')), 'cap (single): the Solidity says exactly that');
+  for (const bad of ['-5', '1e3']) { a.set('vault_cap', bad); eq(a.rows()['Deposit cap'].state, 'bad', `cap (single): ${bad} would not compile and is flagged`); }
   a.set('vault_cap', '1.5'); eq(a.rows()['Deposit cap'].state, 'ok', 'cap (single): 1.5 compiles and is accepted');
   ev("setMultichainMode('portable')"); a.set('vault_cap', '500');
   ok(/Scaled by the asset decimals/.test(a.rows()['Deposit cap'].flag) && /decimals\(\) when the constructor runs/.test(d.getElementById('vltCapNote').textContent), 'cap (portable): scaled by the real decimals at deploy');
@@ -139,15 +139,12 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   a.set('vault_symbol', 'avUSDC'); eq(a.rows()['Share symbol'].state, 'ok', 'a normal symbol is fine');
 }
 
-/* 6. the 6-decimal assumption is reported per network */
+/* 6. no decimal assumption is reported per network (the vault scales by the asset's own decimals) */
 {
   const a = fresh(); const { d } = a;
   a.net('bnb'); a.set('vault_asset', ''); a.set('vault_name', 'V');
-  ok(/has 18 decimals; the generated vault assumes 6/.test(a.rows().Asset.flag) && /has 18 decimals/.test(d.getElementById('vltAssetNote').textContent), 'bnb: the default asset has 18 decimals and the page says so');
-  a.set('vault_asset', ASSET); ok(!/decimals; the generated/.test(a.rows().Asset.flag), 'bnb: a typed asset is not judged (its decimals are unknown here)');
-  a.set('vault_asset', ''); a.net('arc'); a.set('vault_name', 'W'); ok(!/decimals; the generated/.test(a.rows().Asset.flag), 'arc: no warning for a 6-decimal asset');
-  a.net('ethereum'); ok(!/decimals; the generated/.test(a.rows().Asset.flag), 'ethereum: no warning');
-  ok(/Share pricing assumes a 6-decimal asset/.test(d.getElementById('vltAssetNote').textContent), 'every network: the share-pricing assumption is stated');
+  ok(!/assumes 6/.test(a.rows().Asset.flag), 'bnb: the page no longer says the vault assumes 6 decimals');
+  ok(!/6-decimal/.test(d.getElementById('vltAssetNote').textContent), 'every network: no share-pricing decimal assumption is stated');
   ok(!/Uniswap|AMM|signer/i.test(d.getElementById('sec-vault').textContent), 'no wording borrowed from another tab');
 }
 
