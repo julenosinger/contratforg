@@ -3453,6 +3453,37 @@ function assertOpUnchanged(op, opts){
   }
 }
 
+/* Resolves the wallet's currently authorized account, independently of the cached global `account`. A delayed
+   accountsChanged event must not let a stale cached account pass the pre-signing guard. Uses the EIP-1193 eth_accounts
+   (a read, never a connection popup) and falls back to the provider's listAccounts. Returns { accounts: [lowercase…] }
+   or null when no independent query is available. */
+async function currentWalletAccounts(){
+  try{
+    if(window.ethereum && typeof window.ethereum.request === 'function'){
+      const accts = await window.ethereum.request({ method: 'eth_accounts' });
+      if(Array.isArray(accts)) return { accounts: accts.map((a) => String(a).toLowerCase()) };
+    }
+  }catch(_){ /* method unsupported or failed — try the provider */ }
+  try{
+    if(provider && typeof provider.listAccounts === 'function'){
+      const accts = await provider.listAccounts();
+      if(Array.isArray(accts)) return { accounts: accts.map((a) => String(a).toLowerCase()) };
+    }
+  }catch(_){ /* unavailable */ }
+  return null;
+}
+/* Independently confirms the wallet's authorized account against the operation snapshot before signing, so a delayed
+   account-change event cannot authorise a stale signer. Throws a fatal error when the wallet is disconnected or the
+   account differs; returns silently when no independent query is available (the cached check already passed). */
+async function assertWalletIdentity(op, label){
+  const current = await currentWalletAccounts();
+  if(current === null) return;
+  if(!current.accounts.length) throw fatalDeployError('Wallet disconnected before signing' + (label ? ' on '+label : '') + '.');
+  if((op.account || '').toLowerCase() !== current.accounts[0]){
+    throw fatalDeployError('The wallet account changed before signing' + (label ? ' on '+label : '') + '.');
+  }
+}
+
 async function compileAndDeploy(){
   if(deployInFlight){ logConsole('warn','A deployment is already in progress.'); return; }
   deployInFlight = true;                    // acquired synchronously, before the first await (the maturity gate)
@@ -3487,6 +3518,7 @@ async function finishDeploy(compiled, op){
   const ctorValues = collectCtorValues(ctorInputs);
   if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: compilerFacts(compiled).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
   assertOpUnchanged(op);   // the confirmation dialog is the last chance before signing
+  await assertWalletIdentity(op);   // independent wallet-account confirmation before the single signature
   await deployCompiled(compiled, ctorValues, activeNetwork);
 }
 

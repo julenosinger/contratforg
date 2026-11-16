@@ -215,10 +215,23 @@ async function mdWaitForChain(key){
 async function mdAssertReady(key, op){
   if(!account || !signer) throw fatalDeployError('Wallet disconnected before signing on '+NETWORKS[key].label+'.');
   assertOpUnchanged(op, { allowNetworkChange: true });   // source/account/mode violations are fatal
+  await assertWalletIdentity(op, NETWORKS[key].label);   // independent authorized-account confirmation (no stale signer)
   const want = NETWORKS[key].chainIdDec;
   let got = null;
   try{ got = (await provider.getNetwork()).chainId; }catch(_){ /* wallet unreachable */ }
   if(got !== want) throw new Error('The wallet is on '+(got === null ? 'an unknown chain' : 'chainId '+got)+' but '+NETWORKS[key].label+' needs chainId '+want+'.');
+}
+
+/* Classifies the final outcome of a multi-deploy batch. `aborted` is set by a fatal identity violation; otherwise the
+   classification is derived from the per-network results (an address entry = a confirmed deployment). */
+function mdOutcome(keys, results, aborted){
+  if(aborted) return 'aborted';
+  const mains = results.filter((r) => !/bridge$/.test(r[0]));
+  const succeeded = mains.filter((r) => /^0x/.test(String(r[1]))).length;
+  const failedBridges = results.filter((r) => /bridge$/.test(r[0]) && r[1] === 'failed').length;
+  if(succeeded === 0) return 'failed';
+  if(succeeded === keys.length && failedBridges === 0) return 'completed';
+  return 'partially_completed';
 }
 
 async function multiDeploy(){
@@ -227,10 +240,12 @@ async function multiDeploy(){
   const op = deployOpSnapshot();            // the intent at click time
   const original = activeNetwork;
   const results = [];
+  let keys = [];
+  let aborted = false;
   try{
     if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return results; }
     if(!signer || !account){ logConsole('err','Connect your wallet first.'); return results; }
-    const keys = [...mdState.selected].filter(k => NETWORKS[k]);
+    keys = [...mdState.selected].filter(k => NETWORKS[k]);
     if(!keys.length){ logConsole('err','Select at least one network.'); return results; }
     const draftReason = reqBlockReason();
     if(draftReason){ logConsole('err','Deploy blocked. '+draftReason); return results; }
@@ -296,6 +311,7 @@ async function multiDeploy(){
       }
     }
   }catch(e){
+    if(e && e.fatal) aborted = true;   // an identity violation aborts the batch; anything else is a recoverable stop
     logConsole('err','Multi-deploy stopped: '+(e.message || e));
   }finally{
     activeNetwork = original; renderNetBar(); updateSideNet();
@@ -303,8 +319,13 @@ async function multiDeploy(){
     mdSetRunning(false);
     deployInFlight = false;
   }
-  logConsole('ok','Multi-deploy finished: '+results.map(r => r[0]+' → '+r[1]).join(' · '));
-  return results;
+  const outcome = mdOutcome(keys, results, aborted);
+  const summary = results.map(r => r[0]+' → '+r[1]).join(' · ');
+  if(outcome === 'aborted')            logConsole('warn', 'Multi-deploy aborted: '+summary);
+  else if(outcome === 'completed')     logConsole('ok',   'Multi-deploy completed: '+summary);
+  else if(outcome === 'partially_completed') logConsole('warn', 'Multi-deploy partially completed: '+summary);
+  else                                 logConsole('err',  'Multi-deploy failed: '+summary);
+  return { outcome, results };
 }
 
 if(typeof document !== 'undefined') renderMultiDeployPanel();
