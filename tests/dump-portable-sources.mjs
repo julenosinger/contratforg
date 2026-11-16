@@ -104,4 +104,15 @@ set('ms_mode', 'both'); ev('genMultisend()'); save('Multisend');
     fs.writeFileSync(path.join(single, 'WalletZeroGuardian.sol'), zero.replace(/\bArcSmartWallet\b/g, 'ArcSmartWallet'));
     console.log('single/WalletZeroGuardian');
   }
+  // Single Vault with cap 500 (asset hardcoded) for the Single/Portable equivalence test. The asset address is fixed
+  // (0x…Beef) so the test can etch a mock token at it and deploy the single and portable vaults against the same asset.
+  {
+    e2("document.getElementById('vault_asset').value = '0x000000000000000000000000000000000000bEEF'");
+    e2("document.getElementById('vault_cap').value = '500'");
+    e2("genVault()");
+    let { code } = JSON.parse(e2('JSON.stringify(pendingSource)'));
+    code = code.replace(/^pragma solidity 0\.8\.24;/m, 'pragma solidity ^0.8.24;');
+    fs.writeFileSync(path.join(single, 'VaultCap500.sol'), code);
+    console.log('single/VaultCap500');
+  }
 }

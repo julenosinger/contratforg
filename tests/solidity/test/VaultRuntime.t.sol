@@ -10,10 +10,12 @@ import "../src/portable/VaultCapSubUnit.sol" as VSub;
 import "../src/portable/VaultCapSubSubUnit.sol" as VSubSub;
 import "../src/portable/VaultCap1p0000001.sol" as V1p;
 import "../src/portable/VaultCapTrailingZeros.sol" as VTrail;
+import "../src/single/VaultCap500.sol" as SingleVault;
 
 interface Vm {
     function prank(address) external;
     function expectRevert(bytes calldata) external;
+    function etch(address, bytes calldata) external;
 }
 
 /* A mock ERC-20 with constructor-configurable decimals (the vault reads it from the asset at deploy time). */
@@ -34,6 +36,36 @@ contract BadDecTok {
     function balanceOf(address) external pure returns (uint256) { return 0; }
     function transfer(address, uint256) external pure returns (bool) { return true; }
     function transferFrom(address, address, uint256) external pure returns (bool) { return true; }
+}
+
+/* Constant-decimals ERC-20 mocks, used via vm.etch at a fixed address so the single-mode Vault (whose asset address is
+   baked into the source) can be deployed against the same asset as the portable Vault. */
+contract Dec6Tok {
+    uint8 public constant decimals = 6;
+    mapping(address => uint256) public balanceOf;
+    function mint(address t, uint256 a) external { balanceOf[t] += a; }
+    function transfer(address t, uint256 a) external returns (bool) { balanceOf[msg.sender] -= a; balanceOf[t] += a; return true; }
+    function transferFrom(address f, address t, uint256 a) external returns (bool) { balanceOf[f] -= a; balanceOf[t] += a; return true; }
+    function approve(address, uint256) external returns (bool) { return true; }
+    function allowance(address, address) external pure returns (uint256) { return 0; }
+}
+contract Dec8Tok {
+    uint8 public constant decimals = 8;
+    mapping(address => uint256) public balanceOf;
+    function mint(address t, uint256 a) external { balanceOf[t] += a; }
+    function transfer(address t, uint256 a) external returns (bool) { balanceOf[msg.sender] -= a; balanceOf[t] += a; return true; }
+    function transferFrom(address f, address t, uint256 a) external returns (bool) { balanceOf[f] -= a; balanceOf[t] += a; return true; }
+    function approve(address, uint256) external returns (bool) { return true; }
+    function allowance(address, address) external pure returns (uint256) { return 0; }
+}
+contract Dec18Tok {
+    uint8 public constant decimals = 18;
+    mapping(address => uint256) public balanceOf;
+    function mint(address t, uint256 a) external { balanceOf[t] += a; }
+    function transfer(address t, uint256 a) external returns (bool) { balanceOf[msg.sender] -= a; balanceOf[t] += a; return true; }
+    function transferFrom(address f, address t, uint256 a) external returns (bool) { balanceOf[f] -= a; balanceOf[t] += a; return true; }
+    function approve(address, uint256) external returns (bool) { return true; }
+    function allowance(address, address) external pure returns (uint256) { return 0; }
 }
 
 abstract contract Base {
@@ -129,14 +161,23 @@ contract VaultCapEnforcementTest is Base {
         v.deposit(1, u);
     }
     function testSinglePortableEquivalence() public {
-        // The same cap on the same asset resolves to the same base-unit cap in every generated variant.
-        DecTok t6 = new DecTok(6);
-        V500.VaultCap500 a = new V500.VaultCap500(address(t6));
-        VTrail.VaultCapTrailingZeros b = new VTrail.VaultCapTrailingZeros(address(t6));
-        // 500 and 1000.25 are different caps; the equivalence to assert is the deterministic resolution across assets.
-        DecTok t8 = new DecTok(8);
-        V500.VaultCap500 c = new V500.VaultCap500(address(t8));
-        require(a.depositCap() == 500e6 && c.depositCap() == 500e8, "same human cap scales by the asset decimals");
-        require(b.depositCap() == 1_000_250_000, "trailing zeros do not change the cap");
+        // Genuine equivalence: the single-mode Vault (asset address baked into the source, 0x…beef) and the portable
+        // Vault (asset as a constructor argument) must resolve the same cap for the same asset decimals.
+        address asset = 0x000000000000000000000000000000000000bEEF;
+        vm.etch(asset, type(Dec6Tok).runtimeCode);
+        SingleVault.ArcYieldVault s6 = new SingleVault.ArcYieldVault();
+        V500.VaultCap500 p6 = new V500.VaultCap500(asset);
+        require(s6.depositCap() == 500e6 && p6.depositCap() == 500e6, "6 decimals: single and portable caps match");
+        require(s6.totalSupply() == p6.totalSupply() && s6.totalSupply() == 0, "6 decimals: same initial share supply");
+
+        vm.etch(asset, type(Dec8Tok).runtimeCode);
+        SingleVault.ArcYieldVault s8 = new SingleVault.ArcYieldVault();
+        V500.VaultCap500 p8 = new V500.VaultCap500(asset);
+        require(s8.depositCap() == 500e8 && p8.depositCap() == 500e8, "8 decimals: single and portable caps match");
+
+        vm.etch(asset, type(Dec18Tok).runtimeCode);
+        SingleVault.ArcYieldVault s18 = new SingleVault.ArcYieldVault();
+        V500.VaultCap500 p18 = new V500.VaultCap500(asset);
+        require(s18.depositCap() == 500e18 && p18.depositCap() == 500e18, "18 decimals: single and portable caps match");
     }
 }
