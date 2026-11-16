@@ -75,22 +75,22 @@ abstract contract Base {
 contract VaultConstructorTest is Base {
     function testSixDecimalsCap500() public {
         DecTok t = new DecTok(6);
-        V500.VaultCap500 v = new V500.VaultCap500(address(t));
+        V500.ArcYieldVault v = new V500.ArcYieldVault(address(t));
         require(v.depositCap() == 500e6, "cap 500 in 6 decimals");
     }
     function testEightDecimalsCap500() public {
         DecTok t = new DecTok(8);
-        V500.VaultCap500 v = new V500.VaultCap500(address(t));
+        V500.ArcYieldVault v = new V500.ArcYieldVault(address(t));
         require(v.depositCap() == 500e8, "cap 500 in 8 decimals");
     }
     function testEighteenDecimalsCap500() public {
         DecTok t = new DecTok(18);
-        V500.VaultCap500 v = new V500.VaultCap500(address(t));
+        V500.ArcYieldVault v = new V500.ArcYieldVault(address(t));
         require(v.depositCap() == 500e18, "cap 500 in 18 decimals");
     }
     function testFractionalCap() public {
         DecTok t = new DecTok(6);
-        V15.VaultCap15 v = new V15.VaultCap15(address(t));
+        V15.ArcYieldVault v = new V15.ArcYieldVault(address(t));
         require(v.depositCap() == 1_500_000, "1.5 * 1e6");
     }
     function testZeroCapIsUnlimited() public {
@@ -100,52 +100,52 @@ contract VaultConstructorTest is Base {
     }
     function testSubUnitCapIsOneBaseUnit() public {
         DecTok t = new DecTok(6);
-        VSub.VaultCapSubUnit v = new VSub.VaultCapSubUnit(address(t));
+        VSub.ArcYieldVault v = new VSub.ArcYieldVault(address(t));
         require(v.depositCap() == 1, "exactly one base unit");
     }
     function testSubSubUnitCapReverts() public {
         DecTok t = new DecTok(6);
         vm.expectRevert(bytes("deposit cap is not representable"));
-        new VSubSub.VaultCapSubSubUnit(address(t));
+        new VSubSub.ArcYieldVault(address(t));
     }
     function testOnePoint0000001RevertsSixDecimals() public {
         DecTok t = new DecTok(6);
         vm.expectRevert(bytes("deposit cap is not representable"));
-        new V1p.VaultCap1p0000001(address(t));
+        new V1p.ArcYieldVault(address(t));
     }
     function testOnePoint0000001AcceptsEightDecimals() public {
         DecTok t = new DecTok(8);
-        V1p.VaultCap1p0000001 v = new V1p.VaultCap1p0000001(address(t));
+        V1p.ArcYieldVault v = new V1p.ArcYieldVault(address(t));
         require(v.depositCap() == 100_000_010, "1.0000001 * 1e8");
     }
     function testTrailingZeroCapNormalised() public {
         DecTok t = new DecTok(6);
-        VTrail.VaultCapTrailingZeros v = new VTrail.VaultCapTrailingZeros(address(t));
+        VTrail.ArcYieldVault v = new VTrail.ArcYieldVault(address(t));
         require(v.depositCap() == 1_000_250_000, "1000.25 * 1e6");
     }
     function testUnsupportedDecimalsRevert() public {
         BadDecTok t = new BadDecTok();
         vm.expectRevert(bytes("asset decimals out of range"));
-        new V500.VaultCap500(address(t));
+        new V500.ArcYieldVault(address(t));
     }
 }
 
 contract VaultCapEnforcementTest is Base {
-    function _vault(DecTok t) internal returns (V500.VaultCap500 v, address u) {
-        v = new V500.VaultCap500(address(t));
+    function _vault(DecTok t) internal returns (V500.ArcYieldVault v, address u) {
+        v = new V500.ArcYieldVault(address(t));
         u = address(0xABC);
         t.mint(u, 2000e6);
         vm.prank(u); t.approve(address(v), type(uint256).max);
     }
     function testDepositExactlyAtCap() public {
         DecTok t = new DecTok(6);
-        (V500.VaultCap500 v, address u) = _vault(t);
+        (V500.ArcYieldVault v, address u) = _vault(t);
         vm.prank(u); v.deposit(500e6, u);
         require(v.totalAssets() == 500e6, "exactly at cap");
     }
     function testDepositOneUnitAboveCapReverts() public {
         DecTok t = new DecTok(6);
-        (V500.VaultCap500 v, address u) = _vault(t);
+        (V500.ArcYieldVault v, address u) = _vault(t);
         vm.prank(u); v.deposit(500e6, u);
         vm.prank(u);
         vm.expectRevert(bytes("exceeds deposit cap"));
@@ -153,7 +153,7 @@ contract VaultCapEnforcementTest is Base {
     }
     function testMultipleDepositsCannotBypassCap() public {
         DecTok t = new DecTok(6);
-        (V500.VaultCap500 v, address u) = _vault(t);
+        (V500.ArcYieldVault v, address u) = _vault(t);
         vm.prank(u); v.deposit(400e6, u);
         vm.prank(u); v.deposit(100e6, u);   // total 500e6 == cap
         vm.prank(u);
@@ -166,18 +166,18 @@ contract VaultCapEnforcementTest is Base {
         address asset = 0x000000000000000000000000000000000000bEEF;
         vm.etch(asset, type(Dec6Tok).runtimeCode);
         SingleVault.ArcYieldVault s6 = new SingleVault.ArcYieldVault();
-        V500.VaultCap500 p6 = new V500.VaultCap500(asset);
+        V500.ArcYieldVault p6 = new V500.ArcYieldVault(asset);
         require(s6.depositCap() == 500e6 && p6.depositCap() == 500e6, "6 decimals: single and portable caps match");
         require(s6.totalSupply() == p6.totalSupply() && s6.totalSupply() == 0, "6 decimals: same initial share supply");
 
         vm.etch(asset, type(Dec8Tok).runtimeCode);
         SingleVault.ArcYieldVault s8 = new SingleVault.ArcYieldVault();
-        V500.VaultCap500 p8 = new V500.VaultCap500(asset);
+        V500.ArcYieldVault p8 = new V500.ArcYieldVault(asset);
         require(s8.depositCap() == 500e8 && p8.depositCap() == 500e8, "8 decimals: single and portable caps match");
 
         vm.etch(asset, type(Dec18Tok).runtimeCode);
         SingleVault.ArcYieldVault s18 = new SingleVault.ArcYieldVault();
-        V500.VaultCap500 p18 = new V500.VaultCap500(asset);
+        V500.ArcYieldVault p18 = new V500.ArcYieldVault(asset);
         require(s18.depositCap() == 500e18 && p18.depositCap() == 500e18, "18 decimals: single and portable caps match");
     }
 }

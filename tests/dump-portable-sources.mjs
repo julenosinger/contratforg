@@ -38,18 +38,18 @@ ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); 
 // five tokens at most: small enough for the supply invariants to reach the limit
 ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_price', '10'); set('s_supply', '5'); ev("genSimple('erc721')"); save('NftFive');
 fillAddresses(app, 'arcMain'); clearTokens(); ev('genVault()'); save('Vault');
-// Vault variants for the constructor cap runtime tests (each cap produces a different constructor; the contract is
-// renamed so the variants can be imported side by side). The cap is written into the constructor exactly as the user
-// typed it, so the exact-representation and sub-unit rejection are exercised with the real generated Solidity.
-for (const [file, cap, name] of [
-  ['VaultCap500', '500', 'VaultCap500'],
-  ['VaultCap15', '1.5', 'VaultCap15'],
-  ['VaultCapSubUnit', '0.000001', 'VaultCapSubUnit'],
-  ['VaultCapSubSubUnit', '0.0000001', 'VaultCapSubSubUnit'],
-  ['VaultCap1p0000001', '1.0000001', 'VaultCap1p0000001'],
-  ['VaultCapTrailingZeros', '1000.250000', 'VaultCapTrailingZeros'],
+// Vault variants for the constructor cap runtime tests. Each cap produces a different constructor, but the contract is
+// kept named ArcYieldVault so the identical _deposit/_call findings stay covered by the existing Slither triage (the
+// test imports each file under its own namespace). The cap is written exactly as the user typed it.
+for (const [file, cap] of [
+  ['VaultCap500', '500'],
+  ['VaultCap15', '1.5'],
+  ['VaultCapSubUnit', '0.000001'],
+  ['VaultCapSubSubUnit', '0.0000001'],
+  ['VaultCap1p0000001', '1.0000001'],
+  ['VaultCapTrailingZeros', '1000.250000'],
 ]) {
-  set('vault_cap', cap); ev('genVault()'); save(file, [/^contract ArcYieldVault \{/m, 'contract ' + name + ' {']);
+  set('vault_cap', cap); ev('genVault()'); save(file);
 }
 fillAddresses(app, 'arcMain'); set('tre_streaming', 'yes'); ev('genTreasury()'); save('Treasury');
 set('swap_kind', 'amm'); set('swap_multi', 'single'); ev('genSwap()'); save('Amm');
