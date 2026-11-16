@@ -98,6 +98,9 @@ M=[
  ('bridge: the second signature skips its identity check','contractforge-deploy/multideploy.js',"        await mdAssertReady(key, op);   // every independent signature re-validates wallet + chain identity","        // bridge identity check removed",'deploy-batch.mjs'),
  ('batch: an identity violation continues to the next network','contractforge-deploy/multideploy.js',"        if(e && e.fatal) throw e;   // identity violation: abort the whole batch, preserving already-confirmed results","        if(false){",'deploy-batch.mjs'),
  ('gas: a non-Arc chain presents USDC as its native gas','contractforge-deploy/app.js',"          : fmt+' USDC  /  '+nativeFmt+' '+net.gasSymbol;","          : fmt+' USDC  /  '+nativeFmt+' USDC';",'deploy-batch.mjs'),
+ # ---- phase 11.1.4: authoritative wallet identity, truthful batch status
+ ('identity: the authorized account is no longer verified','contractforge-deploy/app.js',"  if((op.account || '').toLowerCase() !== current.accounts[0]){","  if(false){",'deploy-final.mjs'),
+ ('status: an aborted batch is reported as success','contractforge-deploy/multideploy.js',"  if(aborted) return 'aborted';","  if(false) return 'aborted';",'deploy-final.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1

@@ -80,7 +80,7 @@ const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), m, 'got ' + 
     window.__deploys = [];
     deployCompiled = async (compiled, values, key) => { window.__deploys.push(key); if (key === 'arc') throw new Error('tx rejected'); return { address: '0x' + '1'.repeat(40) }; };
   `);
-  const results = await ev('multiDeploy()');
+  const results = (await ev('multiDeploy()')).results;
   ok(ev('JSON.stringify(window.__deploys)') === JSON.stringify(['arc', 'basesep']), 'batch: networks are attempted in the selected order', ev('JSON.stringify(window.__deploys)'));
   const labels = results.map((r) => r[0]);
   ok(labels.includes('Arc Testnet') && labels.includes('Base Sepolia'), 'batch: both networks appear in the results', JSON.stringify(results));
@@ -105,7 +105,7 @@ const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), m, 'got ' + 
     window.__sw = 0;
     switchWalletNetwork = async () => { if (++window.__sw === 2) account = '0xdef'; };   // unexpected account change before the second network
   `);
-  const results = await ev('multiDeploy()');
+  const results = (await ev('multiDeploy()')).results;
   ok(ev('JSON.stringify(window.__deploys)') === JSON.stringify(['arc']), 'fatal: only the first network is deployed before the abort', ev('JSON.stringify(window.__deploys)'));
   ok(results.some((r) => r[0] === 'Arc Testnet' && /^0x/.test(r[1])), 'fatal: the confirmed primary result is preserved', JSON.stringify(results));
   ok(!results.some((r) => r[0] === 'Base Sepolia'), 'fatal: no further signing after an identity violation', JSON.stringify(results.map((r) => r[0])));
@@ -126,7 +126,7 @@ const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), m, 'got ' + 
     window.__calls = [];
     deployCompiled = async (compiled, values, key) => { window.__calls.push(compiled.name); if (String(compiled.name).indexOf('Bridge') >= 0) throw new Error('bridge tx rejected'); return { address: '0x' + '1'.repeat(40) }; };
   `);
-  const results = await ev('multiDeploy()');
+  const results = (await ev('multiDeploy()')).results;
   eq(ev('JSON.stringify(window.__calls)'), JSON.stringify(['A', 'ABridge']), 'bridge: the main and the bridge are both attempted, in order');
   ok(results.find((r) => r[0] === 'Arc Testnet')[1] !== 'failed', 'bridge: the main result is preserved when the bridge fails', JSON.stringify(results.find((r) => r[0] === 'Arc Testnet')));
   ok(results.find((r) => r[0] === 'Arc Testnet bridge')[1] === 'failed', 'bridge: the bridge failure is reported separately', JSON.stringify(results.find((r) => r[0] === 'Arc Testnet bridge')));
@@ -147,7 +147,7 @@ const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), m, 'got ' + 
     window.__calls = [];
     deployCompiled = async (compiled, values, key) => { window.__calls.push(compiled.name); if (String(compiled.name).indexOf('Bridge') < 0) account = '0xdef'; return { address: '0x' + '1'.repeat(40) }; };   // account changes after the main deploy
   `);
-  const results = await ev('multiDeploy()');
+  const results = (await ev('multiDeploy()')).results;
   eq(ev('JSON.stringify(window.__calls)'), JSON.stringify(['A']), 'bridge: the bridge is never signed after a wallet change', ev('JSON.stringify(window.__calls)'));
   ok(results.find((r) => r[0] === 'Arc Testnet')[1] !== 'failed', 'bridge: the primary result is preserved', JSON.stringify(results.find((r) => r[0] === 'Arc Testnet')));
   ok(!results.some((r) => r[0] === 'Arc Testnet bridge'), 'bridge: no false bridge success is recorded', JSON.stringify(results.map((r) => r[0])));
