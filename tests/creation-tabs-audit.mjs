@@ -301,7 +301,7 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   const a = loadApp(); const { ev, w } = a; const d = w.document;
   eq([...d.querySelector('.sticky-top').children].map((c) => c.id), ['globalBar', 'currentContract', 'netPanel'], 'header: two levels and the network panel');
   eq(['netBanner', 'walletStatus', 'balanceBadge', 'connectBtn', 'gbarMode', 'netPanel', 'currentContract'].every((id) => d.querySelectorAll('#' + id).length === 1), true, 'header: the ids the rest of the app uses exist once');
-  eq([...d.querySelectorAll('#sec-home .home-cat')].map((c) => [...c.querySelectorAll('.home-card')].map((x) => x.dataset.go)), [['simple'], ['swap', 'treasury', 'vault'], ['multisend', 'crosschain']], 'home: six builders in Simple, DeFi and Payments');
+  eq([...d.querySelectorAll('#homeBuilders > .home-card')].map((x) => x.dataset.go + ':' + x.querySelector('.hc-cat').textContent), ['simple:Simple', 'swap:DeFi', 'treasury:DeFi', 'vault:DeFi', 'multisend:Payments', 'crosschain:Payments'], 'home: six builders in one grid, each with its category');
   eq(JSON.parse(ev("JSON.stringify(['swap-amm-single','swap-orderbook-factory','treasury','vault','multisend','crosschain','bridge','erc20','dao','ai','imported'].map(uiBuilderFor))")), ['swap', 'swap', 'treasury', 'vault', 'multisend', 'crosschain', 'crosschain', 'simple', 'simple', 'nlai', 'deploy'], 'home: Continue goes to the builder that makes each template');
 }
 

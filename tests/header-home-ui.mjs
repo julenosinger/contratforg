@@ -164,7 +164,25 @@ const NETS = (a) => JSON.parse(a.ev('JSON.stringify(Object.entries(NETWORKS).map
   eq([...home.querySelectorAll('.home-cta .btn')].map((b) => b.textContent + ':' + b.dataset.go + ':' + b.classList.contains('btn-primary')), ['Create Contract:wizard:true', 'Build with AI:nlai:false', 'Explore Templates:simple:false'], 'three actions: the Wizard (primary), the AI and the templates');
   for (const [txt, sec] of [['Create Contract', 'wizard'], ['Build with AI', 'nlai'], ['Explore Templates', 'simple']]) { await a.go('home'); [...home.querySelectorAll('.home-cta .btn')].find((b) => b.textContent === txt).click(); await a.settle(); eq(a.shown(), [sec], `${txt} opens ${sec}`); }
   await a.go('home');
-  eq([...home.querySelectorAll('.home-cat')].map((c) => c.querySelector('.home-cat-h').textContent + ':' + [...c.querySelectorAll('.home-card')].map((x) => x.dataset.go).join(',')), ['Simple:simple', 'DeFi:swap,treasury,vault', 'Payments:multisend,crosschain'], 'six builders in three categories');
+  const cards = [...home.querySelectorAll('#homeBuilders > .home-card')];
+  eq(cards.map((c) => c.dataset.go), ['simple', 'swap', 'treasury', 'vault', 'multisend', 'crosschain'], 'one grid of six builders, in the original order');
+  eq([home.querySelectorAll('#homeBuilders').length, home.querySelectorAll('.home-cat, .home-cats').length], [1, 0], 'a single grid (the three uneven category columns are gone)');
+  eq(cards.map((c) => c.querySelector('.hc-cat').textContent), ['Simple', 'DeFi', 'DeFi', 'DeFi', 'Payments', 'Payments'], 'each card names its category');
+  eq(cards.map((c) => c.querySelector('.hc-num').textContent), ['01', '02', '03', '04', '05', '06'], 'and keeps its builder number');
+  eq(cards.map((c) => c.querySelector('b').textContent), ['Token, Escrow, NFT', 'Swap / AMM', 'Treasury', 'Vault (ERC-4626)', 'MultiSend', 'Crosschain (CCTP)'], 'and its title');
+  eq(cards.map((c) => c.querySelector('.hc-desc').textContent), ['ERC-20, ERC-721, escrow, vesting, subscriptions, DAO, smart wallet and staking.', 'Constant-product pool or order book for a pair of tokens.', 'Multisig with approvals and optional payment streaming.', 'Deposit an asset and receive shares of a yield vault.', 'Pay many recipients in one transaction.', 'Move USDC between chains with Circle CCTP.'], 'and its original description, word for word');
+  ok(cards.every((c) => c.tagName === 'BUTTON' && c.type === 'button' && c.querySelectorAll('svg.hc-ico[aria-hidden="true"]').length === 1 && c.querySelectorAll('.hc-go[aria-hidden="true"]').length === 1 && !c.hasAttribute('onclick')), 'every card is one button (the whole card is the target) with a decorative icon and arrow');
+  eq(cards.map((c) => c.textContent.replace(/\s+/g, ' ').trim().length > 30), [true, true, true, true, true, true], 'no card is empty');
+  const g = css.slice(css.indexOf('.home-builders{grid-template-columns'), css.indexOf('.home-steps{margin-bottom:26px'));
+  ok(/\.home-builders\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/.test(g), 'css: three equal columns on a desktop');
+  ok(/@media \(max-width:1100px\)\{\.home-builders\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\);\}\}/.test(g), 'css: two equal columns on a tablet');
+  ok(/@media \(max-width:640px\)\{\.home-builders\{grid-template-columns:minmax\(0,1fr\);\}/.test(g), 'css: one column on a phone');
+  ok(/\.home-builders\{[^}]*align-items:stretch/.test(g) && /\.home-builders \.home-card\{[^}]*min-height:150px/.test(g) && !/\.home-builders \.home-card\{[^}]*[^-]height:\d/.test(g), 'css: cards stretch to the tallest in their row, with a minimum height and no fixed height');
+  ok(/\.home-builders \.home-card:hover\{[^}]*#34D399/.test(g) && /\.home-builders \.home-card:focus-visible\{outline:2px solid #34D399/.test(g) && /prefers-reduced-motion/.test(g), 'css: emerald hover and focus, and no motion when the user asks for none');
+  ok(/\.light \.home-builders \.home-card/.test(g), 'css: light mode is covered');
+  const kinds = new Set(cards.map((c) => c.className)); eq([...kinds], ['home-card'], 'all six cards share the same class (same padding, radius and spacing)');
+  eq(Object.values(JSON.parse(JSON.stringify(Object.fromEntries(cards.map((c, n) => [n, a.w.getComputedStyle(c).borderRadius]))))).every((x) => x === a.w.getComputedStyle(cards[0]).borderRadius), true, 'and the same border radius');
+  cards[1].focus(); eq(d.activeElement.dataset.go, 'swap', 'a card takes the keyboard focus');
   eq(home.querySelectorAll('.home-grid:not(.home-modes) .home-card').length, 6, 'six contract families');
   for (const s of ['simple', 'swap', 'treasury', 'vault', 'multisend', 'crosschain']) { await a.go('home'); home.querySelector(`.home-card[data-go="${s}"]`).click(); await a.settle(); eq(a.shown(), [s], `the ${s} card opens ${s}`); }
   await a.go('home');
