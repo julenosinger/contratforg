@@ -3683,7 +3683,7 @@ function buildAuditMarkdown(r){
 const HISTORY_KEY = 'contractforge_deploy_history';
 
 function loadDeployHistory(){
-  try{ return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); }
+  try{ const h = JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); return Array.isArray(h) ? h : []; }   // storage that is not a list reads as empty (the Home page would otherwise fail on it)
   catch(_){ return []; }
 }
 
@@ -3698,37 +3698,140 @@ function addToDeployHistory(entry){
   renderHistory();
 }
 
+/* ---- Deploy History view (Phase 10.1). The records are untouched: same storage key, same shape, same order (newest first), same indexes,
+   so the Home page, the Playground and the builders' "Deployed" stages keep reading them exactly as before. The filters below only
+   decide what is DRAWN: a button always acts on the index the record has in storage, whatever is hidden. Everything is built with
+   textContent (nothing from storage reaches markup). ---- */
+let histNetKeys = [];                                 // the network keys the filter list offers, by position
+const HIST_LIMIT = 50;                                // saveDeployHistory keeps this many records
+function histScope(){ const b = document.querySelector('#histScope [aria-pressed="true"]'); return b ? b.getAttribute('data-scope') : 'all'; }
+function histSetScope(scope){
+  document.querySelectorAll('#histScope .hist-segbtn').forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-scope') === scope)));
+  renderHistory();
+}
+function histResetFilters(){
+  histSetScope('all');
+  const n = document.getElementById('histNet'), q = document.getElementById('histSearch');
+  if(n) n.value = ''; if(q) q.value = '';
+  renderHistory();
+}
+function histFlash(btn, text){
+  if(!btn) return;
+  const keep = btn.getAttribute('data-label') || btn.textContent; btn.setAttribute('data-label', keep); btn.textContent = text;
+  setTimeout(() => { btn.textContent = keep; }, 1400);
+}
+function copyHistoryAddress(btn, i){
+  const e = loadDeployHistory()[i];
+  if(!e || !isAddr(e.address)) return;
+  if(!navigator.clipboard || !navigator.clipboard.writeText){ histFlash(btn, 'Copy failed'); return; }
+  navigator.clipboard.writeText(e.address).then(() => histFlash(btn, 'Copied'), () => histFlash(btn, 'Copy failed'));
+}
+function histWhen(ts){
+  const t = Number(ts);
+  if(!Number.isFinite(t) || t <= 0) return { ago: 'unknown time', date: '' };
+  return { ago: timeAgo(t), date: new Date(t).toLocaleString() };
+}
 function renderHistory(){
   if(typeof renderHome === 'function') renderHome();
   if(typeof pgRefreshDeployments === 'function') pgRefreshDeployments();
   const hist = loadDeployHistory();
   const container = document.getElementById('historyList');
   if(!container) return;
-  if(!hist.length){
-    container.innerHTML = '<p style="color:#5C6B65;font-family:var(--mono);font-size:12px;">No deployments yet. Deploy a contract in section 07.</p>';
-    return;
+  const stats = document.getElementById('histStats'), note = document.getElementById('histNote'), count = document.getElementById('histCount');
+  const netSel = document.getElementById('histNet'), search = document.getElementById('histSearch');
+  const rows = [];                                                       // [entry, index in storage]
+  (Array.isArray(hist) ? hist : []).forEach((e, i) => { if(e && isAddr(e.address)) rows.push([e, i]); });
+  const bad = (Array.isArray(hist) ? hist.length : 0) - rows.length;
+  /* the network list follows the records (an option carries its position in this list, never text from storage) */
+  let netKey = '';
+  if(netSel){
+    const keepKey = netSel.value === '' ? '' : (histNetKeys[Number(netSel.value)] || '');
+    const seen = [...new Set(rows.map(([e]) => String(e.network || 'unknown')))];
+    histNetKeys = Object.keys(NETWORKS).filter(k => seen.includes(k)).concat(seen.filter(k => !NETWORKS[k]));
+    netSel.textContent = '';
+    const all = document.createElement('option'); all.value = ''; all.textContent = 'All networks'; netSel.appendChild(all);
+    histNetKeys.forEach((k, ix) => { const o = document.createElement('option'); o.value = String(ix); o.textContent = NETWORKS[k] ? NETWORKS[k].label : k; netSel.appendChild(o); });
+    const at = histNetKeys.indexOf(keepKey);
+    netSel.value = keepKey && at >= 0 ? String(at) : '';
+    netKey = netSel.value === '' ? '' : histNetKeys[Number(netSel.value)];
   }
-  container.innerHTML = '';
-  hist.forEach((entry,i)=>{
-    if(!entry || !isAddr(entry.address)) return; // ignore corrupted history entries
+  /* summary */
+  if(stats){
+    stats.textContent = '';
+    stats.hidden = !rows.length;
+    if(rows.length){
+      const live = rows.filter(([e]) => NETWORKS[e.network] && NETWORKS[e.network].isMainnet).length;
+      const latest = rows.reduce((m, r) => (Number(r[0].timestamp) || 0) > (Number(m[0].timestamp) || 0) ? r : m, rows[0]);
+      const card = (k, v, sub) => { const c = swbEl('div', 'hist-stat'); c.appendChild(swbEl('span', 'hist-k', k)); c.appendChild(swbEl('b', '', v)); if(sub) c.appendChild(swbEl('span', 'hist-s', sub)); stats.appendChild(c); };
+      card('Deployments', String(rows.length), rows.length === 1 ? 'recorded in this browser' : 'recorded in this browser');
+      card('Networks', String(new Set(rows.map(([e]) => String(e.network || 'unknown'))).size), 'with at least one deployment');
+      card('Live (mainnet)', String(live), live ? 'real funds were used' : 'testnets only');
+      card('Latest', String(latest[0].name || 'Contract'), histWhen(latest[0].timestamp).ago);
+    }
+  }
+  /* what to draw */
+  const scope = histScope(), q = search ? search.value.trim().toLowerCase() : '';
+  const shown = rows.filter(([e]) => {
+    const n = NETWORKS[e.network];
+    if(scope === 'mainnet' && !(n && n.isMainnet)) return false;
+    if(scope === 'testnet' && !(n && !n.isMainnet)) return false;
+    if(netKey && String(e.network || 'unknown') !== netKey) return false;
+    if(q && !(String(e.name || '').toLowerCase().includes(q) || String(e.address).toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const filtered = scope !== 'all' || !!netKey || !!q;
+  if(count) count.textContent = !rows.length ? '' : (filtered ? 'Showing ' + shown.length + ' of ' + rows.length : rows.length + (rows.length === 1 ? ' deployment' : ' deployments'));
+  if(note){
+    const msgs = [];
+    if(Array.isArray(hist) && hist.length >= HIST_LIMIT) msgs.push('The history is full (' + HIST_LIMIT + ' entries): a new deployment is not recorded until you remove some. Use Export JSON first if you want to keep the list.');
+    if(bad > 0) msgs.push(bad + (bad === 1 ? ' stored entry has' : ' stored entries have') + ' an invalid address and cannot be shown.');
+    note.textContent = msgs.join(' '); note.hidden = !msgs.length;
+  }
+  container.textContent = '';
+  container.setAttribute('role', 'list');
+  if(!rows.length){
+    const p = swbEl('p', 'hist-empty', 'No deployments yet. Deploy a contract in section 07.'); container.appendChild(p); return;
+  }
+  if(!shown.length){
+    const box = swbEl('div', 'hist-empty'); box.appendChild(swbEl('p', '', 'No deployment matches these filters.'));
+    const b = swbEl('button', 'btn btn-ghost', 'Reset filters'); b.type = 'button'; b.setAttribute('data-onclick', 'histResetFilters()'); box.appendChild(b); container.appendChild(box); return;
+  }
+  shown.forEach(([entry, i]) => {
     const net = NETWORKS[entry.network];
-    const explorerUrl = net?.explorer ? net.explorer+'/address/'+entry.address : '';
-    const ago = timeAgo(entry.timestamp);
-    const row = document.createElement('div');
-    row.className = 'hist-row';
-    row.innerHTML = `
-      <span class="hnet">${escapeHtml(entry.network||'unknown')}</span>
-      <span class="hname">${escapeHtml(entry.name||'Contract')}</span>
-      <span class="haddr" title="${escapeHtml(entry.address)}">${entry.address.slice(0,10)}…${entry.address.slice(-6)}</span>
-      <span class="htime">${ago}</span>
-      <div class="hbtns">
-        ${explorerUrl?`<button class="hbtn" data-onclick="openExternal('${escapeHtml(explorerUrl)}')">Explorer ↗</button>`:''}
-        <button class="hbtn" data-onclick="loadHistoryIntoPlayground(${i})">Playground</button>
-        <button class="hbtn" data-onclick="deleteHistoryEntry(${i})" style="color:#E08A6B;">✕</button>
-      </div>`;
+    const explorerUrl = net && net.explorer ? net.explorer + '/address/' + entry.address : '';
+    const txOk = typeof entry.txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(entry.txHash);
+    const when = histWhen(entry.timestamp);
+    const row = swbEl('div', 'hist-row'); row.setAttribute('role', 'listitem');
+    if(net && net.isMainnet) row.setAttribute('data-live', '1');
+    const netBox = swbEl('div', 'hist-net');
+    const nl = swbEl('span', 'hnet', net ? net.label : String(entry.network || 'unknown')); netBox.appendChild(nl);
+    if(net && net.isMainnet) netBox.appendChild(swbEl('span', 'hist-live', 'LIVE'));
+    netBox.appendChild(swbEl('span', 'hist-kind', net ? (net.isMainnet ? 'Mainnet' : 'Testnet') + ' · chain ' + net.chainIdDec : 'Network not in this app'));
+    const main = swbEl('div', 'hist-main');
+    const nm = swbEl('span', 'hname', entry.name || 'Contract'); nm.id = 'histname-' + i; main.appendChild(nm);
+    const ar = swbEl('div', 'hist-addr'); ar.appendChild(swbEl('span', 'haddr', entry.address));
+    const cp = swbEl('button', 'hbtn', 'Copy'); cp.type = 'button'; cp.setAttribute('data-onclick', 'copyHistoryAddress(this, ' + i + ')'); cp.setAttribute('aria-describedby', 'histname-' + i); ar.appendChild(cp); main.appendChild(ar);
+    const tx = swbEl('div', 'hist-tx'); tx.appendChild(swbEl('span', 'hist-k', 'tx'));
+    if(txOk){
+      const short = entry.txHash.slice(0, 10) + '…' + entry.txHash.slice(-6);
+      if(net && net.explorer){ const a = swbEl('button', 'hist-link', short); a.type = 'button'; a.setAttribute('data-onclick', "openExternal('" + net.explorer + '/tx/' + entry.txHash + "')"); a.setAttribute('aria-describedby', 'histname-' + i); tx.appendChild(a); }
+      else tx.appendChild(swbEl('span', 'hist-hash', short));
+    } else tx.appendChild(swbEl('span', 'hist-hash', entry.txHash ? 'not a valid transaction hash' : 'not recorded'));
+    main.appendChild(tx);
+    const wh = swbEl('div', 'hist-when'); wh.appendChild(swbEl('span', 'htime', when.ago)); if(when.date) wh.appendChild(swbEl('span', 'hist-date', when.date));
+    const btns = swbEl('div', 'hbtns');
+    if(explorerUrl){ const b = swbEl('button', 'hbtn', 'Explorer ↗'); b.type = 'button'; b.setAttribute('data-onclick', "openExternal('" + explorerUrl + "')"); b.setAttribute('aria-describedby', 'histname-' + i); btns.appendChild(b); }
+    const pg = swbEl('button', 'hbtn', 'Playground'); pg.type = 'button'; pg.setAttribute('data-onclick', 'loadHistoryIntoPlayground(' + i + ')'); pg.setAttribute('aria-describedby', 'histname-' + i); btns.appendChild(pg);
+    const rm = swbEl('button', 'hbtn hbtn-del', '✕'); rm.type = 'button'; rm.setAttribute('data-onclick', 'deleteHistoryEntry(' + i + ')'); rm.setAttribute('aria-label', 'Remove this deployment from the history'); rm.setAttribute('aria-describedby', 'histname-' + i); btns.appendChild(rm);
+    row.appendChild(netBox); row.appendChild(main); row.appendChild(wh); row.appendChild(btns);
     container.appendChild(row);
   });
 }
+(function histInit(){
+  if(typeof document === 'undefined') return;
+  const sec = document.getElementById('sec-history'); if(!sec) return;
+  new MutationObserver(() => { if(sec.style.display === 'block') renderHistory(); }).observe(sec, { attributes: true, attributeFilter: ['style'] });   // the relative times are fresh whenever the tab opens
+})();
 
 function loadHistoryIntoPlayground(i){
   const hist = loadDeployHistory();
@@ -3896,7 +3999,7 @@ async function verifyContract(){
   if(!pendingSource.name){ logVerify('err','No contract name found.'); return; }
 
   const apiUrl = getExplorerApi();
-  if(!apiUrl){ logVerify('err','Source verification is not yet available for '+NETWORKS[activeNetwork].label+'. Supported: Ethereum, Polygon, Base, Arbitrum, Optimism (mainnet + testnet).'); return; }
+  if(!apiUrl){ logVerify('err','Source verification is not yet available for '+NETWORKS[activeNetwork].label+'. Supported: '+Object.values(NETWORKS).filter(n=>n.explorerApi).map(n=>n.label).join(', ')+'.'); return; }
 
   logVerify('warn','Submitting source to '+apiUrl+'…');
 
@@ -3950,6 +4053,130 @@ async function checkVerificationStatus(){
   }
 }
 
+/* ---- Verify on Explorer view (Phase 10.2). verifyContract() and checkVerificationStatus() are unchanged: they read the same fields and send the
+   same request. This code only reads the form, the application state and what the page itself logs, and never sends anything. Facts it states
+   come from the application: which networks have an explorer API (NETWORKS[].explorerApi), the compiler settings the app really uses
+   (solc SOLC_VERSION, optimizer on, 200 runs), the constructor arguments of the buffer, the deployments recorded on this page and the
+   explorer's own answers as logged by the page. The API key is never shown, stored or logged here. ---- */
+let verRun = null;                                    // the latest submission this page saw start: values at the click, then what the explorer answered
+function verSnapshot(){
+  const g = (id) => { const e = document.getElementById(id); return e ? String(e.value).trim() : ''; };
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
+  verRun = { address: g('ver_address'), network: activeNetwork, name: ps.name || '', hash: ps.code && typeof matHash === 'function' ? matHash(ps.code) : '', submitted: false, guid: '', failed: '', status: '', verified: false };
+}
+function verReadLog(nodes){
+  if(!verRun) return;
+  nodes.forEach(n => {
+    const m = n.querySelector ? n.querySelector('.msg') : null; if(!m) return;
+    const t = m.textContent;
+    if(/^Verification submitted\. GUID:/.test(t)){ verRun.submitted = true; verRun.failed = ''; verRun.guid = (/GUID: (\S+)/.exec(t) || [])[1] || ''; verRun.status = ''; verRun.verified = false; }
+    else if(/^(Submission failed|Request error):/.test(t)){ verRun.failed = t; }
+    else if(/^Verified!/.test(t)){ verRun.verified = true; }
+    else if(/^Status:/.test(t)){ verRun.status = t.replace(/^Status:\s*/, ''); }
+  });
+}
+function verSupportedNetworks(){ return Object.keys(NETWORKS).filter(k => NETWORKS[k].explorerApi); }
+function verRead(){
+  const g = (id) => { const e = document.getElementById(id); return e ? String(e.value).trim() : ''; };
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
+  const net = NETWORKS[activeNetwork] || null, api = net && net.explorerApi ? net.explorerApi : '';
+  const hash = ps.code && typeof matHash === 'function' ? matHash(ps.code) : '';
+  const address = g('ver_address'), ctor = g('ver_constructor');
+  const hexOk = !ctor || /^(0x)?([0-9a-fA-F]{2})+$/.test(ctor);
+  const results = (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []);
+  const hist = typeof loadDeployHistory === 'function' ? loadDeployHistory() : [];
+  const low = address.toLowerCase();
+  const fromPage = isAddr(address) ? results.find(r => r && r.address && r.address.toLowerCase() === low && r.network === activeNetwork) : null;
+  const fromHist = isAddr(address) ? hist.find(e => e && isAddr(e.address) && e.address.toLowerCase() === low && e.network === activeNetwork) : null;
+  const exact = !!(fromPage && ps.name && fromPage.name === ps.name && dplRun && dplRun.hash && dplRun.hash === hash && dplRun.name === ps.name);
+  return {
+    ps, net, api, hash, address, addressOk: isAddr(address), key: g('ver_apikey'), compiler: g('ver_compiler'), runs: g('ver_runs'), ctor, hexOk,
+    hasCode: !!ps.code, ctorArgs: (typeof pendingCtorArgs !== 'undefined' ? pendingCtorArgs : []).length,
+    fromPage, fromHist, exact, supported: verSupportedNetworks(), run: verRun
+  };
+}
+function verLatest(){
+  const results = (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []).filter(r => r && isAddr(r.address) && r.network === activeNetwork);
+  if(results.length) return { address: results[results.length - 1].address, from: 'this page' };
+  const h = (typeof loadDeployHistory === 'function' ? loadDeployHistory() : []).find(e => e && isAddr(e.address) && e.network === activeNetwork);
+  return h ? { address: h.address, from: 'the deploy history' } : null;
+}
+function verUseLatest(btn){
+  const el = document.getElementById('ver_address'); if(!el) return;
+  const cand = verLatest();
+  if(!cand){ if(typeof histFlash === 'function') histFlash(btn, 'No deployment on this network'); return; }
+  if(el.value.trim() && el.value.trim().toLowerCase() !== cand.address.toLowerCase()){ if(typeof histFlash === 'function') histFlash(btn, 'The field already has an address'); return; }   // never replaces what you typed
+  el.value = cand.address; el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function verRender(){
+  const list = document.getElementById('verSummary'), prog = document.getElementById('verProgress');
+  if(!list || !prog) return;
+  const v = verRead(); list.textContent = ''; prog.textContent = '';
+  const row = (label, value, state, flag, mono) => {
+    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok'); r.appendChild(swbEl('dt', '', label));
+    const dd = swbEl('dd', mono ? 'mono' : '', value); if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag)); r.appendChild(dd); list.appendChild(r);
+  };
+  const apiHost = (u) => { try{ return new URL(u).host; }catch(_){ return u; } };
+  const expSolc = 'v' + SOLC_VERSION;
+  const compilerOk = v.compiler.indexOf(expSolc) === 0, runsOk = v.runs === '200';
+  const problems = [];
+  if(!v.hasCode) problems.push('generate a contract first');
+  if(!v.api) problems.push((v.net ? v.net.label : 'this network') + ' has no explorer API here');
+  if(!v.addressOk) problems.push(v.address ? 'the address is not valid' : 'enter the deployed address');
+  if(!v.key) problems.push('enter the explorer API key');
+  if(!v.hexOk) problems.push('the constructor arguments are not valid hex');
+  /* summary */
+  row('Contract', v.hasCode ? v.ps.name + '.sol' : 'None generated yet', v.hasCode ? 'ok' : 'missing', v.hasCode ? (v.ps.template || '') : 'Verification needs the source of the contract');
+  CFBuilder.networkRow(row, v.net);
+  if(v.api) row('Explorer API', apiHost(v.api), 'ok', 'Etherscan-style verification');
+  else row('Explorer API', 'Not available here', 'bad', 'Available on: ' + v.supported.map(k => NETWORKS[k].label).join(', '));
+  if(!v.address) row('Address', 'Not entered', 'missing', v.net ? 'The contract you deployed on ' + v.net.label : '');
+  else if(!v.addressOk) row('Address', v.address, 'bad', 'Not a valid address', true);
+  else row('Address', v.address, 'ok', v.fromPage ? 'Deployed from this page on ' + v.net.label : (v.fromHist ? 'Found in the deploy history on ' + v.net.label : 'Not in this browser\'s records'), true);
+  if(v.hasCode && v.addressOk){
+    if(v.exact) row('Source', 'Same code as your deployment', 'ok', 'It is the exact source this page deployed to that address');
+    else row('Source', 'Not confirmed', 'missing', v.fromPage ? 'The source on screen is not the one this page deployed to that address' : 'This page cannot tell whether the source on screen is the code deployed there');
+  }
+  row('Compiler', v.compiler || 'Not entered', compilerOk ? 'ok' : 'bad', compilerOk ? 'The version the app compiles with' : 'The app compiles with solc ' + SOLC_VERSION + ': another version will not match');
+  row('Optimizer', 'On, ' + (v.runs || '?') + ' runs', runsOk ? 'ok' : 'bad', runsOk ? 'As compiled by the app' : 'The app compiles with 200 runs: another value will not match');
+  row('Constructor', v.ctor ? (v.hexOk ? Math.floor(v.ctor.replace(/^0x/, '').length / 2) + ' bytes' : 'Not valid hex') : 'None entered', !v.hexOk ? 'bad' : (v.ctorArgs && !v.ctor ? 'missing' : 'ok'), !v.hexOk ? 'Use an even number of hex digits' : (v.ctorArgs && !v.ctor ? 'The contract on screen takes ' + v.ctorArgs + (v.ctorArgs === 1 ? ' argument' : ' arguments') + ': paste them ABI-encoded or the explorer will refuse the match' : ''));
+  row('API key', v.key ? 'Entered' : 'Not entered', v.key ? 'ok' : 'missing', 'Used for this request only; this page never stores or shows it');
+  /* hints beside the fields */
+  const setNote = (id, text, kind) => { const e = document.getElementById(id); if(!e) return; e.textContent = text; e.hidden = !text; if(kind) e.setAttribute('data-kind', kind); };
+  setNote('verAddrNote', v.addressOk ? '' : (v.address ? 'This is not a valid address.' : ''), 'warn');
+  setNote('verCompilerNote', compilerOk || !v.compiler ? '' : 'The app compiles with solc ' + SOLC_VERSION + '; another version will not match the deployed bytecode.', 'warn');
+  setNote('verRunsNote', runsOk || !v.runs ? '' : 'The app compiles with the optimizer on and 200 runs; another value will not match.', 'warn');
+  const lat = verLatest(); const lb = document.getElementById('verUseLatest');
+  if(lb) lb.hidden = !lat;
+  setNote('verLatestNote', lat ? 'Latest deployment on ' + (v.net ? v.net.label : 'this network') + ' (from ' + lat.from + '): ' + lat.address.slice(0, 10) + '…' + lat.address.slice(-6) : '', 'info');
+  /* progress */
+  const step = (title, state, text) => {
+    const li = swbEl('li'); li.setAttribute('data-state', state);
+    const mark = swbEl('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
+    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'bld-t', text)); li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
+  };
+  const r = v.run, rNet = r && NETWORKS[r.network] ? NETWORKS[r.network].label : '';
+  step('Ready to submit', problems.length ? 'todo' : 'done', problems.length ? 'Still needed: ' + problems.join('; ') + '.' : 'Everything the explorer asks for is filled in.');
+  if(r && r.submitted) step('Submitted', 'done', 'Accepted by the explorer for ' + r.address.slice(0, 10) + '…' + r.address.slice(-6) + ' on ' + rNet + (r.guid ? ' (GUID ' + r.guid + ')' : '') + '.');
+  else if(r && r.failed) step('Submitted', 'attention', r.failed);
+  else step('Submitted', 'locked', 'Press Submit Verification. Nothing is sent before that.');
+  if(r && r.verified) step('Verified', 'done', 'The explorer reports this contract as verified on ' + rNet + '.');
+  else if(r && r.submitted) step('Verified', 'todo', r.status ? 'Last answer from the explorer: ' + r.status : 'Press Check Status in about 30 seconds to ask the explorer.');
+  else step('Verified', 'locked', 'Available after the explorer accepts the submission.');
+}
+(function verInit(){
+  if(typeof document === 'undefined') return;
+  const sec = document.getElementById('sec-verify'); if(!sec) return;
+  let queued = false; const later = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; verRender(); }); };
+  sec.addEventListener('input', later); sec.addEventListener('change', later);
+  const submit = sec.querySelector('[data-onclick="verifyContract()"]'); if(submit) submit.addEventListener('click', verSnapshot, true);   // the values the page is about to read
+  const log = document.getElementById('verifyLog'); if(log) new MutationObserver(ms => { ms.forEach(m => verReadLog([...m.addedNodes])); later(); }).observe(log, { childList: true });
+  new MutationObserver(later).observe(sec, { attributes: true, attributeFilter: ['style'] });
+  ['sidenet'].forEach(id => { const e = document.getElementById(id); if(e) new MutationObserver(later).observe(e, { subtree: true, childList: true, characterData: true }); });
+  ['deployResult', 'historyList'].forEach(id => { const e = document.getElementById(id); if(e) new MutationObserver(later).observe(e, { childList: true, subtree: true }); });   // a deployment recorded on this page or in the history
+  CFBuilder.addView('verify', verRender);
+})();
+
 /* ======================================================================
    13 — SHARE / EXPORT
    ====================================================================== */
@@ -4000,6 +4227,7 @@ function exportArtifact(){
   const abi   = window.__lastCompiledABI||[];
   const bytec = window.__lastCompiledBytecode||'';
   let content='', filename='', mime='text/plain';
+  if((fmt==='abi' && !abi.length) || ((fmt==='full' || fmt==='hardhat') && (!abi.length || !bytec))){ alert('No content to export. Ensure the contract is compiled first.'); return; }   // never a file with an empty ABI or bytecode
 
   if(fmt==='abi'){
     content  = JSON.stringify(abi, null, 2);
@@ -4081,12 +4309,111 @@ async function generateQR(){
   if(!url){ return; }
   const qrBox = document.getElementById('qrBox');
   qrBox.style.display='block';
+  if(url.length > SHR_QR_MAX){      // a QR code holds at most this much: the request would be useless, and it would still send the whole source to an outside service
+    qrBox.textContent = 'This link is ' + url.length.toLocaleString() + ' characters and a QR code holds at most ' + SHR_QR_MAX.toLocaleString() + '. Nothing was sent to the QR service. Use Copy URL, or download the source instead.';
+    return;
+  }
   // Use a free QR API
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
   qrBox.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="border:8px solid var(--paper);border-radius:2px;" />
     <div style="font-family:var(--mono);font-size:10px;color:#5C6B65;margin-top:8px;">Scan to open this configuration</div>`;
 }
 
+
+/* ---- Share & Export view (Phase 10.3). generateShareUrl, copyShareUrl, loadFromUrlHash and the artifact builders are unchanged. This code only reads: the
+   current contract, the link field, the last compile (window.__lastCompiledABI / __lastCompiledBytecode) and the deployments this page recorded.
+   What it states comes from the application: what the link holds, what each export file contains, and whether the compiled artifact can be tied to the
+   source on screen. The artifact is only called "from this source" when a deployment made on this page proves it (same run, same bytecode hash);
+   otherwise it is shown as unverified. ---- */
+const SHR_QR_MAX = 2953;                              // the most a QR code can hold (version 40, lowest error correction, binary data)
+function shrConfig(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
+  return { network: activeNetwork, name: ps.name || '', code: ps.code || '' };
+}
+function shrLinkFor(cfg){ return window.location.href.split('#')[0] + '#cfg=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))); }
+function shrArtifact(v){
+  const abi = window.__lastCompiledABI, bc = window.__lastCompiledBytecode;
+  if(!Array.isArray(abi) || !abi.length || !bc) return { state: 'none' };
+  let kk = ''; try{ kk = ethers.utils.keccak256(bc); }catch(_){ kk = ''; }
+  const results = (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []);
+  const exact = !!(kk && v.hash && dplRun && dplRun.hash === v.hash && dplRun.name === v.name && results.some(r => r && r.name === v.name && r.bytecodeKeccak256 === kk));
+  return { state: exact ? 'exact' : 'unverified', items: abi.length };
+}
+function shrRead(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
+  const code = ps.code || '', net = NETWORKS[activeNetwork] || null;
+  const linkEl = document.getElementById('shareUrl'), link = linkEl ? linkEl.value : '';
+  let linkState = 'none';
+  if(link){
+    linkState = 'stale';
+    try{
+      const enc = link.split('#cfg=')[1]; const cfg = JSON.parse(decodeURIComponent(escape(atob(enc)))); const cur = shrConfig();
+      if(cfg && cfg.network === cur.network && cfg.name === cur.name && cfg.code === cur.code) linkState = 'current';
+    }catch(_){ linkState = 'stale'; }
+  }
+  const cfg = shrConfig();
+  let potential = 0; try{ potential = shrLinkFor(cfg).length; }catch(_){ potential = 0; }
+  return {
+    ps, code, name: ps.name || '', net, hash: code && typeof matHash === 'function' ? matHash(code) : '', lines: code ? code.split('\n').length : 0,
+    level: code && typeof matInfo === 'function' ? matInfo(ps.template).level : '',
+    dmode: (typeof MC_MODES !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '',
+    link, linkState, potential, fmt: (document.getElementById('export_format') || {}).value || '',
+    ctor: (typeof pendingCtorArgs !== 'undefined' ? pendingCtorArgs : []).length
+  };
+}
+function shrRender(){
+  const list = document.getElementById('shrSummary'), notes = document.getElementById('shrNotes');
+  if(!list || !notes) return;
+  const v = shrRead(); list.textContent = ''; notes.textContent = '';
+  const isMain = !!(v.net && v.net.isMainnet), art = shrArtifact(v);
+  const row = (label, value, state, flag, mono) => {
+    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok'); r.appendChild(swbEl('dt', '', label));
+    const dd = swbEl('dd', mono ? 'mono' : '', value); if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag)); r.appendChild(dd); list.appendChild(r);
+  };
+  row('Contract', v.code ? v.name + '.sol' : 'None generated yet', v.code ? 'ok' : 'missing', v.code ? (v.ps.template || '') + (v.level ? ' · ' + v.level : '') : 'Generate one in a builder first');
+  CFBuilder.networkRow(row, v.net);
+  row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
+  /* the link */
+  if(v.linkState === 'none') row('Share link', 'Not generated', 'missing', v.code ? 'It would be ' + v.potential.toLocaleString() + ' characters' : 'Without a contract it holds only the network');
+  else if(v.linkState === 'current') row('Share link', v.link.length.toLocaleString() + ' characters', 'ok', 'Holds the network and the full source');
+  else row('Share link', 'Out of date', 'bad', 'The contract or the network changed after it was generated: generate it again');
+  if(v.code) row('When someone opens it', 'Starts on ' + (v.net ? v.net.label : 'the network in the link'), 'ok', 'The source loads as an imported contract, treated as experimental');
+  /* QR */
+  const qrLen = v.linkState === 'current' ? v.link.length : v.potential;
+  row('QR code', qrLen && qrLen <= SHR_QR_MAX ? 'Fits' : 'Too long', qrLen && qrLen <= SHR_QR_MAX ? 'ok' : 'bad', qrLen ? qrLen.toLocaleString() + ' of ' + SHR_QR_MAX.toLocaleString() + ' characters a QR code can hold' : '');
+  /* the compiled artifact */
+  if(art.state === 'none') row('Compiled artifact', 'None in this session', 'missing', 'ABI and bytecode exports need a compile: compile and deploy in section 07');
+  else if(art.state === 'exact') row('Compiled artifact', art.items + ' ABI items', 'ok', 'Compiled from this exact source: a deployment made on this page used the same bytecode');
+  else row('Compiled artifact', art.items + ' ABI items', 'missing', 'Unverified: from the last compile in this session; this page cannot tell it is from the source on screen');
+  row('Constructor', v.ctor ? v.ctor + (v.ctor === 1 ? ' argument' : ' arguments') : 'None', 'ok', v.ctor ? 'The Hardhat and Foundry scripts leave a placeholder for them' : '');
+  /* the note under the format list */
+  const info = document.getElementById('exportInfo');
+  if(info){
+    const n = v.name || 'the contract';
+    const T = {
+      hardhat: 'A Hardhat deploy script (ethers v5) with the ABI and the creation bytecode of the last compile inside. It uses the signer of your Hardhat configuration, and the constructor arguments are left as a placeholder.',
+      forge: 'A Foundry script that deploys ' + n + ' from ../src/' + n + '.sol with the PRIVATE_KEY environment variable. It does not contain the contract: save the source with Download .sol in section 07. The constructor arguments are left as a placeholder.',
+      abi: 'The ABI JSON of the last compile.',
+      full: 'One JSON file with the ABI and the creation bytecode of the last compile, the source on screen, the network and a timestamp.'
+    };
+    info.textContent = (T[v.fmt] || '') + (v.fmt !== 'forge' && art.state === 'none' ? ' Nothing has been compiled in this session, so this export is refused until you compile.' : '') + (v.fmt !== 'forge' && art.state === 'unverified' ? ' The compiled part may belong to another source.' : '');
+  }
+  /* cautions */
+  const note = (kind, text) => { const li = swbEl('li', '', text); li.setAttribute('data-kind', kind); notes.appendChild(li); };
+  note('info', 'The link keeps everything in the part after the # (your browser does not send it to a server), and it contains the full source code.');
+  if(isMain) note('warn', 'You are on a mainnet (' + v.net.label + '). The Hardhat and Foundry scripts broadcast real transactions when you run them: review them first.');
+  note(qrLen && qrLen <= SHR_QR_MAX ? 'info' : 'warn', 'The QR image is drawn by api.qrserver.com, an outside service that receives the whole link, source code included. ' + (qrLen && qrLen > SHR_QR_MAX ? 'This link is too long for a QR code, so no request is made.' : 'Nothing is sent until you press QR Code.'));
+}
+(function shrInit(){
+  if(typeof document === 'undefined') return;
+  const sec = document.getElementById('sec-share'); if(!sec) return;
+  let queued = false; const later = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; shrRender(); }); };
+  sec.addEventListener('change', later); sec.addEventListener('click', later);
+  new MutationObserver(later).observe(sec, { attributes: true, attributeFilter: ['style'] });
+  ['sidenet'].forEach(id => { const e = document.getElementById(id); if(e) new MutationObserver(later).observe(e, { subtree: true, childList: true, characterData: true }); });
+  const dr = document.getElementById('deployResult'); if(dr) new MutationObserver(later).observe(dr, { childList: true, subtree: true });
+  CFBuilder.addView('share', shrRender);
+})();
 
 /* ======================================================================
    TIER SYSTEM — DISABLED FOR TESTNET (all features free)
@@ -5175,10 +5502,26 @@ function wzRender(){
   CFBuilder.addView('wizard', wzRender);
 })();
 
-/* ---- The Compile & Deploy overview (Phase 9.7). The deploy page itself (compileAndDeploy, compilePending, deployCompiled, the constructor panel,
-   Multi-deploy, the results card, the activity console, the mainnet banner and every gate) is unchanged and keeps its place. This card only
-   reads: pendingSource, reqBlockReason(), the constructor inputs, the wallet, the maturity approvals, the multi-deploy selection and the results
-   the page itself records. It never compiles, asks the wallet or deploys, and it cannot claim a deployment that the page did not confirm. ---- */
+/* ---- The Compile & Deploy workspace (Phases 9.7 and 9.8). The deploy page itself (compileAndDeploy, compilePending, compileSource,
+   deployCompiled, collectCtorValues, matGate, mainnetDeployConfirm, the constructor panel, Multi-deploy, the results card, the activity
+   console, the mainnet banner and every gate) is unchanged: its elements were only moved into the new layout and keep their ids, handlers and
+   values. This code only reads: pendingSource, reqBlockReason(), the constructor inputs, the wallet, the maturity approvals, the multi-deploy
+   selection and the results the page itself records. It never compiles, asks the wallet or deploys, and it cannot claim a deployment that it
+   cannot tie to the exact source on screen.
+   Exact association: the page clears its results at the START of every deploy run (single or multi), right before it compiles the buffer. The
+   source hash is noted at that moment, so a result is "confirmed for this source" only when the source on screen is that same source. Results
+   from an earlier source, or from a run this page did not see start, are shown as "unverified". ---- */
+let dplRun = null;                                    // { hash, name } of the source the page started its latest deploy run with
+function dplTrackRuns(){
+  if(typeof uiResetDeployResults !== 'function' || uiResetDeployResults.__dplTracked) return;
+  const orig = uiResetDeployResults;
+  const tracked = function(){
+    try{ const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {}; dplRun = { hash: ps.code ? matHash(ps.code) : '', name: ps.name || '' }; }catch(_){ dplRun = null; }
+    return orig.apply(this, arguments);
+  };
+  tracked.__dplTracked = true;
+  uiResetDeployResults = tracked;
+}
 function dplRead(){
   const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
   const code = ps.code || '';
@@ -5192,9 +5535,12 @@ function dplRead(){
     return { a, val, problem };
   });
   const sel = (typeof mdState !== 'undefined') ? [...mdState.selected].filter(k => NETWORKS[k]) : [];
+  const hash = code && typeof matHash === 'function' ? matHash(code) : '';
+  const all = (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []).filter(r => r && r.name === ps.name && ps.name);
+  const verified = !!(all.length && dplRun && dplRun.hash && dplRun.hash === hash && dplRun.name === ps.name);
   return {
-    ps, code, name: ps.name || '', template: ps.template || '', net,
-    hash: code && typeof matHash === 'function' ? matHash(code) : '',
+    ps, code, name: ps.name || '', template: ps.template || '', net, hash,
+    lines: code ? code.split('\n').length : 0,
     level: code && typeof matInfo === 'function' ? matInfo(ps.template).level : '',
     block: code && typeof reqBlockReason === 'function' ? reqBlockReason() : '',
     sameDeployer: sameDeployer ? sameDeployer.label : '',
@@ -5203,14 +5549,17 @@ function dplRead(){
     mdOn: typeof mdVisible === 'function' && mdVisible(), sel,
     args, argProblem: (args.find(x => x.problem) || {}).problem || '',
     wallet: (typeof signer !== 'undefined' && signer && typeof account !== 'undefined' && account) ? account : '',
-    results: (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []).filter(r => r && r.name === ps.name && ps.name)
+    results: verified ? all : [], unverified: all.length && !verified ? all : []
   };
 }
+let dplShown = '';                                    // what the read-only preview currently holds, so it is rewritten only when the source changes
 function dplRender(){
   const list = document.getElementById('dplSummary'), prog = document.getElementById('dplProgress');
   if(!list || !prog) return;
+  dplTrackRuns();
   const v = dplRead();
   list.textContent = ''; prog.textContent = '';
+  const net = v.net, isMain = !!(net && net.isMainnet), blocked = !!(v.block || v.sameDeployer);
   const row = (label, value, state, flag, mono) => {
     const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
     r.appendChild(swbEl('dt', '', label));
@@ -5218,7 +5567,33 @@ function dplRender(){
     if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag));
     r.appendChild(dd); list.appendChild(r);
   };
-  const net = v.net, isMain = !!(net && net.isMainnet);
+  /* header strip */
+  const head = document.getElementById('dplHead');
+  if(head){
+    head.textContent = '';
+    const chip = (k, val, cls) => { const c = swbEl('span', 'dpl-chip' + (cls ? ' ' + cls : '')); c.appendChild(swbEl('i', '', k)); c.appendChild(swbEl('b', '', val)); head.appendChild(c); };
+    chip('Contract', v.code ? v.name + '.sol' : 'None yet');
+    if(v.code) chip('Maturity', v.level || 'unknown', 'lvl-' + (v.level || 'unknown'));
+    chip('Compiler', v.version ? 'solc ' + v.version : 'Unknown');
+    chip('Mode', v.dmode || 'Unknown');
+    chip('Network', net ? net.label + (isMain ? ' · LIVE' : '') : 'Unknown', isMain ? 'live' : '');
+    if(v.code) chip('Size', v.lines + ' lines');
+  }
+  /* read-only source preview */
+  const srcEl = document.getElementById('dplSource'), sum = document.getElementById('dplSrcSum');
+  const key = v.code ? v.hash + '|' + v.name : '';
+  if(srcEl && dplShown !== key){ srcEl.textContent = v.code || ''; dplShown = key; }
+  if(sum) sum.textContent = v.code ? 'Solidity preview · ' + v.lines + ' lines · read only' : 'Solidity preview · generate a contract first';
+  /* constructor and network cards */
+  const cc = document.getElementById('dplCtorCount'), ce = document.getElementById('dplCtorEmpty');
+  if(cc) cc.textContent = !v.code ? '' : (v.args.length ? v.args.length + (v.args.length === 1 ? ' argument' : ' arguments') + (v.argProblem ? ' · needs attention' : ' · filled') : 'none');
+  if(ce){ ce.hidden = v.args.length > 0 && !!v.code; ce.textContent = !v.code ? 'Generate a contract to see its constructor arguments.' : 'This contract has no constructor arguments in this Deployment Mode.'; }
+  const nc = document.getElementById('dplNetCount'), nn = document.getElementById('dplNetNote');
+  if(nc) nc.textContent = v.mdOn ? (v.sel.length ? v.sel.length + ' selected' + (v.sel.some(k => NETWORKS[k].isMainnet) ? ' · includes live networks' : '') : 'none selected') : '1 network';
+  if(nn) nn.textContent = v.mdOn ? 'Nothing is selected for you. Each mainnet asks for the maturity confirmation, and each network asks for your confirmation in the wallet.' : 'Single and Portable modes deploy to the active network' + (net ? ': ' + net.label + (isMain ? ' (live, real funds)' : '') : '') + '. Change the network from the header; the multi-network selection appears in the Multi-deploy and Crosschain modes.';
+  const rn = document.getElementById('dplResNote');
+  if(rn){ rn.hidden = typeof uiDeployResults !== 'undefined' && uiDeployResults.length > 0; rn.textContent = 'Nothing deployed yet. Confirmed deployments appear here once the wallet transaction is confirmed.'; }
+  /* summary */
   row('Contract', v.code ? v.name + '.sol' : 'None generated yet', v.code ? 'ok' : 'missing', v.code ? (v.template || '') + (v.level ? ' · ' + v.level : '') : 'Generate one in a builder first');
   if(v.code){
     if(v.block) row('Source', 'Draft', 'bad', v.block);
@@ -5229,7 +5604,7 @@ function dplRender(){
   CFBuilder.networkRow(row, net);
   row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
   if(v.mdOn){
-    if(!v.sel.length) row('Multi-deploy', 'No network selected', 'missing', 'Pick the networks in the panel below');
+    if(!v.sel.length) row('Multi-deploy', 'No network selected', 'missing', 'Pick the networks in the panel');
     else { const mains = v.sel.filter(k => NETWORKS[k].isMainnet).length; row('Multi-deploy', v.sel.length + (v.sel.length === 1 ? ' network' : ' networks'), 'ok', mains ? mains + ' mainnet' + (mains > 1 ? 's' : '') + ': each asks for the maturity confirmation' : 'Testnets only'); }
   }
   if(v.code){
@@ -5237,17 +5612,31 @@ function dplRender(){
     else row('Constructor', v.args.length + (v.args.length === 1 ? ' argument' : ' arguments'), v.argProblem ? 'bad' : 'ok', v.argProblem || 'All filled');
   }
   row('Wallet', v.wallet || 'Not connected', v.wallet ? 'ok' : 'missing', v.wallet ? '' : 'Connect the wallet to deploy', !!v.wallet);
+  const approved = !!(v.code && isMain && v.hash && typeof matIsApproved === 'function' && matIsApproved(v.hash, activeNetwork));
   if(v.code && net){
-    if(isMain){ const approved = v.hash && typeof matIsApproved === 'function' && matIsApproved(v.hash, activeNetwork); row('Maturity check', approved ? 'Confirmed for this source' : 'Not confirmed yet', approved ? 'ok' : 'missing', approved ? '' : 'Asked when you press Compile and deploy'); }
+    if(isMain) row('Maturity check', approved ? 'Confirmed for this source' : 'Not confirmed yet', approved ? 'ok' : 'missing', approved ? '' : 'Asked when you press Compile and deploy');
     else row('Maturity check', 'Not required on a testnet', 'ok');
   }
+  /* readiness checklist: the same facts as the summary, as a checklist */
+  const rd = document.getElementById('dplReady');
+  if(rd){
+    rd.textContent = '';
+    const item = (state, text) => { const li = swbEl('li', '', text); li.setAttribute('data-state', state); rd.appendChild(li); };
+    if(!v.code) item('todo', 'No contract yet: generate one in a builder.');
+    else if(v.block) item('bad', 'Contract source is a draft: ' + v.block);
+    else if(v.sameDeployer) item('bad', v.sameDeployer + ' cannot be the wallet that deploys the contract.');
+    else item('ok', 'Contract source is ready.');
+    if(v.code && !blocked) item(v.argProblem ? 'bad' : 'ok', v.args.length ? (v.argProblem ? 'Constructor: ' + v.argProblem + '.' : 'Constructor arguments are valid.') : 'No constructor arguments.');
+    item(v.wallet ? 'ok' : 'warn', v.wallet ? 'Wallet connected.' : 'Connect your wallet to deploy.');
+    if(v.code && net) item(isMain ? (approved ? 'ok' : 'warn') : 'ok', isMain ? (approved ? 'Mainnet: the maturity confirmation is given for this source.' : 'Mainnet: the maturity confirmation is asked when you press Compile and deploy.') : 'Testnet deployment (no maturity approval).');
+  }
+  /* progress */
   const step = (title, state, text) => {
     const li = swbEl('li'); li.setAttribute('data-state', state);
     const mark = swbEl('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'draft' || state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
     const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'bld-t', text));
     li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
   };
-  const blocked = !!(v.block || v.sameDeployer);
   if(!v.code) step('Source', 'todo', 'No contract yet. Generate one in a builder.');
   else if(blocked) step('Source', 'draft', 'The source cannot be deployed yet: ' + (v.block || (v.sameDeployer + ' cannot be the wallet that deploys it')));
   else step('Source', 'done', v.name + '.sol is ready to compile.');
@@ -5258,19 +5647,22 @@ function dplRender(){
     else step('Ready to deploy', 'done', 'Wallet connected' + (v.args.length ? ' and constructor values filled' : '') + '.' + (isMain ? ' The maturity confirmation is asked when you press Compile and deploy.' : ''));
   }
   if(v.results.length){
-    const r = v.results[0], rn = NETWORKS[r.network] || { label: r.network };
-    step('Deployed', 'done', v.results.length === 1 ? 'Confirmed on ' + rn.label + ' at ' + r.address + '.' : v.results.length + ' deployments confirmed, the first on ' + rn.label + ' at ' + r.address + '.');
-  } else step('Deployed', v.code && !blocked ? 'todo' : 'locked', 'Nothing deployed yet. Compile and deploy compiles, asks the wallet and waits for the confirmation.');
+    const r = v.results[0], rn2 = NETWORKS[r.network] || { label: r.network };
+    step('Deployed', 'done', v.results.length === 1 ? 'Confirmed on ' + rn2.label + ' at ' + r.address + ', for this exact source.' : v.results.length + ' deployments confirmed for this exact source, the first on ' + rn2.label + ' at ' + r.address + '.');
+  } else if(v.unverified.length) step('Deployed', 'todo', 'Unverified: ' + v.unverified.length + (v.unverified.length === 1 ? ' deployment shown' : ' deployments shown') + ' on this page cannot be tied to the source on screen (it was generated or changed after, or the run was not seen). This source has not been confirmed as deployed.');
+  else step('Deployed', v.code && !blocked ? 'todo' : 'locked', 'Nothing deployed yet. Compile and deploy compiles, asks the wallet and waits for the confirmation.');
 }
 (function dplInit(){
   if(typeof document === 'undefined') return;
   const sec = document.getElementById('sec-deploy'); if(!sec) return;
   let queued = false; const later = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; dplRender(); }); };
-  const panel = sec.querySelector(':scope > .form-panel');
-  if(panel) new MutationObserver(later).observe(panel, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'disabled', 'value'] });   // the page's own panels, console and results
+  // the page's own elements (never the card's own output, so rendering cannot trigger itself)
+  ['ctorArgsPanel', 'multiDeployPanel', 'draftReason', 'deployResult', 'deployConsole', 'mainnetDeployBanner'].forEach(id => { const el = document.getElementById(id); if(el) new MutationObserver(later).observe(el, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'disabled', 'value'] }); });
+  const b = document.getElementById('btnCompileDeploy'); if(b) new MutationObserver(later).observe(b, { attributes: true, attributeFilter: ['disabled'] });
   new MutationObserver(later).observe(sec, { attributes: true, attributeFilter: ['style'] });                                                     // the tab was opened
   ['walletStatus', 'sidenet'].forEach(id => { const el = document.getElementById(id); if(el) new MutationObserver(later).observe(el, { subtree: true, childList: true, characterData: true }); });
   const cp = document.getElementById('ctorArgsPanel'); if(cp) cp.addEventListener('input', later);
+  const sv = document.getElementById('solcVersion'); if(sv) sv.addEventListener('change', later);
   CFBuilder.addView('deploy', dplRender);
 })();
 

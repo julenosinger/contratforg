@@ -37,17 +37,30 @@ function fresh(opts) {
 }
 async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (e) { return String(e && e.message || e); } }
 
-/* 1. nothing on the deploy page was renamed, moved or changed; the card sits above it */
+/* 1. the deploy page's own elements were moved into the new layout, not rebuilt: same ids, attributes, handlers and values */
 {
   const a = fresh(); const { d } = a;
-  for (const id of ['mainnetDeployBanner', 'mainnetBannerNet', 'mainnetBannerGas', 'pendingContractLabel', 'solcVersion', 'ctorArgsPanel', 'draftReason', 'btnCompileDeploy', 'btnDownloadSol', 'btnCopySol', 'multiDeployPanel', 'deployResult', 'consoleCopy', 'consoleClear', 'deployConsole']) ok(!!d.getElementById(id), 'ids: #' + id + ' exists');
-  eq([...d.querySelectorAll('#sec-deploy .btnrow button')].map((b) => [b.textContent, b.getAttribute('data-onclick')]), [['Compile and deploy', 'compileAndDeploy()'], ['Download .sol', 'downloadSource()'], ['Copy code', 'copySource()']], 'the three buttons keep their handlers');
+  const KEEP = { mainnetDeployBanner: { style: true }, mainnetBannerNet: {}, mainnetBannerGas: {}, pendingContractLabel: { disabled: '' }, solcVersion: {}, ctorArgsPanel: { class: 'mc-panel', style: 'display:none;' }, draftReason: { class: 'req-reason', role: 'alert', style: 'display:none;' }, btnCompileDeploy: { class: 'btn btn-primary', 'data-onclick': 'compileAndDeploy()' }, btnDownloadSol: { class: 'btn btn-ghost', 'data-onclick': 'downloadSource()' }, btnCopySol: { class: 'btn btn-ghost', 'data-onclick': 'copySource()' }, multiDeployPanel: { class: 'mc-panel', style: 'display:none;' }, deployResult: { class: 'deploy-result', style: 'display:none;', 'aria-live': 'polite' }, consoleCopy: { class: 'btn btn-ghost', type: 'button' }, consoleClear: { class: 'btn btn-ghost', type: 'button' }, deployConsole: { class: 'console' } };
+  for (const [id, attrs] of Object.entries(KEEP)) { const el = d.getElementById(id); ok(!!el, 'ids: #' + id + ' exists'); for (const [k, v] of Object.entries(attrs)) if (v !== true) eq(el.getAttribute(k), v, `#${id} keeps ${k}`); }
   eq([d.getElementById('pendingContractLabel').value, d.getElementById('pendingContractLabel').disabled, [...d.getElementById('solcVersion').options].map((o) => o.value)], ['— none generated yet', true, ['0.8.24']], 'the pending-contract field and the compiler list are unchanged');
-  const sec = d.getElementById('sec-deploy'), kids = [...sec.children].map((e) => e.className.split(' ')[0] || e.tagName);
-  eq(kids, ['section-head', 'bld', 'form-panel'], 'the section is: heading, the new card, the original panel (which is untouched and in its place)');
-  eq([...d.querySelectorAll('#sec-deploy > .form-panel > *')].map((e) => e.id || e.className.split(' ')[0] || e.tagName).slice(0, 4), ['P', 'mainnetDeployBanner', 'field-grid', 'ctorArgsPanel'], 'the original panel keeps its order');
-  eq([...d.getElementById('dplOverview').outerHTML.matchAll(/\s(on[a-z]+|style)=\"[^\"]*\"/gi)].length, 0, 'csp: the new card has no inline handler or style');
-  ok(/\.bld\.dpl\{margin-bottom:18px;\}/.test(css), 'css: the only new rule is scoped to the card');
+  eq(d.querySelector('#deployConsole .line .msg').textContent, 'Waiting for contract generation and wallet connection…', 'the console keeps its first line');
+  eq(d.getElementById('btnCompileDeploy').textContent, 'Compile and deploy', 'the primary button keeps its text');
+  const order = ['mainnetDeployBanner', 'pendingContractLabel', 'solcVersion', 'btnDownloadSol', 'btnCopySol', 'ctorArgsPanel', 'multiDeployPanel', 'draftReason', 'btnCompileDeploy', 'consoleClear', 'deployConsole'];
+  const pos = order.map((id) => { const e = d.getElementById(id); return [...d.querySelectorAll('#sec-deploy *')].indexOf(e); });
+  eq(pos.every((x, i) => i === 0 || x > pos[i - 1]), true, 'document order: banner, source, compiler, source buttons, constructor, networks, draft alert, the primary button, the activity console');
+  ok(d.querySelector('#sec-deploy .bld-side').contains(d.getElementById('deployResult')) && d.querySelector('#sec-deploy .bld-main').contains(d.getElementById('deployConsole')), 'confirmed results are in the overview column; the activity log is in the main column');
+  eq([...d.getElementById('sec-deploy').children].map((e) => e.className.split(' ')[0]), ['section-head', 'bld'], 'the section is: heading and the workspace');
+  eq(d.querySelectorAll('#sec-deploy .form-panel').length, 0, 'the old single panel is gone (its contents live in the cards)');
+  const inl = [...d.getElementById('sec-deploy').querySelectorAll('[style]')].map((e) => e.id || e.tagName.toLowerCase());
+  ok(inl.every((x) => ['mainnetDeployBanner', 'DIV', 'div', 'b', 'mainnetBannerNet', 'mainnetBannerGas', 'ctorArgsPanel', 'multiDeployPanel', 'draftReason', 'deployResult', 'sec-deploy'].includes(x)), 'csp: the only inline styles are the original ones (banner, display toggles)');
+  eq([...d.getElementById('sec-deploy').outerHTML.matchAll(/\s(on[a-z]+)=\"[^\"]*\"/gi)].length, 0, 'csp: no inline handler attribute');
+  eq([...d.querySelectorAll('#sec-deploy .dpl-ws [id]')].filter((e) => d.querySelectorAll('#' + e.id).length > 1).length, 0, 'no duplicate ids');
+  const css9 = css.slice(css.indexOf('/* ---- Compile & Deploy workspace (Phase 9.8)'), css.indexOf('/* ---- Swap / AMM builder'));
+  const sels = []; css9.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\})\s*([^{}@][^{}]*)\{/g, (_, __, s) => { sels.push(...s.split(',').map((x) => x.trim())); return ''; });
+  eq(sels.filter((s) => s && !s.startsWith('@') && !/^\.bld\.dpl-ws(?![\w-])/.test(s)), [], 'css: every new rule is scoped to .dpl-ws');
+  ok(/\.bld\.dpl-ws \.bld-grid\{grid-template-columns:minmax\(0,65fr\) minmax\(0,35fr\)/.test(css9), 'css: 65/35 columns');
+  ok(/@media \(max-width:860px\)\{[\s\S]*\.bld\.dpl-ws \.bld-grid\{grid-template-columns:minmax\(0,1fr\);\}/.test(css9), 'css: a single column on narrow screens');
+  ok(/\.bld\.dpl-ws \.console\{[^}]*max-height:240px;overflow:auto/.test(css9) && /\.dpl-pre\{[^}]*max-height:260px;overflow:auto/.test(css9), 'css: the activity log and the source preview scroll inside their cards');
   eq(d.querySelector('#sec-deploy .section-head h2').textContent, 'Compile & Deploy', 'the heading is unchanged');
   eq(a.pageErrors.length, 0, 'no page errors on load');
 }
@@ -135,22 +148,34 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ev("setMultichainMode('single')"); await a.go('deploy'); ok(!a.rows()['Multi-deploy'], 'single mode: no Multi-deploy row');
 }
 
-/* 6. "Deployed" is only ever what the page itself recorded */
+/* 6. "Deployed" is only ever what the page itself recorded, and only for the exact source the run started with */
 {
   const a = fresh(); const { d, ev } = a;
   ev("account = '" + A + "'; signer = {};"); a.GEN.erc20(); await a.go('deploy');
-  const name = ev('pendingSource.name');
+  const name = ev('pendingSource.name'), run = async () => { ev('uiResetDeployResults()'); await a.settle(); };   // the page does this at the start of every deploy run
   eq(a.prog().Deployed.state, 'todo', 'before any deployment: not done');
   ev("addToDeployHistory({ name: '" + name + "', address: '0x' + '4'.repeat(40), network: 'arc', abi: [], txHash: '0x4' })"); await a.settle();
   eq(a.prog().Deployed.state, 'todo', 'a history entry alone does not count (only this page confirms a deployment)');
+  ev("uiAddDeployResult({ name: '" + name + "', network: 'arc', address: '0x' + '5'.repeat(40), txHash: '0x5' })"); await a.settle();
+  ok(a.prog().Deployed.state === 'todo' && /^Unverified/.test(a.prog().Deployed.text), 'a result with no run seen start is unverified, not a success (the name alone is not enough)');
+  await run();
   ev("uiAddDeployResult({ name: 'SomethingElse', network: 'arc', address: '0x' + '5'.repeat(40), txHash: '0x5' })"); await a.settle();
   eq(a.prog().Deployed.state, 'todo', 'a result for another contract does not count');
-  ev("uiAddDeployResult({ name: '" + name + "', network: 'sepolia', address: '0x' + '6'.repeat(40), txHash: '0x6' })"); await a.settle();
-  ok(a.prog().Deployed.state === 'done' && /Confirmed on Ethereum Sepolia at 0x6{40}/.test(a.prog().Deployed.text), 'a result the page recorded for this contract is shown, with its real network and address');
+  await run(); ev("uiAddDeployResult({ name: '" + name + "', network: 'sepolia', address: '0x' + '6'.repeat(40), txHash: '0x6' })"); await a.settle();
+  ok(a.prog().Deployed.state === 'done' && /Confirmed on Ethereum Sepolia at 0x6{40}, for this exact source/.test(a.prog().Deployed.text), 'a run that started with this exact source and recorded a result: confirmed, with its real network and address');
   ev("uiAddDeployResult({ name: '" + name + "', network: 'base', address: '0x' + '7'.repeat(40), txHash: '0x7' })"); await a.settle();
-  ok(/2 deployments confirmed, the first on Ethereum Sepolia/.test(a.prog().Deployed.text), 'several results are counted');
-  ev('uiResetDeployResults()'); await a.settle(); eq(a.prog().Deployed.state, 'todo', 'when the page clears its results (a new deployment starts), the overview follows');
+  ok(/2 deployments confirmed for this exact source, the first on Ethereum Sepolia/.test(a.prog().Deployed.text), 'several results of the same run are counted');
+  // the source changes after the run: same name, different code
+  ev("document.getElementById('s_supply').value = '5'; genSimple('erc20')"); await a.go('home'); await a.go('deploy');
+  ok(ev('pendingSource.name') === name && a.prog().Deployed.state === 'todo' && /^Unverified: 2 deployments/.test(a.prog().Deployed.text), 'the same name with different code is unverified');
+  eq(a.rows().Contract.text, name + '.sol', 'the page still shows the contract, and the results card is untouched');
+  ok(d.getElementById('deployResult').style.display === 'block', 'the original results card still lists the earlier deployments');
+  // generating the identical source again is still the exact same source
+  ev("document.getElementById('s_supply').value = '1000000'; genSimple('erc20')"); await a.go('home'); await a.go('deploy');
+  eq(a.prog().Deployed.state, 'done', 'regenerating the identical source makes the association exact again');
+  await run(); eq(a.prog().Deployed.state, 'todo', 'when the page clears its results (a new run starts), the overview follows');
   ev("lastAuditReport = { score: 99, summary: 'fine', findings: [] }"); a.ev('dplRender()'); eq(a.prog().Deployed.state, 'todo', 'an audit report in memory changes nothing');
+  ok(ev("uiResetDeployResults.__dplTracked === true") && ev("uiResetDeployResults.toString().includes('orig.apply')"), 'the run tracker is a transparent wrapper around the page function');
 }
 
 /* 7. reading never compiles, signs, sends, alerts or writes; the existing flow and gates answer exactly as before */
@@ -194,6 +219,74 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   const n1 = d.querySelectorAll('#dplSummary .bld-row').length; await a.go('home'); await a.go('deploy');
   eq([n1 === d.querySelectorAll('#dplSummary .bld-row').length, d.querySelectorAll('#dplProgress li').length, d.querySelectorAll('#dplOverview').length], [true, 3, 1], 'repeated navigation does not duplicate rows, stages or the card');
   ok(['sec-treasury', 'sec-vault', 'sec-multisend', 'sec-crosschain', 'sec-simple', 'sec-wizard'].every((id) => !d.getElementById(id).querySelector('#dplOverview')) && ['sec-swap'].every((id) => !!d.getElementById(id)), 'the other tabs are untouched');
+  eq(a.pageErrors.length, 0, 'no page errors');
+}
+
+/* 9. the workspace (Phase 9.8): header, read-only source preview, constructor and network cards, readiness, activity and results */
+{
+  const a = fresh(); const { d, ev, w } = a;
+  const chips = () => Object.fromEntries([...d.querySelectorAll('#dplHead .dpl-chip')].map((c) => [c.querySelector('i').textContent, c.querySelector('b').textContent]));
+  await a.go('deploy');
+  eq(chips(), { Contract: 'None yet', Compiler: 'solc 0.8.24', Mode: 'Single network', Network: 'Arc Testnet' }, 'start: the header shows only what is real');
+  eq([d.getElementById('dplSource').textContent, /generate a contract first/.test(d.getElementById('dplSrcSum').textContent), d.getElementById('dplSrcBox').open], ['', true, false], 'start: the preview is empty and closed');
+  eq([d.getElementById('dplCtorEmpty').hidden, d.getElementById('dplCtorEmpty').textContent], [false, 'Generate a contract to see its constructor arguments.'], 'start: the constructor card has its empty state');
+  eq(d.getElementById('dplNetCount').textContent, '1 network', 'start (single mode): one network, the active one');
+  ok(/Single and Portable modes deploy to the active network: Arc Testnet/.test(d.getElementById('dplNetNote').textContent), 'start: the note says which network');
+  eq([...d.querySelectorAll('#dplReady li')].map((l) => l.dataset.state), ['todo', 'warn'], 'start: readiness has no false check');
+  a.GEN.erc20(); await a.go('home'); await a.go('deploy');
+  const code = ev('pendingSource.code');
+  eq([chips().Contract, chips().Size, chips().Maturity], [ev('pendingSource.name') + '.sol', code.split('\n').length + ' lines', ev("matInfo('erc20').level")], 'a contract: its real name, line count and maturity level');
+  eq([d.getElementById('dplSource').textContent === code, d.getElementById('dplSource').closest('details').open, !!d.getElementById('dplSource').closest('pre')], [true, false, true], 'the preview holds exactly pendingSource.code, read only (a <pre>, no input), closed until you open it');
+  ok(/Solidity preview · \d+ lines · read only/.test(d.getElementById('dplSrcSum').textContent), 'and says how long it is');
+  eq(d.querySelectorAll('#dplSrcBox textarea, #dplSrcBox input, #dplSrcBox [contenteditable]').length, 0, 'there is nothing to edit in the preview');
+  eq([d.getElementById('dplCtorEmpty').hidden, d.getElementById('dplCtorEmpty').textContent, d.getElementById('dplCtorCount').textContent], [false, 'This contract has no constructor arguments in this Deployment Mode.', 'none'], 'erc20: the empty state says there is no constructor argument');
+  eq([...d.querySelectorAll('#dplReady li')].map((l) => l.dataset.state + ':' + l.textContent), ['ok:Contract source is ready.', 'ok:No constructor arguments.', 'warn:Connect your wallet to deploy.', 'ok:Testnet deployment (no maturity approval).'], 'readiness: the same facts as the summary, as a checklist');
+  // the source buttons still work, and never touch the source
+  const clip = []; Object.defineProperty(w.navigator, 'clipboard', { value: { writeText: (x) => { clip.push(x); return Promise.resolve(); } }, configurable: true });
+  d.getElementById('btnCopySol').click(); await tick(); eq(clip, [code], 'Copy code copies exactly the source');
+  let dl = null; w.URL.createObjectURL = (b) => { dl = b; return 'blob:x'; }; w.URL.revokeObjectURL = () => {}; w.HTMLAnchorElement.prototype.click = function () { this.__clicked = this.download; dl = dl && { blob: dl, name: this.download }; };
+  d.getElementById('btnDownloadSol').click(); await tick(); eq(dl && dl.name, ev('pendingSource.name') + '.sol', 'Download .sol saves the contract under its own name');
+  eq(ev('pendingSource.code'), code, 'the source is untouched');
+  // a draft
+  a.GEN.treasury(false); await a.go('home'); await a.go('deploy');
+  ok(/draft/i.test(d.querySelector('#dplReady li').textContent) && d.querySelector('#dplReady li').dataset.state === 'bad' && d.getElementById('btnCompileDeploy').disabled, 'a draft: readiness says so and the original button is disabled');
+  // constructor card
+  ev("setMultichainMode('portable')"); a.GEN.escrow(); await a.go('home'); await a.go('deploy');
+  eq([d.getElementById('dplCtorCount').textContent, d.getElementById('dplCtorEmpty').hidden, d.querySelectorAll('#ctorArgsPanel input').length], ['1 argument · filled', true, 1], 'escrow (portable): the card counts the argument and hides the empty state');
+  await a.setv('ctor_arg_0', ''); eq(d.getElementById('dplCtorCount').textContent, '1 argument · needs attention', 'an emptied argument: needs attention');
+  await a.setv('ctor_arg_0', A); eq(d.getElementById('dplCtorCount').textContent, '1 argument · filled', 'and filled again');
+  eq(d.getElementById('ctor_arg_0').value, A, 'the typed value is still in its original input');
+  // networks
+  ev("setMultichainMode('multi')"); await a.go('home'); await a.go('deploy');
+  eq([d.getElementById('dplNetCount').textContent, d.querySelectorAll('#multiDeployPanel .md-chip').length, d.querySelectorAll('#multiDeployPanel .md-chip.on').length], ['none selected', 16, 0], 'multi mode: 16 networks, none selected for you, and the card says none');
+  eq([...d.querySelectorAll('#multiDeployPanel .md-group-label')].map((l) => l.textContent), ['Testnets', 'Mainnets (real funds)'], 'the panel keeps its two groups');
+  eq([d.querySelectorAll('#multiDeployPanel .md-group')[0].querySelectorAll('.md-chip').length, d.querySelectorAll('#multiDeployPanel .md-group')[1].querySelectorAll('.md-chip').length], [7, 9], '7 testnets and 9 mainnets');
+  eq([...d.querySelectorAll('#multiDeployPanel .md-group')[1].querySelectorAll('.md-chip')].every((c) => /LIVE/i.test(c.textContent)), true, 'every mainnet is marked LIVE');
+  ev("toggleMdNetwork('arc')"); await a.settle(); eq(d.getElementById('dplNetCount').textContent, '1 selected', 'one testnet: the count follows');
+  ev("toggleMdNetwork('base')"); await a.settle(); eq(d.getElementById('dplNetCount').textContent, '2 selected · includes live networks', 'a mainnet: the card says live networks are included');
+  ok(/Nothing is selected for you/.test(d.getElementById('dplNetNote').textContent), 'the note says nothing is selected for you');
+  eq(ev('JSON.stringify([...mdState.selected])'), '["arc","base"]', 'the selection lives in mdState, as before');
+  ev("setMultichainMode('cross')"); await a.go('home'); await a.go('deploy'); eq(d.querySelector('#multiDeployPanel .md-bridge') !== null, true, 'crosschain mode: the bridge option is still there');
+  for (const dm of ['single', 'portable', 'multi', 'cross']) { ev(`setMultichainMode('${dm}')`); await a.go('home'); await a.go('deploy'); eq(chips().Mode, ev(`MC_MODES.${dm}.label`), `the header follows the ${dm} mode`); }
+  // activity and results
+  ev("setMultichainMode('single')"); ev("logConsole('ok', 'a line')"); await a.settle();
+  ok([...d.querySelectorAll('#deployConsole .line .msg')].some((m) => m.textContent === 'a line') && d.getElementById('deployConsole').closest('.bld-card').querySelector('h3').textContent === 'Activity', 'the activity log lives in its own card and still receives the page\'s lines');
+  eq([d.getElementById('dplResNote').hidden, /Nothing deployed yet/.test(d.getElementById('dplResNote').textContent)], [false, true], 'results card: says nothing is deployed');
+  ev("uiAddDeployResult({ name: 'X', network: 'arc', address: '0x' + '9'.repeat(40), txHash: '0x9' })"); await a.settle();
+  eq([d.getElementById('dplResNote').hidden, d.getElementById('deployResult').style.display, d.querySelectorAll('#deployResult .dr-row').length], [true, 'block', 1], 'a result shows the page\'s own results card, with its explorer link and copy button');
+  eq(a.pageErrors.length, 0, 'no page errors');
+}
+
+/* 10. a real deploy run through the page's own compileAndDeploy (compiler, deployment and wallet stubbed: nothing is sent) ties the result to the exact source */
+{
+  const a = fresh(); const { d, ev } = a;
+  ev("account = '" + A + "'; signer = {};"); a.GEN.erc20(); await a.go('deploy');
+  ev("window.__ran = []; compilePending = async () => { window.__ran.push('compile'); return { name: pendingSource.name, abi: [], bytecode: '0x', sourceHash: matHash(pendingSource.code) }; }; deployCompiled = async (c, v, k) => { window.__ran.push('deploy:' + k); uiAddDeployResult({ name: c.name, network: k, address: '0x' + '8'.repeat(40), txHash: '0x8' }); };");
+  await a.w.eval('compileAndDeploy()'); await a.settle();
+  eq(ev('JSON.stringify(window.__ran)'), '["compile","deploy:arc"]', 'the page ran its own flow: compile, then deploy on the active network');
+  ok(a.prog().Deployed.state === 'done' && /for this exact source/.test(a.prog().Deployed.text), 'the result of that run is confirmed for this exact source');
+  ev("document.getElementById('s_supply').value = '7'; genSimple('erc20')"); await a.go('home'); await a.go('deploy');
+  ok(a.prog().Deployed.state === 'todo' && /^Unverified/.test(a.prog().Deployed.text), 'after the source changed, the same result is unverified');
   eq(a.pageErrors.length, 0, 'no page errors');
 }
 

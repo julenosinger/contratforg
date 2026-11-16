@@ -245,7 +245,7 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
 /* 13. Compile & Deploy particularities found by the Phase 9.7 audit (the overview may read them, it must not change them) */
 {
   const app = loadApp(); const { ev, w } = app; const d = w.document; w.alert = () => {};
-  eq([...d.querySelectorAll('#sec-deploy .btnrow button')].map((b) => b.getAttribute('data-onclick')), ['compileAndDeploy()', 'downloadSource()', 'copySource()'], 'deploy: the three action handlers');
+  eq(['btnCompileDeploy', 'btnDownloadSol', 'btnCopySol'].map((id) => d.getElementById(id).getAttribute('data-onclick')), ['compileAndDeploy()', 'downloadSource()', 'copySource()'], 'deploy: the three action handlers');
   ok(ev("typeof compileAndDeploy === 'function' && typeof compilePending === 'function' && typeof compileSource === 'function' && typeof deployCompiled === 'function' && typeof matGate === 'function' && typeof mainnetDeployConfirm === 'function'"), 'deploy: the compile, deploy and gate functions exist');
   ok(/matIsApproved\(compiled\.sourceHash, netKey\)/.test(ev('deployCompiled.toString()')) && /Mainnet deploy blocked/.test(ev('deployCompiled.toString()')), 'deploy: deployCompiled itself refuses a mainnet that was not confirmed (the last line of defence)');
   ok(/reqBlockReason\(\)/.test(ev('compileAndDeploy.toString()')) && /matGate\(/.test(ev('compileAndDeploy.toString()')), 'deploy: compileAndDeploy checks the draft reason and the maturity gate before compiling');
@@ -253,6 +253,46 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   eq(ev('uiDeployResults.length'), 0, 'deploy: no result before a deployment');
   ev("window.__c = 0; compileSource = async () => { window.__c++; return {}; }"); ev("pendingSource = { name: '', code: '', template: '' }"); ev('compileAndDeploy()');
   eq(ev('window.__c'), 0, 'deploy: with no contract, compileAndDeploy never reaches the compiler');
+}
+
+
+/* Phase 10.1: the Deploy History facts that every reader of it relies on */
+{
+  const a = loadApp(); const { ev, w } = a;
+  eq([ev('HISTORY_KEY'), ev('typeof loadDeployHistory'), ev('typeof deleteHistoryEntry'), ev('typeof loadHistoryIntoPlayground')], ['contractforge_deploy_history', 'function', 'function', 'function'], 'history: key and the functions its readers call');
+  ev("localStorage.removeItem(HISTORY_KEY); addToDeployHistory({ name: 'A', address: '0x' + '1'.repeat(40), network: 'arc', abi: [], txHash: '0x1' }); addToDeployHistory({ name: 'B', address: '0x' + '2'.repeat(40), network: 'arc', abi: [], txHash: '0x2' });");
+  const h = JSON.parse(w.localStorage.getItem('contractforge_deploy_history'));
+  eq([h.map((e) => e.name), Object.keys(h[0]).sort(), typeof h[0].timestamp], [['B', 'A'], ['abi', 'address', 'name', 'network', 'timestamp', 'txHash'], 'number'], 'history: newest first, one shape, a numeric timestamp');
+  ev("localStorage.removeItem(HISTORY_KEY); for (let i = 1; i <= 52; i++) addToDeployHistory({ name: 'C' + i, address: '0x' + String(i).padStart(40, '0'), network: 'arc', abi: [], txHash: '0x' + i });");
+  const full = JSON.parse(w.localStorage.getItem('contractforge_deploy_history')).map((e) => e.name);
+  eq([full.length, full.includes('C51'), full.includes('C52'), full.includes('C1')], [50, false, false, true], 'history: the 50-record limit keeps the OLDEST fifty and drops new ones (a known defect, unchanged, and the History tab says so)');
+  ev("localStorage.setItem(HISTORY_KEY, '{\"a\":1}')"); eq(ev('JSON.stringify(loadDeployHistory())'), '[]', 'history: storage that is not a list reads as an empty list');
+}
+
+
+/* Phase 10.2: the Verify on Explorer facts the overview states */
+{
+  const a = loadApp(); const { ev } = a;
+  const sup = JSON.parse(ev('JSON.stringify(Object.entries(NETWORKS).filter(([k, n]) => n.explorerApi).map(([k]) => k))'));
+  eq([sup.length, ['arc', 'arcMain', 'robinhood', 'robinhoodMain'].some((k) => sup.includes(k))], [12, false], 'verify: 12 of 16 networks have an explorer API; Arc and Robinhood do not');
+  eq([ev('SOLC_VERSION'), a.w.document.getElementById('ver_compiler').value.startsWith('v' + ev('SOLC_VERSION')), a.w.document.getElementById('ver_runs').value], ['0.8.24', true, '200'], 'verify: the form defaults match the compiler the app uses');
+  ok(/optimizer:\{enabled:true, runs:200\}/.test(fs.readFileSync(path.join(here, '../contractforge-deploy/app.js'), 'utf8')), 'verify: the app compiles with the optimizer on and 200 runs');
+  eq([a.w.document.getElementById('ver_apikey').type, ev("typeof verifyContract + typeof checkVerificationStatus + typeof getExplorerApi")], ['password', 'functionfunctionfunction'], 'verify: the key is a password field and the three functions exist');
+}
+
+
+/* Phase 10.3: the Share & Export facts the overview states */
+{
+  const a = loadApp(); const { ev, w } = a; const d = w.document; w.alert = () => {};
+  ev("renderSimpleForm('erc20'); genSimple('erc20')"); ev('generateShareUrl()');
+  const link = d.getElementById('shareUrl').value; const cfg = JSON.parse(decodeURIComponent(escape(Buffer.from(link.split('#cfg=')[1], 'base64').toString('binary'))));
+  eq([Object.keys(cfg).sort(), cfg.code === ev('pendingSource.code'), link.length > 2953], [['code', 'name', 'network'], true, true], 'share: the link holds the network, the name and the full source, and a generated contract is too long for a QR code (2,953 characters)');
+  eq([...d.querySelectorAll('#export_format option')].map((o) => o.value), ['hardhat', 'forge', 'abi', 'full'], 'share: four export formats');
+  ev("window.__lastCompiledABI = [{ type: 'constructor', inputs: [] }]; window.__lastCompiledBytecode = '0x00';");
+  const files = []; w.Blob = class { constructor(p) { this.t = p.join(''); } }; w.URL.createObjectURL = (b) => { w.__b = b; return 'x'; }; w.HTMLAnchorElement.prototype.click = function () { files.push(this.download); };
+  for (const f of ['abi', 'full', 'hardhat', 'forge']) { d.getElementById('export_format').value = f; ev('exportArtifact()'); }
+  eq([...files], [ev('pendingSource.name') + '_abi.json', ev('pendingSource.name') + '_artifact.json', 'deploy_' + ev('pendingSource.name') + '.js', 'Deploy' + ev('pendingSource.name') + '.s.sol'], 'share: the four file names');
+  ok(/imported/.test(fs.readFileSync(path.join(here, '../contractforge-deploy/app.js'), 'utf8').split('function loadFromUrlHash')[1].slice(0, 1400)), 'share: a link never names its own template (it loads as "imported")');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

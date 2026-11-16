@@ -599,59 +599,83 @@
     <!-- ============ 07 DEPLOY CONSOLE ============ -->
     <section class="section" id="sec-deploy" style="display:none;">
       <div class="section-head"><span class="n">07</span><h2>Compile &amp; Deploy</h2><div class="rule"></div></div>
-      <div class="bld dpl" id="dplOverview">
-        <p class="bld-sub">Review what is about to be deployed, then press Compile and deploy below. This summary only reads the page: nothing is compiled, signed or sent until you press the button.</p>
+      <div class="bld dpl dpl-ws" id="dplOverview">
+        <p class="bld-sub">The generated contract is compiled in the browser via <b>solc</b> (loaded on demand) and deployed using the connected wallet (MetaMask / injected EVM). Nothing is simulated: the bytecode comes from the source shown here and the transaction is signed by your wallet on the selected network. This page only reads state until you press Compile and deploy.</p>
+        <div class="dpl-head" id="dplHead" aria-label="Contract"></div>
         <div class="bld-grid">
           <div class="bld-main">
-            <section class="bld-card" aria-labelledby="dplSumH">
-              <h3 id="dplSumH">Deployment Summary</h3>
-              <dl class="bld-sum" id="dplSummary"></dl>
+            <div id="mainnetDeployBanner" style="display:none;background:#1A0D0D;border:1px solid #5C2020;border-radius:var(--radius);padding:12px 16px;margin-bottom:18px;">
+              <div style="font-family:var(--mono);font-size:11.5px;color:#E08A6B;font-weight:600;margin-bottom:4px;">⚠ MAINNET — real funds will be spent</div>
+              <div style="font-family:var(--mono);font-size:10.5px;color:#A06050;line-height:1.6;">You are deploying to <b id="mainnetBannerNet" style="color:#E08A6B;"></b>. This uses real <b id="mainnetBannerGas" style="color:#E08A6B;"></b>. A confirmation dialog will appear before the transaction is sent.</div>
+            </div>
+            <section class="bld-card dpl-card" aria-labelledby="dplSrcH">
+              <h3 id="dplSrcH"><span class="dpl-n" aria-hidden="true">1</span>Contract Source</h3>
+              <div class="dpl-fields">
+                <div class="field">
+                  <label for="pendingContractLabel">Pending contract</label>
+                  <input id="pendingContractLabel" value="— none generated yet" disabled />
+                </div>
+                <div class="field">
+                  <label for="solcVersion">Compiler version</label>
+                  <select id="solcVersion">
+                    <option value="0.8.24">solc 0.8.24</option>
+                  </select>
+                </div>
+              </div>
+              <details class="dpl-src" id="dplSrcBox">
+                <summary id="dplSrcSum">Solidity preview</summary>
+                <pre class="dpl-pre" tabindex="0" aria-label="Solidity source, read only"><code id="dplSource"></code></pre>
+              </details>
+              <div class="dpl-srcbtns">
+                <button class="btn btn-ghost" id="btnDownloadSol" data-onclick="downloadSource()">Download .sol</button>
+                <button class="btn btn-ghost" id="btnCopySol" data-onclick="copySource()">Copy code</button>
+              </div>
+            </section>
+            <section class="bld-card dpl-card" aria-labelledby="dplCtorH">
+              <h3 id="dplCtorH"><span class="dpl-n" aria-hidden="true">2</span>Constructor Arguments <span class="dpl-count" id="dplCtorCount"></span></h3>
+              <p class="bld-note" id="dplCtorEmpty" role="note"></p>
+              <div class="mc-panel" id="ctorArgsPanel" style="display:none;"></div>
+            </section>
+            <section class="bld-card dpl-card" aria-labelledby="dplNetH">
+              <h3 id="dplNetH"><span class="dpl-n" aria-hidden="true">3</span>Deployment Networks <span class="dpl-count" id="dplNetCount"></span></h3>
+              <p class="bld-note" id="dplNetNote" role="note"></p>
+              <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
+            </section>
+            <div class="req-reason" id="draftReason" role="alert" style="display:none;"></div>
+            <div class="btnrow dpl-actions">
+              <button class="btn btn-primary" id="btnCompileDeploy" data-onclick="compileAndDeploy()">Compile and deploy</button>
+            </div>
+            <section class="bld-card dpl-card" aria-labelledby="dplActH">
+              <h3 id="dplActH">Activity</h3>
+              <div class="console-tools">
+                <span class="console-title">Log</span>
+                <button type="button" class="btn btn-ghost" id="consoleCopy">Copy log</button>
+                <button type="button" class="btn btn-ghost" id="consoleClear">Clear</button>
+              </div>
+              <div class="console" id="deployConsole">
+                <div class="line"><span class="t">[boot]</span><span class="msg">Waiting for contract generation and wallet connection…</span></div>
+              </div>
             </section>
           </div>
-          <aside class="bld-side" aria-label="Deployment progress">
+          <aside class="bld-side" aria-label="Deployment overview">
+            <section class="bld-card" aria-labelledby="dplSumH">
+              <h3 id="dplSumH">Deployment Overview</h3>
+              <dl class="bld-sum" id="dplSummary"></dl>
+            </section>
+            <section class="bld-card" aria-labelledby="dplReadyH">
+              <h3 id="dplReadyH">Deployment Readiness</h3>
+              <ul class="dpl-ready" id="dplReady"></ul>
+            </section>
             <section class="bld-card" aria-labelledby="dplProgH">
               <h3 id="dplProgH">Deployment Progress</h3>
               <ol class="bld-prog" id="dplProgress"></ol>
             </section>
+            <section class="bld-card" aria-labelledby="dplResH">
+              <h3 id="dplResH">Confirmed Results</h3>
+              <p class="bld-note" id="dplResNote" role="note"></p>
+              <div class="deploy-result" id="deployResult" style="display:none;" aria-live="polite"></div>
+            </section>
           </aside>
-        </div>
-      </div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          The currently generated contract is compiled in the browser via <b style="color:var(--gold);">solc</b> (loaded on demand) and deployed using the connected wallet (MetaMask / injected EVM). Nothing is simulated: the bytecode comes from the source shown above and the transaction is signed by your wallet on the selected network.
-        </p>
-        <div id="mainnetDeployBanner" style="display:none;background:#1A0D0D;border:1px solid #5C2020;border-radius:var(--radius);padding:12px 16px;margin-bottom:18px;">
-          <div style="font-family:var(--mono);font-size:11.5px;color:#E08A6B;font-weight:600;margin-bottom:4px;">⚠ MAINNET — real funds will be spent</div>
-          <div style="font-family:var(--mono);font-size:10.5px;color:#A06050;line-height:1.6;">You are deploying to <b id="mainnetBannerNet" style="color:#E08A6B;"></b>. This uses real <b id="mainnetBannerGas" style="color:#E08A6B;"></b>. A confirmation dialog will appear before the transaction is sent.</div>
-        </div>
-        <div class="field-grid">
-          <div class="field">
-            <label>Pending contract</label>
-            <input id="pendingContractLabel" value="— none generated yet" disabled />
-          </div>
-          <div class="field">
-            <label>Compiler version</label>
-            <select id="solcVersion">
-              <option value="0.8.24">solc 0.8.24</option>
-            </select>
-          </div>
-        </div>
-        <div class="mc-panel" id="ctorArgsPanel" style="display:none;"></div>
-        <div class="req-reason" id="draftReason" role="alert" style="display:none;"></div>
-        <div class="btnrow">
-          <button class="btn btn-primary" id="btnCompileDeploy" data-onclick="compileAndDeploy()">Compile and deploy</button>
-          <button class="btn btn-ghost" id="btnDownloadSol" data-onclick="downloadSource()">Download .sol</button>
-          <button class="btn btn-ghost" id="btnCopySol" data-onclick="copySource()">Copy code</button>
-        </div>
-        <div class="mc-panel" id="multiDeployPanel" style="display:none;"></div>
-        <div class="deploy-result" id="deployResult" style="display:none;" aria-live="polite"></div>
-        <div class="console-tools">
-          <span class="console-title">Activity</span>
-          <button type="button" class="btn btn-ghost" id="consoleCopy">Copy log</button>
-          <button type="button" class="btn btn-ghost" id="consoleClear">Clear</button>
-        </div>
-        <div class="console" id="deployConsole">
-          <div class="line"><span class="t">[boot]</span><span class="msg">Waiting for contract generation and wallet connection…</span></div>
         </div>
       </div>
     </section>
@@ -821,14 +845,28 @@
     <!-- ============ 10 DEPLOY HISTORY ============ -->
     <section class="section" id="sec-history" style="display:none;">
       <div class="section-head"><span class="n">10</span><h2>Deploy History</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
+      <div class="form-panel hist-panel">
+        <p class="hist-intro">
           All deployments are stored locally in your browser. Click any address to open it in the block explorer, or load its ABI directly into the Playground.
         </p>
-        <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-ghost" data-onclick="clearHistory()">Clear All</button>
-          <button class="btn btn-ghost" data-onclick="exportHistory()">Export JSON</button>
+        <div class="hist-stats" id="histStats" role="group" aria-label="History summary" hidden></div>
+        <div class="hist-bar">
+          <div class="hist-seg" id="histScope" role="group" aria-label="Show deployments on">
+            <button type="button" class="hist-segbtn" data-scope="all" aria-pressed="true" data-onclick="histSetScope('all')">All</button>
+            <button type="button" class="hist-segbtn" data-scope="testnet" aria-pressed="false" data-onclick="histSetScope('testnet')">Testnets</button>
+            <button type="button" class="hist-segbtn" data-scope="mainnet" aria-pressed="false" data-onclick="histSetScope('mainnet')">Mainnets</button>
+          </div>
+          <label class="sr-only" for="histNet">Network</label>
+          <select id="histNet" data-onchange="renderHistory()"><option value="">All networks</option></select>
+          <label class="sr-only" for="histSearch">Search by name or address</label>
+          <input id="histSearch" type="search" placeholder="Search name or address" autocomplete="off" data-oninput="renderHistory()" />
+          <span class="hist-count" id="histCount" aria-live="polite"></span>
+          <div class="btnrow hist-actions">
+            <button class="btn btn-ghost" data-onclick="clearHistory()">Clear All</button>
+            <button class="btn btn-ghost" data-onclick="exportHistory()">Export JSON</button>
+          </div>
         </div>
+        <p class="hist-note" id="histNote" role="status" hidden></p>
         <div id="historyList"></div>
       </div>
     </section>
@@ -868,79 +906,114 @@
     </section>
 
     <!-- ============ 12 VERIFY ON EXPLORER ============ -->
-    <section class="section" id="sec-verify" style="display:none;">
+    <section class="section bld" id="sec-verify" style="display:none;">
       <div class="section-head"><span class="n">12</span><h2>Verify on Explorer</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Submits the flattened source code and ABI to the block explorer's verification API (Etherscan-compatible). After verification, anyone can read and interact with the contract on the explorer.
-        </p>
-        <div class="field-grid" style="margin-bottom:18px;">
-          <div class="field">
-            <label>Deployed contract address</label>
-            <input id="ver_address" placeholder="0x..." />
+      <p class="bld-sub">Submits the flattened source code and ABI to the block explorer's verification API (Etherscan-compatible). After verification, anyone can read and interact with the contract on the explorer.</p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="verAddrH">
+            <h3 id="verAddrH"><span class="bld-n" aria-hidden="true">1</span>Deployed contract</h3>
+            <div class="field">
+              <label for="ver_address">Deployed contract address</label>
+              <input id="ver_address" placeholder="0x..." />
+              <div class="hint bld-note" id="verAddrNote" data-kind="warn" hidden></div>
+              <div class="ver-latest"><button type="button" class="btn btn-ghost" id="verUseLatest" data-onclick="verUseLatest(this)" hidden>Use the latest deployment</button><span class="hint" id="verLatestNote"></span></div>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="verKeyH">
+            <h3 id="verKeyH"><span class="bld-n" aria-hidden="true">2</span>Explorer access</h3>
+            <div class="field">
+              <label for="ver_apikey">Explorer API key</label>
+              <input id="ver_apikey" placeholder="Your Etherscan / Arbiscan API key" type="password" autocomplete="off" />
+              <div class="hint">Sent to the explorer with the request and nowhere else: it is not stored and not written to the log.</div>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="verCompH">
+            <h3 id="verCompH"><span class="bld-n" aria-hidden="true">3</span>Compiler settings</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="ver_compiler">Compiler version</label>
+                <input id="ver_compiler" value="v0.8.24+commit.e11b9ed9" />
+                <div class="hint bld-note" id="verCompilerNote" data-kind="warn" hidden></div>
+              </div>
+              <div class="field">
+                <label for="ver_runs">Optimization runs</label>
+                <input id="ver_runs" type="number" value="200" />
+                <div class="hint bld-note" id="verRunsNote" data-kind="warn" hidden></div>
+              </div>
+              <div class="field bld-wide">
+                <label for="ver_constructor">Constructor arguments (ABI-encoded hex, if any)</label>
+                <input id="ver_constructor" placeholder="0x... (leave empty if none)" />
+              </div>
+            </div>
+          </section>
+          <div class="btnrow bld-actions">
+            <button class="btn btn-primary" data-onclick="verifyContract()">Submit Verification</button>
+            <button class="btn btn-ghost" data-onclick="checkVerificationStatus()">Check Status</button>
           </div>
-          <div class="field">
-            <label>Explorer API key</label>
-            <input id="ver_apikey" placeholder="Your Etherscan / Arbiscan API key" type="password" />
-          </div>
-          <div class="field">
-            <label>Compiler version</label>
-            <input id="ver_compiler" value="v0.8.24+commit.e11b9ed9" />
-          </div>
-          <div class="field">
-            <label>Optimization runs</label>
-            <input id="ver_runs" type="number" value="200" />
-          </div>
-          <div class="field">
-            <label>Constructor arguments (ABI-encoded hex, if any)</label>
-            <input id="ver_constructor" placeholder="0x... (leave empty if none)" />
-          </div>
+          <section class="bld-card" aria-labelledby="verLogH">
+            <h3 id="verLogH">Activity</h3>
+            <div class="console" id="verifyLog">
+              <div class="line"><span class="t">[boot]</span><span class="msg">Deploy a contract first, then submit verification.</span></div>
+            </div>
+          </section>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="verifyContract()">Submit Verification</button>
-          <button class="btn btn-ghost" data-onclick="checkVerificationStatus()">Check Status</button>
-        </div>
-        <div class="console" id="verifyLog" style="margin-top:14px;">
-          <div class="line"><span class="t">[boot]</span><span class="msg">Deploy a contract first, then submit verification.</span></div>
-        </div>
+        <aside class="bld-side" aria-label="Verification overview">
+          <section class="bld-card" aria-labelledby="verSumH"><h3 id="verSumH">Verification Overview</h3><dl class="bld-sum" id="verSummary"></dl></section>
+          <section class="bld-card" aria-labelledby="verProgH"><h3 id="verProgH">Verification Progress</h3><ol class="bld-prog" id="verProgress"></ol></section>
+        </aside>
       </div>
     </section>
 
     <!-- ============ 13 SHARE / EXPORT ============ -->
-    <section class="section" id="sec-share" style="display:none;">
+    <section class="section bld" id="sec-share" style="display:none;">
       <div class="section-head"><span class="n">13</span><h2>Share &amp; Export</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Share the current contract configuration as a URL or export deployment artifacts for use in Hardhat, Foundry, or CI pipelines.
-        </p>
-
-        <div class="section-head" style="margin-top:10px;"><span class="n">↗</span><h2 style="font-size:18px;">Share URL</h2><div class="rule"></div></div>
-        <div class="share-box">
-          <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;">Encodes the current contract config into the URL hash — share this link to reproduce the exact setup.</div>
-          <input id="shareUrl" readonly placeholder="Click 'Generate URL' to encode current config" />
-          <div class="btnrow" style="margin-top:10px;">
-            <button class="btn btn-primary" data-onclick="generateShareUrl()">Generate URL</button>
-            <button class="btn btn-ghost" data-onclick="copyShareUrl()">Copy URL</button>
-          </div>
+      <p class="bld-sub">Share the current contract configuration as a URL or export deployment artifacts for use in Hardhat, Foundry, or CI pipelines.</p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="shrLinkH">
+            <h3 id="shrLinkH"><span class="bld-n" aria-hidden="true">1</span>Share URL</h3>
+            <div class="share-box">
+              <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;">Encodes the current contract config into the URL hash — share this link to reproduce the exact setup.</div>
+              <label class="sr-only" for="shareUrl">Share link</label>
+              <input id="shareUrl" readonly placeholder="Click 'Generate URL' to encode current config" />
+              <div class="btnrow" style="margin-top:10px;">
+                <button class="btn btn-primary" data-onclick="generateShareUrl()">Generate URL</button>
+                <button class="btn btn-ghost" data-onclick="copyShareUrl()">Copy URL</button>
+              </div>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="shrExpH">
+            <h3 id="shrExpH"><span class="bld-n" aria-hidden="true">2</span>Export artifacts</h3>
+            <div class="field-grid" style="margin-bottom:14px;">
+              <div class="field">
+                <label for="export_format">Export format</label>
+                <select id="export_format">
+                  <option value="hardhat">Hardhat deploy script (JS)</option>
+                  <option value="forge">Foundry script (Solidity)</option>
+                  <option value="abi">ABI JSON only</option>
+                  <option value="full">Full artifact (ABI + bytecode + source)</option>
+                </select>
+              </div>
+            </div>
+            <p class="bld-note" id="exportInfo" data-kind="info"></p>
+            <div class="btnrow">
+              <button class="btn btn-primary" data-onclick="exportArtifact()">Download</button>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="shrQrH">
+            <h3 id="shrQrH"><span class="bld-n" aria-hidden="true">3</span>QR code</h3>
+            <p class="bld-note" data-kind="warn">The QR image is drawn by api.qrserver.com, an outside service: it receives the whole link, source code included. Nothing is sent until you press QR Code, and a link too long for a QR code is never sent.</p>
+            <div class="btnrow">
+              <button class="btn btn-ghost" data-onclick="generateQR()">QR Code</button>
+            </div>
+            <div id="qrBox" style="margin-top:16px;display:none;text-align:center;"></div>
+          </section>
         </div>
-
-        <div class="section-head" style="margin-top:22px;"><span class="n">⬇</span><h2 style="font-size:18px;">Export artifacts</h2><div class="rule"></div></div>
-        <div class="field-grid" style="margin-bottom:14px;">
-          <div class="field">
-            <label>Export format</label>
-            <select id="export_format">
-              <option value="hardhat">Hardhat deploy script (JS)</option>
-              <option value="forge">Foundry script (Solidity)</option>
-              <option value="abi">ABI JSON only</option>
-              <option value="full">Full artifact (ABI + bytecode + source)</option>
-            </select>
-          </div>
-        </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" data-onclick="exportArtifact()">Download</button>
-          <button class="btn btn-ghost" data-onclick="generateQR()">QR Code</button>
-        </div>
-        <div id="qrBox" style="margin-top:16px;display:none;text-align:center;"></div>
+        <aside class="bld-side" aria-label="Share and export overview">
+          <section class="bld-card" aria-labelledby="shrSumH"><h3 id="shrSumH">Share &amp; Export Overview</h3><dl class="bld-sum" id="shrSummary"></dl></section>
+          <section class="bld-card" aria-labelledby="shrNotesH"><h3 id="shrNotesH">Good to know</h3><ul class="bld-notes" id="shrNotes"></ul></section>
+        </aside>
       </div>
     </section>
 

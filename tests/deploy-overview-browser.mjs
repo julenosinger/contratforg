@@ -36,16 +36,28 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
   await page.evaluate(() => { document.querySelector('.nav-item[data-section="erc20"], .nav-item[data-section="simple"]').click(); });
   await page.evaluate(() => { renderSimpleForm('erc20'); genSimple('erc20'); document.querySelector('.nav-item[data-section="deploy"]').click(); }); await page.waitForTimeout(200);
   const rect = (sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right, w: b.width, h: b.height }; }, sel);
-  ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth <= 0), name + ': no sideways scroll');
-  const ov = await rect('#dplOverview'), panel = await rect('#sec-deploy > .form-panel'), sum = await rect('#dplSummary'), pr = await rect('#dplProgress');
-  ok(ov.b <= panel.t + 1, name + ': the overview sits above the original panel and does not overlap it', JSON.stringify({ ov, panel }));
-  if (name === 'phone') ok(pr.t >= sum.b - 1, name + ': one column, the progress under the summary', JSON.stringify({ sum, pr }));
-  else ok(pr.l >= sum.r - 1, name + ': summary and progress side by side', JSON.stringify({ sum, pr }));
-  ok(await page.evaluate(() => /ArcDollar\.sol/.test(document.getElementById('dplSummary').textContent) && document.querySelector('#dplProgress li').dataset.state === 'done'), name + ': it names the contract and the source stage is done');
+  const noSideways = async (what) => ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth <= 0), name + ': no sideways scroll ' + what);
+  await noSideways('with a contract');
+  const main = await rect('#sec-deploy .bld-main'), side = await rect('#sec-deploy .bld-side'), act = await rect('.dpl-actions'), btn = await rect('#btnCompileDeploy');
+  if (name === 'phone') ok(side.t >= main.b - 1 && btn.w >= vp.width * 0.8, name + ': one column; the primary button is full width', JSON.stringify({ main, side, btn }));
+  else {
+    ok(side.l >= main.r - 1 && side.t < main.t + 120, name + ': two columns', JSON.stringify({ main, side }));
+    if (name === 'desktop') { const r = main.w / (main.w + side.w); ok(r > 0.58 && r < 0.72, name + ': about 65/35', String(r)); }
+  }
+  ok(await page.evaluate(() => document.getElementById('dplHead').children.length >= 5 && /ArcDollar\.sol/.test(document.getElementById('dplHead').textContent)), name + ': the header strip shows the contract, maturity, compiler, mode and network');
+  ok(await page.evaluate(() => { const d = document.getElementById('dplSrcBox'); return d && !d.open; }), name + ': the source preview is closed until opened');
+  await page.click('#dplSrcSum'); await page.waitForTimeout(100);
+  const pre = await page.evaluate(() => { const p = document.querySelector('#dplSrcBox pre'); const b = p.getBoundingClientRect(); return { scrolls: p.scrollHeight > p.clientHeight, h: b.height, right: b.right, vw: window.innerWidth, body: document.documentElement.scrollWidth }; });
+  ok(pre.scrolls && pre.h <= 280 && pre.right <= pre.vw + 0.5 && pre.body <= pre.vw, name + ': the opened preview scrolls inside its card and does not widen the page', JSON.stringify(pre));
   ok(await page.evaluate(() => [...document.querySelectorAll('#sec-deploy button, #sec-deploy select, #sec-deploy input')].filter((e) => e.offsetParent).every((e) => e.getBoundingClientRect().right <= window.innerWidth + 0.5)), name + ': every control of the page is inside the screen');
+  ok(await page.evaluate(() => { const c = document.getElementById('deployConsole'); return getComputedStyle(c).overflowY !== 'visible' && c.getBoundingClientRect().height <= 260; }), name + ': the activity log has its own height and scroll');
   ok(await page.evaluate(() => !document.getElementById('btnCompileDeploy').disabled && /Compile and deploy/.test(document.getElementById('btnCompileDeploy').textContent)), name + ': the original button is there and enabled for a valid contract');
-  await page.evaluate(() => { activeNetwork = 'ethereum'; updateSideNet(); }); await page.waitForTimeout(150);
-  ok(await page.evaluate(() => /Mainnet: real funds/.test(document.getElementById('dplSummary').textContent) && getComputedStyle(document.getElementById('mainnetDeployBanner')).display !== 'none'), name + ': on a mainnet the overview warns and the page\'s own banner shows');
+  await page.evaluate(() => { setMultichainMode('multi'); }); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => document.querySelectorAll('#multiDeployPanel .md-chip').length === 16 && document.querySelectorAll('#multiDeployPanel .md-chip.on').length === 0 && /none selected/.test(document.getElementById('dplNetCount').textContent)), name + ': Multi-deploy shows 16 networks and none is selected for you');
+  await noSideways('with the Multi-deploy panel');
+  ok(await page.evaluate(() => [...document.querySelectorAll('#multiDeployPanel .md-chip')].every((c) => c.getBoundingClientRect().right <= window.innerWidth + 0.5)), name + ': every network chip is inside the screen');
+  await page.evaluate(() => { setMultichainMode('single'); activeNetwork = 'ethereum'; updateSideNet(); }); await page.waitForTimeout(150);
+  ok(await page.evaluate(() => /Mainnet: real funds/.test(document.getElementById('dplSummary').textContent) && getComputedStyle(document.getElementById('mainnetDeployBanner')).display !== 'none' && /LIVE/.test(document.getElementById('dplHead').textContent)), name + ': on a mainnet the overview and the page\'s own banner both warn');
   if (process.env.SHOTS) await page.screenshot({ path: path.join(process.env.SHOTS, 'deploy-' + name + '.png'), fullPage: true });
   ok(problems.length === 0, name + ': no console error or CSP violation', problems.join(' | ').slice(0, 300));
   await ctx.close();

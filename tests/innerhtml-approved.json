@@ -59,13 +59,6 @@
   },
   {
    "file": "app.js",
-   "hash": "7eb44222ed67",
-   "category": "E",
-   "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
-   "excerpt": "` <span class=\"hnet\">${escapeHtml(entry.network||'unknown')}</span> <span class=\"hname\">${escapeHtml(entry.nam"
-  },
-  {
-   "file": "app.js",
    "hash": "54bf714e09fb",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
@@ -203,13 +196,6 @@
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<div class=\"mc-title\">Constructor arguments <span>for '+escapeHtml(net.label)+'</span></div>' + rows.map((a,i"
-  },
-  {
-   "file": "multichain.js",
-   "hash": "8c4b1e954eec",
-   "category": "C",
-   "why": "Interpolates only tables of the program itself (NETWORKS, the template, mode and maturity tables): no outside data reaches it.",
-   "excerpt": "'<div class=\"mc-label\">Multichain mode</div><div class=\"mc-seg\" role=\"group\" aria-label=\"Multichain mode\">' + "
   },
   {
    "file": "multideploy.js",
