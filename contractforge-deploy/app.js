@@ -2184,13 +2184,16 @@ CFBuilder.register(TRE_CONFIG);
    SECTION 04 — VAULT (ERC-4626 minimal)
    ====================================================================== */
 /* Parses a human-readable amount ("500" or "1.5") into the digits and fractional scale needed to express it in the
-   token's base units as `digits * 10**decimals() / 10**scale`. Throws for a non-numeric amount. Leading zeros are
-   stripped (Solidity rejects 0-prefixed integer literals as octal). */
+   token's base units as `digits * 10**decimals() / 10**scale`. Throws for a non-numeric amount. Normalizes the value:
+   leading integer zeros and insignificant trailing fractional zeros are stripped (so "000500.250000" -> digits "50025",
+   scale 2), which keeps Solidity literals valid (no 0-prefix octal) and minimises the fractional scale without changing
+   the mathematical value. Meaningful fractional zeros are preserved. */
 function scaleAmount(amount){
   const m = /^(\d+)(?:\.(\d+))?$/.exec(String(amount).trim());
   if(!m) throw new Error('portabilize: "' + amount + '" is not a number');
-  const scale = (m[2] || '').length;
-  const digits = (m[1] + (m[2] || '')).replace(/^0+/, '');
+  const frac = (m[2] || '').replace(/0+$/, '');
+  const scale = frac.length;
+  const digits = (m[1] + frac).replace(/^0+/, '');
   return { digits, scale, isZero: digits === '' };
 }
 

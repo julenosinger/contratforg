@@ -25,6 +25,13 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ok(JSON.stringify(s('0')) === JSON.stringify({ digits: '', scale: 0, isZero: true }), 'scaleAmount: zero');
   ok(JSON.stringify(s('0.000001')) === JSON.stringify({ digits: '1', scale: 6, isZero: false }), 'scaleAmount: leading zeros are stripped (0.000001 -> digits "1", scale 6)');
   ok(JSON.stringify(s('0.0000001')) === JSON.stringify({ digits: '1', scale: 7, isZero: false }), 'scaleAmount: seven fractional digits (0.0000001 -> digits "1", scale 7)');
+  // trailing fractional zeros are normalised away without changing the value
+  ok(JSON.stringify(s('1.000000')) === JSON.stringify({ digits: '1', scale: 0, isZero: false }), 'scaleAmount: 1.000000 normalises to 1');
+  ok(JSON.stringify(s('500.250000')) === JSON.stringify({ digits: '50025', scale: 2, isZero: false }), 'scaleAmount: 500.250000 normalises to 500.25');
+  ok(JSON.stringify(s('0.000001000')) === JSON.stringify({ digits: '1', scale: 6, isZero: false }), 'scaleAmount: 0.000001000 normalises to 0.000001');
+  ok(JSON.stringify(s('000500.2500')) === JSON.stringify({ digits: '50025', scale: 2, isZero: false }), 'scaleAmount: 000500.2500 normalises to 500.25');
+  ok(JSON.stringify(s('0.000000')) === JSON.stringify({ digits: '', scale: 0, isZero: true }), 'scaleAmount: 0.000000 normalises to 0');
+  ok(JSON.stringify(s('1.0000001')) === JSON.stringify({ digits: '10000001', scale: 7, isZero: false }), 'scaleAmount: meaningful fractional digits are preserved (1.0000001)');
   ok(/is not a number/.test(s('1e3').err || ''), 'scaleAmount: rejects a non-number', JSON.stringify(s('1e3')));
   ok(/is not a number/.test(s('abc').err || ''), 'scaleAmount: rejects text');
 }

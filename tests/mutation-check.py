@@ -110,6 +110,9 @@ M=[
  # ---- phase 11.2.2: exact decimal representation, validation before arithmetic
  ('vault: a nonrepresentable cap silently truncates again','contractforge-deploy/app.js',"    lines.push(`if (_vltDec >= ${s}) { ${name} = ${d} * 10**(_vltDec - ${s}); } else { require(${d} % 10**(${s} - _vltDec) == 0, \"deposit cap is not representable\"); ${name} = ${d} / 10**(${s} - _vltDec); }`);","    lines.push(`if (_vltDec >= ${s}) { ${name} = ${d} * 10**(_vltDec - ${s}); } else { ${name} = ${d} / 10**(${s} - _vltDec); }`);",'vault-decimals.mjs'),
  ('vault: the decimals are not validated before the exponentiation','contractforge-deploy/app.js',"    'require(_vltDec <= 38, \"asset decimals out of range\");'","    '// decimals unchecked'",'vault-decimals.mjs'),
+ # ---- phase 11.2.3: decimal normalization, nonzero-cap guard
+ ('vault: insignificant trailing zeros are preserved again','contractforge-deploy/app.js',"  const frac = (m[2] || '').replace(/0+$/, '');","  const frac = m[2] || '';",'vault-decimals.mjs'),
+ ('vault: the nonzero-cap guard is removed','contractforge-deploy/app.js',"  lines.push(`require(${name} > 0, \"deposit cap is not representable\");`);","  // no nonzero guard",'vault-decimals.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
