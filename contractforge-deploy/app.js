@@ -2194,6 +2194,30 @@ function scaleAmount(amount){
   return { digits, scale, isZero: digits === '' };
 }
 
+/* Solidity lines that validate the asset decimals and compute `name` in base units from `capS` (digits/scale), with
+   exact-representation and overflow-safe ordering. Returns an array of lines (no leading indentation); callers indent
+   them. `tokenExpr` is the token expression ("asset" in single mode, "IERC20(asset_)" in the portable modes). For a
+   zero cap (unlimited) it returns an empty array. The order matters: decimals are validated BEFORE any exponentiation,
+   and a positive cap is computed only after validation, so a sub-unit or nonrepresentable cap reverts instead of
+   silently truncating. */
+function scaledCtorLines(capS, name, tokenExpr){
+  if(capS.isZero) return [];
+  const d = capS.digits, s = capS.scale;
+  const lines = [
+    `uint8 _vltDec = ${tokenExpr}.decimals();`,
+    'require(_vltDec <= 38, "asset decimals out of range");'
+  ];
+  if(s === 0){
+    lines.push(`${name} = ${d} * 10**_vltDec;`);
+  } else {
+    // scale <= decimals: always exact (multiply). scale > decimals: divide only when the excess fractional digits are
+    // all zero (no silent floor/ceiling), keeping the intermediate value inside uint256.
+    lines.push(`if (_vltDec >= ${s}) { ${name} = ${d} * 10**(_vltDec - ${s}); } else { require(${d} % 10**(${s} - _vltDec) == 0, "deposit cap is not representable"); ${name} = ${d} / 10**(${s} - _vltDec); }`);
+  }
+  lines.push(`require(${name} > 0, "deposit cap is not representable");`);
+  return lines;
+}
+
 function genVault(){
   const net=NETWORKS[activeNetwork];
   const name=(document.getElementById('vault_name').value||'ArcYieldVault').replace(/[^A-Za-z0-9]/g,'');
@@ -2205,14 +2229,14 @@ function genVault(){
   const cap=document.getElementById('vault_cap').value||'0';
   // The cap is human-readable asset units, scaled to base units by the asset's own decimals at deployment (never a fixed 6).
   const capS = scaleAmount(cap);
-  const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**uint256(asset.decimals())' + (capS.scale ? ' / 10**' + capS.scale : ''));
-  // A positive cap must never silently truncate to zero (which the vault reads as "unlimited"). Guard the constructor:
-  // reject absurd asset decimals (so 10**decimals() cannot overflow) and reject a positive cap that resolves to zero base
-  // units. An explicit zero cap (unlimited) needs no guard. In the portable modes the guard is added by portabilize (with
-  // the constructor asset), so the single-mode guard is only emitted here for the single mode.
-  const capGuardLines = (capS.isZero || (typeof isPortable === 'function' && isPortable()))
+  // A positive cap is validated and computed in the constructor (not in a state-variable initializer), so the asset
+  // decimals are checked before any exponentiation and a nonrepresentable cap reverts instead of silently truncating.
+  const capLines = scaledCtorLines(capS, 'depositCap', 'asset');
+  // In the portable modes the guard is added by portabilize (with the constructor asset), so the single-mode lines are
+  // only emitted here for the single mode.
+  const capGuardLines = (capLines.length === 0 || (typeof isPortable === 'function' && isPortable()))
     ? ''
-    : '        require(asset.decimals() <= 38, "asset decimals out of range");\n        require(depositCap > 0, "deposit cap is not representable");\n';
+    : capLines.map((l) => '        ' + l).join('\n') + '\n';
 
   if(!/^\d+$/.test(String(perf).trim()) || Number(perf) > 9999){
     alert('Performance fee must be a whole number of basis points from 0 to 9999 (1000 = 10%).');
@@ -2242,7 +2266,7 @@ contract ${name} {
 
     IERC20 public asset = IERC20(${asset});
     uint256 public totalSupply;      // total shares issued
-    uint256 public depositCap = ${capExpr}; // 0 = unlimited (scaled by the asset's own decimals)
+    uint256 public depositCap; // 0 = unlimited (validated and computed in the constructor)
     uint256 public constant PERF_FEE_BPS = ${perf};
     /// @dev Virtual shares: 1e12 shares per smallest asset unit when the vault is empty (a fixed precision offset, independent of the asset's decimals).
     uint256 private constant SHARE_OFFSET = 1e12;

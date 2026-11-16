@@ -103,20 +103,17 @@ function portabilize(code, specs){
         args.push({ param: sp.param, type:'address', allowZero: !!sp.allowZero, hint: sp.hint || 'static', value: sp.argValue !== undefined ? sp.argValue : sp.value, userSet: !!sp.userSet, genNetwork: activeNetwork, optional: !!sp.optional });
       }
     } else if(sp.kind === 'scaled'){
-      const re = new RegExp('^([ \\t]*)uint256(\\s+public)\\s+' + sp.name + '\\s*=\\s*[^;]*;[^\\n]*', 'm');
+      const re = new RegExp('^([ \\t]*)uint256(\\s+public)\\s+' + sp.name + '(\\s*=\\s*[^;]*)?;[^\\n]*', 'm');
       if(!re.test(code)) throw new Error('portabilize: declaration of "' + sp.name + '" not found');
       code = code.replace(re, (m, ind, pub) => `${ind}uint256${pub} ${sp.name};`);
       const s = scaleAmount(sp.expr);
       if(s.isZero) continue; // zero stays zero, no token call needed
       needsDecimals = true;
       if(sp.requireNonZero){
-        // A positive cap must never silently truncate to zero: bound the decimals first (so 10**decimals() cannot
-        // overflow) and then reject a positive value that resolves to zero base units.
-        assigns.push(`require(IERC20(${sp.tokenParam}).decimals() <= 38, "asset decimals out of range");`);
-      }
-      assigns.push(`${sp.name} = ${s.digits} * 10**uint256(IERC20(${sp.tokenParam}).decimals())${s.scale ? ' / 10**' + s.scale : ''};`);
-      if(sp.requireNonZero){
-        assigns.push(`require(${sp.name} > 0, "deposit cap is not representable");`);
+        // Exact representation + validation before arithmetic (the vault deposit cap).
+        assigns.push(...scaledCtorLines(s, sp.name, 'IERC20(' + sp.tokenParam + ')'));
+      } else {
+        assigns.push(`${sp.name} = ${s.digits} * 10**uint256(IERC20(${sp.tokenParam}).decimals())${s.scale ? ' / 10**' + s.scale : ''};`);
       }
     } else if(sp.kind === 'uint'){
       const re = new RegExp('^([ \\t]*)uint256\\s+public\\s+constant\\s+' + sp.name + '(\\s*)=\\s*' + escRe(sp.rhs) + ';', 'm');
