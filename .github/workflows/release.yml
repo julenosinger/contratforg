@@ -1,0 +1,43 @@
+# Pushing a tag v* attaches the Cloudflare zip and its checksum to a GitHub release.
+# Nothing is built from untrusted input and no secret is used: the only credential is the workflow's own
+# GITHUB_TOKEN, and only the release job may write.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# bash with pipefail, so 'cmd | tee log' fails when cmd fails
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: '24.22.1'
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Build the zip
+        run: node scripts/build-zip.mjs
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/contractforge-cloudflare.zip dist/contractforge-cloudflare.zip.sha256 \
+            --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+            --notes "Cloudflare Pages upload (index.html at the root, Pages Functions under functions/). Verify with: sha256sum -c contractforge-cloudflare.zip.sha256. ContractForge generates contracts that are NOT audited by a third party; see docs/mainnet-gate.md."

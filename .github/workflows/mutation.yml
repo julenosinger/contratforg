@@ -1,0 +1,38 @@
+# Switches the project's guards off one at a time and expects a test to fail each time.
+# The script edits source files and restores them with git checkout, so it does not run on every push.
+name: Mutation check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 1'   # Mondays 05:23 UTC
+
+permissions:
+  contents: read
+
+# bash with pipefail, so 'cmd | tee log' fails when cmd fails
+defaults:
+  run:
+    shell: bash
+
+env:
+  NODE_VERSION: '24.22.1'
+
+jobs:
+  mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+      - name: Mutation check (fails if any mutation is not detected)
+        run: python3 tests/mutation-check.py
