@@ -242,5 +242,18 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   eq(ev('wizardState.subtype'), '', 'wizard: changing the goal clears the contract (before 9.6 it survived and was routed to anyway)');
 }
 
+/* 13. Compile & Deploy particularities found by the Phase 9.7 audit (the overview may read them, it must not change them) */
+{
+  const app = loadApp(); const { ev, w } = app; const d = w.document; w.alert = () => {};
+  eq([...d.querySelectorAll('#sec-deploy .btnrow button')].map((b) => b.getAttribute('data-onclick')), ['compileAndDeploy()', 'downloadSource()', 'copySource()'], 'deploy: the three action handlers');
+  ok(ev("typeof compileAndDeploy === 'function' && typeof compilePending === 'function' && typeof compileSource === 'function' && typeof deployCompiled === 'function' && typeof matGate === 'function' && typeof mainnetDeployConfirm === 'function'"), 'deploy: the compile, deploy and gate functions exist');
+  ok(/matIsApproved\(compiled\.sourceHash, netKey\)/.test(ev('deployCompiled.toString()')) && /Mainnet deploy blocked/.test(ev('deployCompiled.toString()')), 'deploy: deployCompiled itself refuses a mainnet that was not confirmed (the last line of defence)');
+  ok(/reqBlockReason\(\)/.test(ev('compileAndDeploy.toString()')) && /matGate\(/.test(ev('compileAndDeploy.toString()')), 'deploy: compileAndDeploy checks the draft reason and the maturity gate before compiling');
+  ok(/uiAddDeployResult/.test(ev('deployCompiled.toString()')) && /deployed\(\)/.test(ev('deployCompiled.toString()')), 'deploy: a result is recorded only after the transaction is confirmed');
+  eq(ev('uiDeployResults.length'), 0, 'deploy: no result before a deployment');
+  ev("window.__c = 0; compileSource = async () => { window.__c++; return {}; }"); ev("pendingSource = { name: '', code: '', template: '' }"); ev('compileAndDeploy()');
+  eq(ev('window.__c'), 0, 'deploy: with no contract, compileAndDeploy never reaches the compiler');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -5175,6 +5175,105 @@ function wzRender(){
   CFBuilder.addView('wizard', wzRender);
 })();
 
+/* ---- The Compile & Deploy overview (Phase 9.7). The deploy page itself (compileAndDeploy, compilePending, deployCompiled, the constructor panel,
+   Multi-deploy, the results card, the activity console, the mainnet banner and every gate) is unchanged and keeps its place. This card only
+   reads: pendingSource, reqBlockReason(), the constructor inputs, the wallet, the maturity approvals, the multi-deploy selection and the results
+   the page itself records. It never compiles, asks the wallet or deploys, and it cannot claim a deployment that the page did not confirm. ---- */
+function dplRead(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
+  const code = ps.code || '';
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const sameDeployer = (ps.notDeployer || []).find(x => typeof reqAddressProblem === 'function' && reqAddressProblem(x.value, { notDeployer: true }) === 'cannot be the wallet that deploys the contract');
+  const args = (typeof pendingCtorArgs !== 'undefined' ? pendingCtorArgs : []).map((a, i) => {
+    const el = document.getElementById('ctor_arg_' + i), val = el ? String(el.value).trim() : '';
+    let problem = '';
+    if(!val && !a.optional) problem = a.param.replace(/_$/, '') + ' needs a value';
+    else if(val && a.type === 'address' && typeof reqAddressProblem === 'function'){ const p = reqAddressProblem(val, { allowZero: !!a.allowZero }); if(p) problem = a.param.replace(/_$/, '') + ' ' + p; }
+    return { a, val, problem };
+  });
+  const sel = (typeof mdState !== 'undefined') ? [...mdState.selected].filter(k => NETWORKS[k]) : [];
+  return {
+    ps, code, name: ps.name || '', template: ps.template || '', net,
+    hash: code && typeof matHash === 'function' ? matHash(code) : '',
+    level: code && typeof matInfo === 'function' ? matInfo(ps.template).level : '',
+    block: code && typeof reqBlockReason === 'function' ? reqBlockReason() : '',
+    sameDeployer: sameDeployer ? sameDeployer.label : '',
+    version: (document.getElementById('solcVersion') || {}).value || '',
+    dmode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '',
+    mdOn: typeof mdVisible === 'function' && mdVisible(), sel,
+    args, argProblem: (args.find(x => x.problem) || {}).problem || '',
+    wallet: (typeof signer !== 'undefined' && signer && typeof account !== 'undefined' && account) ? account : '',
+    results: (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []).filter(r => r && r.name === ps.name && ps.name)
+  };
+}
+function dplRender(){
+  const list = document.getElementById('dplSummary'), prog = document.getElementById('dplProgress');
+  if(!list || !prog) return;
+  const v = dplRead();
+  list.textContent = ''; prog.textContent = '';
+  const row = (label, value, state, flag, mono) => {
+    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
+    r.appendChild(swbEl('dt', '', label));
+    const dd = swbEl('dd', mono ? 'mono' : '', value);
+    if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag));
+    r.appendChild(dd); list.appendChild(r);
+  };
+  const net = v.net, isMain = !!(net && net.isMainnet);
+  row('Contract', v.code ? v.name + '.sol' : 'None generated yet', v.code ? 'ok' : 'missing', v.code ? (v.template || '') + (v.level ? ' · ' + v.level : '') : 'Generate one in a builder first');
+  if(v.code){
+    if(v.block) row('Source', 'Draft', 'bad', v.block);
+    else if(v.sameDeployer) row('Source', 'Blocked', 'bad', v.sameDeployer + ' cannot be the wallet that deploys the contract');
+    else row('Source', 'Ready to compile', 'ok');
+  }
+  row('Compiler', v.version ? 'solc ' + v.version : 'Unknown', v.version ? 'ok' : 'bad', 'Compiled in the browser');
+  CFBuilder.networkRow(row, net);
+  row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
+  if(v.mdOn){
+    if(!v.sel.length) row('Multi-deploy', 'No network selected', 'missing', 'Pick the networks in the panel below');
+    else { const mains = v.sel.filter(k => NETWORKS[k].isMainnet).length; row('Multi-deploy', v.sel.length + (v.sel.length === 1 ? ' network' : ' networks'), 'ok', mains ? mains + ' mainnet' + (mains > 1 ? 's' : '') + ': each asks for the maturity confirmation' : 'Testnets only'); }
+  }
+  if(v.code){
+    if(!v.args.length) row('Constructor', 'No arguments', 'ok');
+    else row('Constructor', v.args.length + (v.args.length === 1 ? ' argument' : ' arguments'), v.argProblem ? 'bad' : 'ok', v.argProblem || 'All filled');
+  }
+  row('Wallet', v.wallet || 'Not connected', v.wallet ? 'ok' : 'missing', v.wallet ? '' : 'Connect the wallet to deploy', !!v.wallet);
+  if(v.code && net){
+    if(isMain){ const approved = v.hash && typeof matIsApproved === 'function' && matIsApproved(v.hash, activeNetwork); row('Maturity check', approved ? 'Confirmed for this source' : 'Not confirmed yet', approved ? 'ok' : 'missing', approved ? '' : 'Asked when you press Compile and deploy'); }
+    else row('Maturity check', 'Not required on a testnet', 'ok');
+  }
+  const step = (title, state, text) => {
+    const li = swbEl('li'); li.setAttribute('data-state', state);
+    const mark = swbEl('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'draft' || state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
+    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'bld-t', text));
+    li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
+  };
+  const blocked = !!(v.block || v.sameDeployer);
+  if(!v.code) step('Source', 'todo', 'No contract yet. Generate one in a builder.');
+  else if(blocked) step('Source', 'draft', 'The source cannot be deployed yet: ' + (v.block || (v.sameDeployer + ' cannot be the wallet that deploys it')));
+  else step('Source', 'done', v.name + '.sol is ready to compile.');
+  if(!v.code || blocked) step('Ready to deploy', 'locked', 'Available once the source is ready.');
+  else {
+    const miss = []; if(!v.wallet) miss.push('connect the wallet'); if(v.argProblem) miss.push(v.argProblem);
+    if(miss.length) step('Ready to deploy', 'todo', 'Still needed: ' + miss.join('; ') + '.');
+    else step('Ready to deploy', 'done', 'Wallet connected' + (v.args.length ? ' and constructor values filled' : '') + '.' + (isMain ? ' The maturity confirmation is asked when you press Compile and deploy.' : ''));
+  }
+  if(v.results.length){
+    const r = v.results[0], rn = NETWORKS[r.network] || { label: r.network };
+    step('Deployed', 'done', v.results.length === 1 ? 'Confirmed on ' + rn.label + ' at ' + r.address + '.' : v.results.length + ' deployments confirmed, the first on ' + rn.label + ' at ' + r.address + '.');
+  } else step('Deployed', v.code && !blocked ? 'todo' : 'locked', 'Nothing deployed yet. Compile and deploy compiles, asks the wallet and waits for the confirmation.');
+}
+(function dplInit(){
+  if(typeof document === 'undefined') return;
+  const sec = document.getElementById('sec-deploy'); if(!sec) return;
+  let queued = false; const later = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; dplRender(); }); };
+  const panel = sec.querySelector(':scope > .form-panel');
+  if(panel) new MutationObserver(later).observe(panel, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'disabled', 'value'] });   // the page's own panels, console and results
+  new MutationObserver(later).observe(sec, { attributes: true, attributeFilter: ['style'] });                                                     // the tab was opened
+  ['walletStatus', 'sidenet'].forEach(id => { const el = document.getElementById(id); if(el) new MutationObserver(later).observe(el, { subtree: true, childList: true, characterData: true }); });
+  const cp = document.getElementById('ctorArgsPanel'); if(cp) cp.addEventListener('input', later);
+  CFBuilder.addView('deploy', dplRender);
+})();
+
 /* ======================================================================
    AI CHAT (section 15)
    ====================================================================== */

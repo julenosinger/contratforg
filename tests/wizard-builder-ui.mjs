@@ -50,7 +50,7 @@ function fresh(opts) {
   eq([...d.getElementById('sec-wizard').outerHTML.matchAll(/\s(on[a-z]+)=\"[^\"]*\"/gi)].map((m) => m[0].trim()), [], 'csp: no inline handler attribute');
   eq(a.w.getComputedStyle(d.querySelector('#sec-wizard .bld-grid')).display, 'grid', 'computed: the grid is a grid');
   eq(a.pageErrors.length, 0, 'no page errors on load');
-  eq([JSON.parse(a.ev('JSON.stringify(CFBuilder.keys())')).includes('wizard'), JSON.parse(a.ev('JSON.stringify(CFBuilder.viewKeys())'))], [false, ['wizard']], 'engine: the wizard is a view, not a builder with a code panel');
+  eq([JSON.parse(a.ev('JSON.stringify(CFBuilder.keys())')).includes('wizard'), JSON.parse(a.ev('JSON.stringify(CFBuilder.viewKeys())')).includes('wizard')], [false, true], 'engine: the wizard is a view, not a builder with a code panel');
 }
 
 /* 2. the flow and what the overview says at each step */

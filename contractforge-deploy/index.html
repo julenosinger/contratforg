@@ -599,6 +599,23 @@
     <!-- ============ 07 DEPLOY CONSOLE ============ -->
     <section class="section" id="sec-deploy" style="display:none;">
       <div class="section-head"><span class="n">07</span><h2>Compile &amp; Deploy</h2><div class="rule"></div></div>
+      <div class="bld dpl" id="dplOverview">
+        <p class="bld-sub">Review what is about to be deployed, then press Compile and deploy below. This summary only reads the page: nothing is compiled, signed or sent until you press the button.</p>
+        <div class="bld-grid">
+          <div class="bld-main">
+            <section class="bld-card" aria-labelledby="dplSumH">
+              <h3 id="dplSumH">Deployment Summary</h3>
+              <dl class="bld-sum" id="dplSummary"></dl>
+            </section>
+          </div>
+          <aside class="bld-side" aria-label="Deployment progress">
+            <section class="bld-card" aria-labelledby="dplProgH">
+              <h3 id="dplProgH">Deployment Progress</h3>
+              <ol class="bld-prog" id="dplProgress"></ol>
+            </section>
+          </aside>
+        </div>
+      </div>
       <div class="form-panel">
         <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
           The currently generated contract is compiled in the browser via <b style="color:var(--gold);">solc</b> (loaded on demand) and deployed using the connected wallet (MetaMask / injected EVM). Nothing is simulated: the bytecode comes from the source shown above and the transaction is signed by your wallet on the selected network.
