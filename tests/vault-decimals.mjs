@@ -29,16 +29,16 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ok(/is not a number/.test(s('abc').err || ''), 'scaleAmount: rejects text');
 }
 
-/* ---- 2. the single-mode deposit cap is scaled by the asset's own decimals (never a fixed 6) ---- */
+/* ---- 2. the single-mode deposit cap is computed in the constructor from the asset's own decimals ---- */
 {
   ev("activeNetwork = 'arc'; updateSideNet(); setMultichainMode('single')");
   d.getElementById('vault_asset').value = '';
-  const capLine = (cap) => { d.getElementById('vault_cap').value = cap; ev('genVault()'); return ev('pendingSource.code').split('\n').find((l) => /depositCap/.test(l)); };
-  ok(/depositCap = 0;/.test(capLine('0')), 'single: cap 0 stays 0 (unlimited)');
-  ok(/depositCap = 500 \* 10\*\*uint256\(asset\.decimals\(\)\);/.test(capLine('500')), 'single: a whole cap uses asset.decimals()');
-  ok(/depositCap = 15 \* 10\*\*uint256\(asset\.decimals\(\)\) \/ 10\*\*1;/.test(capLine('1.5')), 'single: a fractional cap is scaled exactly (no 1.5 * 10**6)');
-  ok(/depositCap = 100025 \* 10\*\*uint256\(asset\.decimals\(\)\) \/ 10\*\*2;/.test(capLine('1000.25')), 'single: two fractional digits are preserved');
-  ok(!/\* 10\*\*6/.test(capLine('500')), 'single: no hardcoded 10**6 remains');
+  const gen = (cap) => { d.getElementById('vault_cap').value = cap; ev('genVault()'); return ev('pendingSource.code'); };
+  ok(/uint256 public depositCap;/.test(gen('0')), 'single: the cap is a constructor-assigned state variable (no initializer)');
+  ok(/depositCap = 500 \* 10\*\*_vltDec;/.test(gen('500')), 'single: a whole cap is 500 * 10**_vltDec');
+  ok(/depositCap = 15 \* 10\*\*\(_vltDec - 1\);/.test(gen('1.5')), 'single: a fractional cap uses the exact (scale <= decimals) branch');
+  ok(/depositCap = 100025 \* 10\*\*\(_vltDec - 2\);/.test(gen('1000.25')), 'single: two fractional digits are preserved');
+  ok(!/\* 10\*\*6/.test(gen('500')), 'single: no hardcoded 10**6 remains');
 }
 
 /* ---- 3. the generated single-mode Solidity compiles for several cap shapes ---- */
@@ -57,7 +57,7 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ev("setMultichainMode('portable')");
   d.getElementById('vault_cap').value = '500'; d.getElementById('vault_asset').value = ''; ev('genVault()');
   const code = ev('pendingSource.code');
-  ok(/depositCap = 500 \* 10\*\*uint256\(IERC20\(asset_\)\.decimals\(\)\);/.test(code), 'portable: the cap is scaled by the constructor asset');
+  ok(/uint8 _vltDec = IERC20\(asset_\)\.decimals\(\);/.test(code) && /depositCap = 500 \* 10\*\*_vltDec;/.test(code), 'portable: the cap is computed from the constructor asset decimals');
   ok(ev('pendingCtorArgs.map((a) => a.param).join()') === 'asset_', 'portable: the asset is a constructor argument');
   ok(compile(code).length === 0, 'portable: the generated Solidity compiles');
 }
@@ -74,28 +74,32 @@ const app = loadApp(); const { ev, w } = app; const d = w.document;
   ok(/assetsOut = grossAssets - perfFee/.test(code), 'accounting: the performance fee is taken from the gross, never from the principal');
 }
 
-/* ---- 6. positive-cap safety: a cap that truncates to zero is rejected, never treated as unlimited ---- */
+/* ---- 6. positive-cap safety: exact representation, validation before arithmetic, never silent truncation ---- */
 {
   ev("setMultichainMode('single')"); d.getElementById('vault_asset').value = '';
   // zero = unlimited: no guard emitted
   d.getElementById('vault_cap').value = '0'; ev('genVault()');
   ok(!/deposit cap is not representable/.test(ev('pendingSource.code')), 'cap: an explicit zero cap (unlimited) emits no guard');
-  // positive representable: guard present and compiles
+  // positive representable: decimals resolved and bounded before any exponentiation
   d.getElementById('vault_cap').value = '500'; ev('genVault()');
   const c500 = ev('pendingSource.code');
-  ok(/require\(depositCap > 0, "deposit cap is not representable"\)/.test(c500), 'cap: a positive cap emits the not-representable guard');
-  ok(/require\(asset\.decimals\(\) <= 38, "asset decimals out of range"\)/.test(c500), 'cap: a positive cap bounds the asset decimals');
+  ok(/uint8 _vltDec = asset\.decimals\(\);/.test(c500), 'cap: the decimals are resolved first');
+  ok(/require\(_vltDec <= 38, "asset decimals out of range"\);/.test(c500), 'cap: the decimals are bounded before any exponentiation');
+  ok(/require\(depositCap > 0, "deposit cap is not representable"\);/.test(c500), 'cap: a positive cap emits the not-representable guard');
   ok(compile(c500).length === 0, 'cap: the guarded single vault compiles');
-  // positive sub-unit cap: written exactly, the require guards it at runtime
+  // nonrepresentable fractional precision is rejected exactly (no floor/ceiling)
+  d.getElementById('vault_cap').value = '1.0000001'; ev('genVault()');
+  const cN = ev('pendingSource.code');
+  ok(/require\(10000001 % 10\*\*\(7 - _vltDec\) == 0, "deposit cap is not representable"\);/.test(cN), 'cap: excess fractional precision is rejected by the exact-representation check');
+  ok(compile(cN).length === 0, 'cap: the nonrepresentable-cap vault compiles (the require guards it at runtime)');
+  // sub-unit cap: rejected by the same check
   d.getElementById('vault_cap').value = '0.0000001'; ev('genVault()');
   const cSub = ev('pendingSource.code');
-  ok(/depositCap = 1 \* 10\*\*uint256\(asset\.decimals\(\)\) \/ 10\*\*7/.test(cSub), 'cap: a sub-unit cap is written exactly (1 * 10**decimals() / 10**7)');
-  ok(/require\(depositCap > 0, "deposit cap is not representable"\)/.test(cSub), 'cap: the sub-unit cap still carries the guard');
-  ok(compile(cSub).length === 0, 'cap: the sub-unit cap compiles (the require guards it at runtime)');
-  // portable: the same guard, using the constructor asset
+  ok(/require\(1 % 10\*\*\(7 - _vltDec\) == 0, "deposit cap is not representable"\);/.test(cSub), 'cap: a sub-unit cap is rejected by the exact-representation check');
+  // portable: same guard, constructor asset
   ev("setMultichainMode('portable')"); d.getElementById('vault_cap').value = '500'; ev('genVault()');
   const p = ev('pendingSource.code');
-  ok(/require\(IERC20\(asset_\)\.decimals\(\) <= 38, "asset decimals out of range"\)/.test(p) && /require\(depositCap > 0, "deposit cap is not representable"\)/.test(p), 'cap: the portable vault emits the same guard for the constructor asset');
+  ok(/uint8 _vltDec = IERC20\(asset_\)\.decimals\(\);/.test(p) && /require\(depositCap > 0, "deposit cap is not representable"\);/.test(p), 'cap: the portable vault emits the same guard for the constructor asset');
   ok(compile(p).length === 0, 'cap: the guarded portable vault compiles');
 }
 

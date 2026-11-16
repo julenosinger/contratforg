@@ -127,12 +127,12 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   eq([a.rows()['Deposit cap'].text, d.getElementById('vltCapNote').textContent], ['Unlimited', 'Unlimited: no deposit cap.'], 'cap: 0 is unlimited');
   a.set('vault_cap', '500'); eq([a.rows()['Deposit cap'].text, a.rows()['Deposit cap'].flag], ['500 tokens', 'Scaled by the asset decimals at deploy'], 'cap (single): scaled by the asset decimals');
   ok(/decimals\(\) when the constructor runs/.test(d.getElementById('vltCapNote').textContent), 'cap (single): says how it is scaled');
-  await a.gen(); ok(/depositCap = 500 \* 10\*\*uint256\(asset\.decimals\(\)\);/.test(ev('pendingSource.code')), 'cap (single): the Solidity says exactly that');
+  await a.gen(); ok(/depositCap = 500 \* 10\*\*_vltDec;/.test(ev('pendingSource.code')), 'cap (single): the Solidity says exactly that');
   for (const bad of ['-5', '1e3']) { a.set('vault_cap', bad); eq(a.rows()['Deposit cap'].state, 'bad', `cap (single): ${bad} would not compile and is flagged`); }
   a.set('vault_cap', '1.5'); eq(a.rows()['Deposit cap'].state, 'ok', 'cap (single): 1.5 compiles and is accepted');
   ev("setMultichainMode('portable')"); a.set('vault_cap', '500');
   ok(/Scaled by the asset decimals/.test(a.rows()['Deposit cap'].flag) && /decimals\(\) when the constructor runs/.test(d.getElementById('vltCapNote').textContent), 'cap (portable): scaled by the real decimals at deploy');
-  await a.gen(); ok(/depositCap = 500 \* 10\*\*uint256\(IERC20\(asset_\)\.decimals\(\)\);/.test(ev('pendingSource.code')), 'cap (portable): the Solidity says exactly that');
+  await a.gen(); ok(/depositCap = 500 \* 10\*\*_vltDec;/.test(ev('pendingSource.code')), 'cap (portable): the Solidity says exactly that');
   for (const bad of ['1e3', '-5']) { a.set('vault_cap', bad); eq(a.rows()['Deposit cap'].state, 'bad', `cap (portable): ${bad} is flagged`); ok(/stops generation/.test(a.rows()['Deposit cap'].flag), 'cap (portable): and the flag says generation stops'); ok(/is not a number/.test(await w_try(a, 'genVault()')), `cap (portable): the generator really throws for ${bad}`); }
   ev("setMultichainMode('single')"); a.set('vault_cap', '0');
   for (const bad of ['a"b', 'a\\b']) { a.set('vault_symbol', bad); ok(a.rows()['Share symbol'].state === 'bad' && /quotes or backslashes/.test(a.prog().Configuration.text), `symbol ${bad} is flagged: the Solidity would not compile`); }

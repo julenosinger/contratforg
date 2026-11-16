@@ -156,7 +156,7 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   ev("activeNetwork = 'arc'; updateSideNet()");
   gen({ vault_perf: '10000' }); ok(alerts === 1 && ev('pendingSource.code') === '', 'vault: a fee above 9999 is refused with an alert and no buffer');
   gen({ vault_symbol: 'a"b' }); ok(/symbol = "a"b"/.test(ev('pendingSource.code')) && ev('pendingSource.problems.length') === 0, 'vault: the symbol is written raw into the Solidity');
-  gen({ vault_cap: '500' }); ok(/depositCap = 500 \* 10\*\*uint256\(asset\.decimals\(\)\);/.test(ev('pendingSource.code')), 'vault (single): the cap is scaled by the asset\'s own decimals');
+  gen({ vault_cap: '500' }); ok(/depositCap = 500 \* 10\*\*_vltDec;/.test(ev('pendingSource.code')), 'vault (single): the cap is scaled by the asset\'s own decimals');
   ev("setMultichainMode('portable')");
   ok(/is not a number/.test(gen({ vault_cap: '1e3' })), 'vault (portable): a cap that is not digits with an optional decimal part makes the generator throw');
   gen({ vault_cap: '500' }); ok(/IERC20\(asset_\)\.decimals\(\)/.test(ev('pendingSource.code')) && ev('pendingCtorArgs.map((a) => a.param).join()') === 'asset_', 'vault (portable): the asset is a constructor argument and the cap is scaled by its decimals');

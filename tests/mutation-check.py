@@ -107,6 +107,9 @@ M=[
  # ---- phase 11.2.1: positive-cap safety
  ('vault: a positive cap can truncate to unlimited again','contractforge-deploy/app.js',"  const capGuardLines = (capS.isZero || (typeof isPortable === 'function' && isPortable()))","  const capGuardLines = (true)",'vault-decimals.mjs'),
  ('vault: leading zeros are not stripped again','contractforge-deploy/app.js',"  const digits = (m[1] + (m[2] || '')).replace(/^0+/, '');","  const digits = m[1] + (m[2] || '');",'vault-decimals.mjs'),
+ # ---- phase 11.2.2: exact decimal representation, validation before arithmetic
+ ('vault: a nonrepresentable cap silently truncates again','contractforge-deploy/app.js',"    lines.push(`if (_vltDec >= ${s}) { ${name} = ${d} * 10**(_vltDec - ${s}); } else { require(${d} % 10**(${s} - _vltDec) == 0, \"deposit cap is not representable\"); ${name} = ${d} / 10**(${s} - _vltDec); }`);","    lines.push(`if (_vltDec >= ${s}) { ${name} = ${d} * 10**(_vltDec - ${s}); } else { ${name} = ${d} / 10**(${s} - _vltDec); }`);",'vault-decimals.mjs'),
+ ('vault: the decimals are not validated before the exponentiation','contractforge-deploy/app.js',"    'require(_vltDec <= 38, \"asset decimals out of range\");'","    '// decimals unchecked'",'vault-decimals.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
