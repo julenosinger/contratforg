@@ -225,7 +225,6 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ok(!d.querySelector('#ccxSummary img, #ccxSummary script, #ccxProgress img, #ccxSetupNote img') && w.__xss === undefined, 'xss: values are shown as text, never as markup');
   ok(![...d.querySelectorAll('#ccxSummary *, #ccxProgress *, #ccxSetupNote, #ccxResumeNote')].some((e) => [...e.attributes].some((x) => /__xss/.test(x.value))), 'xss: no attribute carries the payload');
   ok(['swap', 'treasury', 'vault', 'multisend', 'crosschain'].every((k) => JSON.parse(ev('JSON.stringify(CFBuilder.keys())')).includes(k)), 'engine: five screens registered');
-  for (const id of ['sec-wizard']) ok(!d.getElementById(id).querySelector('.bld-grid, .bld-side'), id + ' is untouched');
   for (const id of ['cc_name']) a.set(id, 'ArcCrossPay'); for (const id of ['cc_tokenmessenger', 'cc_msgtransmitter', 'cc_usdc']) a.set(id, '');
   await a.net('sepolia'); await a.gen();
   for (let i = 0; i < 3; i++) for (const s of ['home', 'swap', 'crosschain', 'deploy', 'multisend', 'crosschain']) await a.go(s);

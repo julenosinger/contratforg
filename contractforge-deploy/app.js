@@ -5013,6 +5013,7 @@ const WIZARD_SUBTYPES = {
 function wizardPick(category, el){
   document.querySelectorAll('#wp-0 .tcard').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
+  if(wizardState.category !== category) wizardState.subtype = '';   // a contract picked under another goal must not survive the change (it used to be routed to anyway)
   wizardState.category = category;
   const subs = WIZARD_SUBTYPES[category]||[];
   const container = document.getElementById('wz-subtypes');
@@ -5106,6 +5107,73 @@ function wizardGenerate(){
   }
   window.scrollTo({top:0,behavior:'smooth'});
 }
+
+/* ---- The Contract Wizard overview (Phase 9.6). The wizard itself (wizardPick, wizardNext, wizardBack, renderWizardStep, wizardGenerate) is
+   unchanged. It does not generate a contract: it routes. Swap, Vault, Treasury and Crosschain open their own builder; every other choice
+   opens Simple contracts with that template selected (after a short delay). The MultiSend builder is not offered by the wizard. The network
+   step switches the app's active network at once (a mainnet asks to confirm first). This view only reads wizardState, activeNetwork and the
+   Deployment Mode, and never writes them. ---- */
+const WZ_CATEGORY = { token: 'Launch a token', payment: 'Handle payments', defi: 'Build DeFi', org: 'Govern an org', bridge: 'Move value cross-chain', wallet: 'Smart wallet' };
+const WZ_STEPS = ['What to build', 'Configure', 'Network', 'Review & generate'];
+/* opens: where wizardGenerate() lands; ctor: the constructor arguments in the portable modes (none in Single network mode), as generated. */
+const WZ_INFO = {
+  erc20:       { opens: 'Simple contracts: ERC-20 Token', ctor: [], notes: ['Owner-controlled mint, an optional cap and optional burn.'] },
+  erc721:      { opens: 'Simple contracts: NFT Collection', ctor: ['usdc_'], notes: ['Mints are paid in USDC by default; a free mint (price 0) needs no stablecoin.'] },
+  escrow:      { opens: 'Simple contracts: Buyer/Seller Escrow', ctor: ['token_'], notes: ['Needs a buyer, a seller and an arbiter, three different addresses: otherwise the builder writes a DRAFT.'] },
+  vesting:     { opens: 'Simple contracts: Linear Vesting', ctor: ['token_'], notes: ['Needs a beneficiary address: otherwise the builder writes a DRAFT.'] },
+  paywall:     { opens: 'Simple contracts: Paywall / Subscription', ctor: ['token_'], notes: ['Needs a beneficiary address: otherwise the builder writes a DRAFT.'] },
+  staking:     { opens: 'Simple contracts: Staking Rewards', ctor: ['stakingToken_'], notes: ['Stakes an ERC-20 and pays rewards over time. An empty reward token means the staking token.'] },
+  dao:         { opens: 'Simple contracts: DAO Governance', ctor: ['token_', 'votingPeriod_'], notes: ['Needs a governance token in Single network mode (a DRAFT otherwise).', 'The voting period is counted in blocks, and block times differ between chains.'] },
+  smartwallet: { opens: 'Simple contracts: Smart Wallet', ctor: ['dailyLimit_'], notes: ['Needs a guardian address that is not the account that deploys the wallet: otherwise the builder refuses to generate.'] },
+  swap:        { opens: 'Swap / AMM', ctor: ['tokenA_', 'tokenB_'], notes: ['Opens the Swap / AMM builder with the constant-product AMM. The order-book swap is a choice inside the builder.'] },
+  vault:       { opens: 'Vault (ERC-4626)', ctor: ['asset_'], notes: ['The asset defaults to the USDC of the active network. Robinhood Chain and Robinhood Testnet have none, so you type the token address.'] },
+  treasury:    { opens: 'Treasury', ctor: ['gasTokenAlias_'], notes: ['Needs the signer addresses, one per line: without them the builder writes a DRAFT with a placeholder signer.'] },
+  crosschain:  { opens: 'Crosschain (CCTP)', ctor: ['tokenMessenger_', 'messageTransmitter_', 'usdc_'], notes: ['Single network mode writes the payments contract; the portable modes write the CCTP V2 bridge.'] }
+};
+
+function wzRender(){
+  const list = document.getElementById('wzSummaryList'), ul = document.getElementById('wzNotes');
+  if(!list || !ul || typeof wizardState === 'undefined') return;
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[activeNetwork]) || null;
+  const portable = typeof isPortable === 'function' ? isPortable() : false;
+  const dmode = (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '';
+  const subs = WIZARD_SUBTYPES[wizardState.category] || [], sub = subs.find(s => s.id === wizardState.subtype);
+  const info = sub ? WZ_INFO[sub.id] : null;
+  list.textContent = '';
+  const row = (label, value, state, flag, mono) => {
+    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
+    r.appendChild(swbEl('dt', '', label));
+    const dd = swbEl('dd', mono ? 'mono' : '', value);
+    if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag));
+    r.appendChild(dd); list.appendChild(r);
+  };
+  row('Step', (wizardState.step + 1) + ' of 4: ' + WZ_STEPS[wizardState.step], 'ok');
+  row('Goal', WZ_CATEGORY[wizardState.category] || 'Not chosen yet', WZ_CATEGORY[wizardState.category] ? 'ok' : 'missing');
+  row('Contract', sub ? sub.name : 'Not chosen yet', sub ? 'ok' : 'missing');
+  row('Opens', info ? info.opens : 'Choose a contract first', info ? 'ok' : 'missing');
+  if(net) CFBuilder.networkRow(row, net); else row('Network', 'Unknown', 'bad');
+  row('Deployment Mode', dmode || 'Unknown', dmode ? 'ok' : 'bad', info ? (portable && info.ctor.length ? 'Constructor arguments: ' + info.ctor.join(', ') : 'No constructor arguments') : '');
+  ul.textContent = '';
+  const add = (t, kind) => { const li = swbEl('li', '', t); if(kind) li.setAttribute('data-kind', kind); ul.appendChild(li); };
+  if(!info){ add('Choose what you want to build and the wizard shows what the contract needs and where it opens.'); }
+  else {
+    info.notes.forEach(t => add(t));
+    if(sub.id === 'crosschain' && net){
+      const v1 = !!(net.cctp && net.cctp.tokenMessenger && net.cctp.messageTransmitter), v2 = typeof cctpV2 === 'function' && !!cctpV2(activeNetwork);
+      if(!portable && !v1) add(net.label + ' is not in the CCTP V1 address table: in Single network mode the builder writes a DRAFT until you enter the addresses.' + (v2 ? ' The portable modes use CCTP V2, which ' + net.label + ' has.' : ''), 'warn');
+      if(portable && !v2) add(net.label + ' has no CCTP V2 deployment in this app: you enter the addresses on the deploy page.', 'warn');
+    }
+  }
+  if(wizardState.step >= 2) add('Choosing a network here switches the app\'s active network at once. A mainnet asks you to confirm first, and deploying to one needs the maturity confirmation.');
+}
+(function wzInit(){
+  if(typeof document === 'undefined') return;
+  const sec = document.getElementById('sec-wizard'); if(!sec) return;
+  sec.addEventListener('click', () => setTimeout(wzRender, 0));                                                   // every wizard control is a click
+  ['wizardSteps', 'wz-subtypes', 'wz-netbar'].forEach(id => { const el = document.getElementById(id); if(el) new MutationObserver(() => wzRender()).observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] }); });
+  const sn = document.getElementById('sidenet'); if(sn) new MutationObserver(() => wzRender()).observe(sn, { childList: true, characterData: true, subtree: true });   // the network changed elsewhere
+  CFBuilder.addView('wizard', wzRender);
+})();
 
 /* ======================================================================
    AI CHAT (section 15)

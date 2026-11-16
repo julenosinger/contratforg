@@ -928,12 +928,12 @@
     </section>
 
     <!-- ============ 14 CONTRACT WIZARD ============ -->
-    <section class="section" id="sec-wizard" style="display:none;">
+    <section class="section bld" id="sec-wizard" style="display:none;">
       <div class="section-head"><span class="n">14</span><h2>Contract Wizard</h2><div class="rule"></div><div class="dm-mount"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:22px;">
-          Answer a few questions and ContractForge builds the right contract for you — no need to know which section to use.
-        </p>
+      <p class="bld-sub">Answer a few questions and ContractForge opens the right builder for you, on the network you picked. Nothing is generated or deployed until you press Generate in that builder.</p>
+      <div class="bld-grid">
+      <div class="bld-main">
+      <div class="form-panel bld-panel">
         <div class="wizard-steps" id="wizardSteps">
           <div class="wstep active" data-step="0"><div class="dot">1</div><div class="label">What to build</div></div>
           <div class="wstep" data-step="1"><div class="dot">2</div><div class="label">Configure</div></div>
@@ -982,8 +982,9 @@
             </div>
           </div>
           <div class="btnrow">
-            <button class="btn btn-primary" data-onclick="wizardGenerate()">Generate &amp; go to editor →</button>
+            <button class="btn btn-primary" data-onclick="wizardGenerate()">Open the builder →</button>
           </div>
+          <p class="bld-note bld-actnote">This opens the builder with your choice selected. It does not generate or deploy anything: you review the fields there and press Generate yourself.</p>
         </div>
 
         <div class="wizard-nav">
@@ -991,6 +992,18 @@
           <span></span>
           <button class="btn btn-ghost" id="wz-next" data-onclick="wizardNext()" style="display:none;">Next →</button>
         </div>
+      </div>
+      </div>
+      <aside class="bld-side" aria-label="Your choices">
+        <section class="bld-card" aria-labelledby="wzSumH">
+          <h3 id="wzSumH">Your Choices</h3>
+          <dl class="bld-sum" id="wzSummaryList"></dl>
+        </section>
+        <section class="bld-card" aria-labelledby="wzNotesH">
+          <h3 id="wzNotesH">About This Choice</h3>
+          <ul class="bld-notes" id="wzNotes"></ul>
+        </section>
+      </aside>
       </div>
     </section>
 

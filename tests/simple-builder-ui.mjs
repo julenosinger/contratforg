@@ -275,7 +275,6 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ok(!d.querySelector('#smpSummary img, #smpSummary script, #smpProgress img, #smpNotes img') && w.__xss === undefined, 'xss: values are shown as text, never as markup');
   ok(![...d.querySelectorAll('#smpSummary *, #smpProgress *, #smpNotes *')].some((e) => [...e.attributes].some((x) => /__xss/.test(x.value))), 'xss: no attribute carries the payload');
   ok(['swap', 'treasury', 'vault', 'multisend', 'crosschain', 'simple'].every((k) => JSON.parse(ev('JSON.stringify(CFBuilder.keys())')).includes(k)), 'engine: six screens registered');
-  ok(!d.getElementById('sec-wizard').querySelector('.bld-grid, .bld-side'), 'sec-wizard is untouched');
   await a.pick('erc20'); await a.gen('erc20');
   for (let i = 0; i < 3; i++) for (const s of ['home', 'swap', 'simple', 'deploy', 'vault', 'simple']) await a.go(s);
   ok(a.prog()['Code Generation'].state === 'done' && a.rows().Template.text === 'ERC-20 Token' && d.querySelectorAll('#smpSummary .bld-row').length === 9, 'repeated navigation keeps the template and the state and does not duplicate rows', String(d.querySelectorAll('#smpSummary .bld-row').length));

@@ -223,5 +223,24 @@ for (const mode of ['single', 'portable', 'multi', 'cross']) {
   ok(true, 'simple (single): no template has a constructor argument');
 }
 
+/* 12. Wizard particularities found by the Phase 9.6 audit (the page may explain them, it must not change them) */
+{
+  const app = loadApp(); const { ev, w } = app; const d = w.document; w.alert = () => {};
+  const ids = ev('Object.values(WIZARD_SUBTYPES).flat().map((s) => s.id)');
+  eq(ids.length, 12, 'wizard: offers twelve contracts');
+  ok(!ids.includes('multisend'), 'wizard: MultiSend is not offered (but the router would open it: it is in the advanced list)');
+  const where = {};
+  for (const id of ids) { ev(`wizardState.subtype = '${id}'; wizardGenerate()`); where[id] = [...d.querySelectorAll('main section.section')].filter((s) => s.style.display === 'block').map((s) => s.id.replace('sec-', ''))[0]; }
+  eq(Object.entries(where).sort(), Object.entries({ erc20: 'simple', erc721: 'simple', escrow: 'simple', vesting: 'simple', paywall: 'simple', staking: 'simple', dao: 'simple', smartwallet: 'simple', swap: 'swap', vault: 'vault', treasury: 'treasury', crosschain: 'crosschain' }).sort(), 'wizard: swap, vault, treasury and crosschain open their own builder; the rest open Simple contracts');
+  ev("wizardState.subtype = 'multisend'; wizardGenerate()"); eq(d.getElementById('sec-multisend').style.display, 'block', 'wizard: a multisend subtype would still be routed to its builder');
+  ev("pendingSource = { name: '', code: '', template: '' }"); ev("wizardState = {step:3, category:'defi', subtype:'vault'}; wizardGenerate()");
+  eq(ev('pendingSource.code'), '', 'wizard: wizardGenerate() generates nothing, it only routes');
+  ev("wizardState = {step:0, category:'', subtype:''}; renderWizardStep()");
+  d.querySelector('#wp-0 .tcard[data-onclick^="wizardPick(\'defi\'"]').click(); const card = [...d.querySelectorAll('#wz-subtypes .tcard')].find((c) => /Vault/.test(c.textContent)); card.click();
+  eq(ev('wizardState.subtype'), 'vault', 'wizard: a contract is picked under its goal');
+  d.querySelector('#wp-0 .tcard[data-onclick^="wizardPick(\'token\'"]').click();
+  eq(ev('wizardState.subtype'), '', 'wizard: changing the goal clears the contract (before 9.6 it survived and was routed to anyway)');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

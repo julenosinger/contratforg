@@ -26,6 +26,7 @@
 const CFBuilder = (function(){
   'use strict';
   const modules = {};
+  const views = {};
 
   function el(tag, cls, text){
     const e = document.createElement(tag);
@@ -197,7 +198,10 @@ const CFBuilder = (function(){
   return {
     el, register, TEXTS, networkRow,
     render: (key) => { if(modules[key]) render(modules[key]); },
-    renderAll: () => { Object.keys(modules).forEach(k => render(modules[k])); },
+    renderAll: () => { Object.keys(modules).forEach(k => render(modules[k])); Object.keys(views).forEach(k => { try { views[k](); } catch(_) { /* a view must never break the others */ } }); },
+    /* A screen with no code panel (the Contract Wizard) registers a plain redraw function; renderAll() runs it with the screens. */
+    addView: (key, fn) => { if(typeof fn === 'function' && !views[key]) views[key] = fn; },
+    viewKeys: () => Object.keys(views),
     decorateCode: (key) => { if(modules[key]) decorateCode(modules[key]); },
     genState: (key) => { const m = modules[key]; return m ? genState(m, m.read()) : null; },
     deployed: (key) => { const m = modules[key]; return m ? deployed(m) : null; },
