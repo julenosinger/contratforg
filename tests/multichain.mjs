@@ -138,7 +138,7 @@ async function runMulti(mode, setup) {
     w.document.getElementById('dcConfirm').click();
   }, 5);
   setup(app, () => fillParties(app, 'arc'));
-  return { app, deployed, run: async () => { const r = await ev('multiDeploy()'); if (process.env.DEBUG_MC) console.log([...w.document.querySelectorAll('#deployConsole .line')].map((l) => l.textContent).join('\n')); return r; } };
+  return { app, deployed, run: async () => { const r = await ev('multiDeploy()'); if (process.env.DEBUG_MC) console.log([...w.document.querySelectorAll('#deployConsole .line')].map((l) => l.textContent).join('\n')); return (r && Array.isArray(r)) ? r : ((r && r.results) || []); } };
 }
 
 {
