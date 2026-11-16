@@ -94,6 +94,10 @@ M=[
  ('lock: two deploys can overlap again','contractforge-deploy/app.js',"  if(deployInFlight){ logConsole('warn','A deployment is already in progress.'); return; }","  if(false){",'deploy-concurrency.mjs'),
  ('ctor: a value survives a type change again','contractforge-deploy/multichain.js',"    const match = prevAt && (prevAt.param || '') === name && canon(prevAt.type) === canon(inp.type);","    const match = prevAt && (prevAt.param || '') === name;",'deploy-concurrency.mjs'),
  ('net: a wrong chain no longer blocks signing','contractforge-deploy/multideploy.js',"  if(got !== want) throw new Error('The wallet is on '+(got === null ? 'an unknown chain' : 'chainId '+got)+' but '+NETWORKS[key].label+' needs chainId '+want+'.');","  // no chain check",'deploy-concurrency.mjs'),
+ # ---- phase 11.1.3: gas integrity, bridge re-signing, fatal batch abort
+ ('bridge: the second signature skips its identity check','contractforge-deploy/multideploy.js',"        await mdAssertReady(key, op);   // every independent signature re-validates wallet + chain identity","        // bridge identity check removed",'deploy-batch.mjs'),
+ ('batch: an identity violation continues to the next network','contractforge-deploy/multideploy.js',"        if(e && e.fatal) throw e;   // identity violation: abort the whole batch, preserving already-confirmed results","        if(false){",'deploy-batch.mjs'),
+ ('gas: a non-Arc chain presents USDC as its native gas','contractforge-deploy/app.js',"          : fmt+' USDC  /  '+nativeFmt+' '+net.gasSymbol;","          : fmt+' USDC  /  '+nativeFmt+' USDC';",'deploy-batch.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
