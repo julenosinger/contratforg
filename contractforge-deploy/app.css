@@ -1466,3 +1466,7 @@ body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:360px;min
 #sec-nlai .dm-trigger:hover,#sec-nlai .dm-trigger[aria-expanded="true"]{border-color:var(--ai-emerald-dim);background:var(--ai-raise);}
 #sec-nlai .dm-trigger .dm-k{color:var(--ai-dim);}
 @media (max-width:760px){#sec-nlai .dm-trigger .dm-k{display:none;}}
+
+/* ---- contract selector (phase 11.1) ---- */
+.cs-list{display:flex;flex-direction:column;gap:6px;margin:12px 0;}
+.cs-item{text-align:left;justify-content:flex-start;font-family:var(--mono);font-size:12px;}

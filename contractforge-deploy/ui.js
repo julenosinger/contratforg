@@ -501,6 +501,49 @@ function uiConfirmSwitch(label, gasSymbol){
   });
 }
 
+/* Compact contract selector for a source with several deployable contracts (e.g. an AI output with helpers).
+   Resolves the chosen contract name, or null when cancelled. Built with createElement/textContent (no innerHTML). */
+function uiContractSelect(names){
+  return new Promise((resolve) => {
+    const prev = document.activeElement;
+    const root = document.createElement('div');
+    root.className = 'dc-backdrop'; root.id = 'contractSelect';
+    root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'csTitle');
+    const box = document.createElement('div'); box.className = 'dc-box dc-small';
+    const head = document.createElement('div'); head.className = 'dc-head';
+    const title = document.createElement('h3'); title.id = 'csTitle'; title.textContent = 'Pick the contract to deploy';
+    head.appendChild(title);
+    const warn = document.createElement('p'); warn.className = 'dc-warn'; warn.textContent = 'This source has several contracts. Choose the one you mean.';
+    const list = document.createElement('div'); list.className = 'cs-list';
+    (names || []).forEach((n) => {
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn btn-ghost cs-item';
+      const code = document.createElement('code'); code.textContent = n;
+      btn.appendChild(code);
+      list.appendChild(btn);
+    });
+    const actions = document.createElement('div'); actions.className = 'dc-actions';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-ghost'; cancel.id = 'csCancel'; cancel.textContent = 'Cancel';
+    actions.appendChild(cancel);
+    box.appendChild(head); box.appendChild(warn); box.appendChild(list); box.appendChild(actions);
+    root.appendChild(box);
+    document.body.appendChild(root);
+    let finished = false;
+    const finish = (v) => { if (finished) return; finished = true; document.removeEventListener('keydown', onKey, true); root.remove(); if (prev && prev.focus) prev.focus(); resolve(v); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+      else if (e.key === 'Tab') {
+        const f = [...list.querySelectorAll('.cs-item'), cancel], i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    list.querySelectorAll('.cs-item').forEach((b) => b.addEventListener('click', () => finish(b.querySelector('code').textContent)));
+    cancel.addEventListener('click', () => finish(null));
+    list.querySelector('.cs-item')?.focus();
+  });
+}
+
 /* ---- Field validation while typing (advice only: it never blocks generating) ---- */
 const UI_RANGES = { // id -> [min, max, label]
   swap_fee: [0, 9999, 'Fee in basis points, 0 to 9999'],
