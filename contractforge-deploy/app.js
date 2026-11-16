@@ -3349,6 +3349,41 @@ function deployFromBuffer(){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
+/* ---- Deterministic contract resolution (phase 11.1) ---- */
+/* A compiled contract is deployable only when it has non-empty creation bytecode (abstract contracts, interfaces and
+   libraries have none). */
+function isDeployableArtifact(c){
+  const o = c && c.evm && c.evm.bytecode && c.evm.bytecode.object;
+  return typeof o === 'string' && o.length > 0 && o !== '0x';
+}
+function deployableContractNames(contracts){
+  return Object.keys(contracts || {}).filter((n) => isDeployableArtifact(contracts[n]));
+}
+function ambiguousContractError(names){
+  const err = new Error('This source contains ' + names.length + ' deployable contracts (' + names.join(', ') + '). Pick the one to deploy.');
+  err.ambiguous = true;
+  err.deployable = names.slice();
+  return err;
+}
+/* Resolves the contract to deploy from the compiler output. An exact requested name wins and is never substituted by
+   another contract. Without a requested name, a single deployable contract is selected automatically; several require
+   the caller to pick one (the error carries the list). */
+function resolveContract(contracts, requestedName){
+  const all = Object.keys(contracts || {});
+  if (!all.length) throw new Error('The compiler returned no contract for this source.');
+  if (requestedName) {
+    if (Object.prototype.hasOwnProperty.call(contracts, requestedName)) {
+      if (isDeployableArtifact(contracts[requestedName])) return requestedName;
+      throw new Error('Contract "' + requestedName + '" is not deployable (abstract, interface or library?).');
+    }
+    throw new Error('Contract "' + requestedName + '" was not found in the compiler output.');
+  }
+  const deployable = deployableContractNames(contracts);
+  if (deployable.length === 1) return deployable[0];
+  if (!deployable.length) throw new Error('No deployable contract in this source (only abstract contracts, interfaces or libraries?).');
+  throw ambiguousContractError(deployable);
+}
+
 /* ======================================================================
    COMPILE + DEPLOY (self-hosted solc-js, verified against vendor/MANIFEST.json)
    ====================================================================== */
@@ -3367,18 +3402,37 @@ async function compileAndDeploy(){
 
   try{
     const compiled = await compilePending();
-    const ctorInputs = (compiled.abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs;
-    const ctorValues = collectCtorValues(ctorInputs);
-    if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: compilerFacts(compiled).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
-    await deployCompiled(compiled, ctorValues, activeNetwork);
+    await finishDeploy(compiled);
   }catch(e){
+    if(e && e.ambiguous && typeof uiContractSelect === 'function'){
+      const target = await uiContractSelect(e.deployable);
+      if(!target){ logConsole('warn','Deployment cancelled (no contract selected).'); return; }
+      logConsole('step','Compiling '+target+'…');
+      try{
+        const compiled = await compileSource(pendingSource.name, pendingSource.code, target);
+        await finishDeploy(compiled);
+      }catch(e2){
+        if(e2 && e2.handled) return;
+        logConsole('err','Error: '+(e2.message||e2));
+      }
+      return;
+    }
     if(e && e.handled) return; // already reported in the console
     logConsole('err','Error: '+(e.message||e));
   }
 }
 
-/* Compiles any source with the selected solc; resolves { name, target, abi, bytecode }. */
-async function compileSource(name, code){
+/* The shared tail of compileAndDeploy: constructor values, mainnet confirmation, then the actual deploy. */
+async function finishDeploy(compiled){
+  const ctorInputs = (compiled.abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs;
+  const ctorValues = collectCtorValues(ctorInputs);
+  if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: compilerFacts(compiled).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
+  await deployCompiled(compiled, ctorValues, activeNetwork);
+}
+
+/* Compiles any source with the selected solc; resolves { name, target, abi, bytecode }. An explicitTarget (chosen in the
+   selector) wins; otherwise the generator/AI target is resolved deterministically with resolveContract. */
+async function compileSource(name, code, explicitTarget){
   const version = document.getElementById('solcVersion').value;
   await ensureSolcLoaded(version);
 
@@ -3400,8 +3454,11 @@ async function compileSource(name, code){
   }
 
   const contracts = output.contracts[name+'.sol'];
-  const contractNames = Object.keys(contracts);
-  const target = contracts[name] ? name : contractNames[0];
+  // A multi-contract AI source has no implicit target; the selector (or an explicit target) resolves it.
+  const requested = explicitTarget !== undefined
+    ? explicitTarget
+    : ((pendingSource && Array.isArray(pendingSource.aiTargets) && pendingSource.aiTargets.length > 1) ? undefined : name);
+  const target = resolveContract(contracts, requested);
   const abi = contracts[target].abi;
   const bytecode = '0x'+contracts[target].evm.bytecode.object;
   const bytecodeKeccak256 = (typeof ethers !== 'undefined' && ethers.utils && ethers.utils.keccak256) ? ethers.utils.keccak256(bytecode) : '';
@@ -5692,9 +5749,9 @@ const aiState = { convs: [], activeId: null, sending: false, sendingId: null, st
    jumps to Compile & Deploy. Shared by the chat "Use" button (the legacy generate flow did the same). */
 function adoptAiCode(rawCode){
   const code = matStamp(String(rawCode || ''), 'ai');
-  const nameMatch = code.match(/contract\s+(\w+)/);
-  const contractName = nameMatch ? nameMatch[1] : 'GeneratedContract';
-  pendingSource = { name: contractName, code, template: 'ai' };
+  const names = [...code.matchAll(/^\s*(?:abstract\s+)?contract\s+([A-Za-z_][A-Za-z0-9_]*)/gm)].map((m) => m[1]);
+  const contractName = names.length ? names[0] : 'GeneratedContract';
+  pendingSource = { name: contractName, code, template: 'ai', aiTargets: names };
   pendingCtorArgs = []; renderCtorArgs();
   document.getElementById('pendingContractLabel').value = contractName + '.sol (AI — ' + NETWORKS[activeNetwork].label + ')';
   document.getElementById('auditContractLabel').value = contractName + '.sol';
