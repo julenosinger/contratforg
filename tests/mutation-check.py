@@ -87,6 +87,9 @@ M=[
  ('chat: consecutive same-role messages are not merged','contractforge-deploy/app.js',"    if (last && last.role === m.role) last.content += '\\n\\n' + m.content;\n    else merged.push({ role: m.role, content: m.content });","    merged.push({ role: m.role, content: m.content });",'ui.mjs'),
  # ---- phase 11.1: deterministic contract resolution
  ('resolve: the first contract is silently chosen again','contractforge-deploy/app.js',"  const target = resolveContract(contracts, requested);","  const target = (requested && Object.prototype.hasOwnProperty.call(contracts, requested)) ? requested : Object.keys(contracts)[0];",'contract-resolution.mjs'),
+ # ---- phase 11.1.1: deploy integrity (library linking, async guards)
+ ('resolve: an unlinked library is deployed again','contractforge-deploy/app.js',"    const libs = unresolvedLibraries(c);\n    if (libs.length) throw libraryLinkError(requestedName, libs);\n    return requestedName;","    return requestedName;",'deploy-integrity.mjs'),
+ ('async: a changed source no longer aborts the deploy','contractforge-deploy/app.js',"  if(op.sourceHash && pendingSource && pendingSource.code && matHash(pendingSource.code) !== op.sourceHash){","  if(false){",'deploy-integrity.mjs'),
 ]
 if '--self-test' in sys.argv:
     # a harmless edit (a comment) that no test should notice: the run has to report it and exit 1
