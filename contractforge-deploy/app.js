@@ -4533,7 +4533,7 @@ async function generateQR(){
   const qrBox = document.getElementById('qrBox');
   qrBox.style.display='block';
   if(url.length > SHR_QR_MAX){      // a QR code holds at most this much: the request would be useless, and it would still send the whole source to an outside service
-    qrBox.textContent = 'This link is ' + url.length.toLocaleString() + ' characters and a QR code holds at most ' + SHR_QR_MAX.toLocaleString() + '. Nothing was sent to the QR service. Use Copy URL, or download the source instead.';
+    qrBox.textContent = 'This link is ' + url.length.toLocaleString('en-US') + ' characters and a QR code holds at most ' + SHR_QR_MAX.toLocaleString('en-US') + '. Nothing was sent to the QR service. Use Copy URL, or download the source instead.';
     return;
   }
   // Use a free QR API
@@ -4597,13 +4597,13 @@ function shrRender(){
   CFBuilder.networkRow(row, v.net);
   row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
   /* the link */
-  if(v.linkState === 'none') row('Share link', 'Not generated', 'missing', v.code ? 'It would be ' + v.potential.toLocaleString() + ' characters' : 'Without a contract it holds only the network');
-  else if(v.linkState === 'current') row('Share link', v.link.length.toLocaleString() + ' characters', 'ok', 'Holds the network and the full source');
+  if(v.linkState === 'none') row('Share link', 'Not generated', 'missing', v.code ? 'It would be ' + v.potential.toLocaleString('en-US') + ' characters' : 'Without a contract it holds only the network');
+  else if(v.linkState === 'current') row('Share link', v.link.length.toLocaleString('en-US') + ' characters', 'ok', 'Holds the network and the full source');
   else row('Share link', 'Out of date', 'bad', 'The contract or the network changed after it was generated: generate it again');
   if(v.code) row('When someone opens it', 'Starts on ' + (v.net ? v.net.label : 'the network in the link'), 'ok', 'The source loads as an imported contract, treated as experimental');
   /* QR */
   const qrLen = v.linkState === 'current' ? v.link.length : v.potential;
-  row('QR code', qrLen && qrLen <= SHR_QR_MAX ? 'Fits' : 'Too long', qrLen && qrLen <= SHR_QR_MAX ? 'ok' : 'bad', qrLen ? qrLen.toLocaleString() + ' of ' + SHR_QR_MAX.toLocaleString() + ' characters a QR code can hold' : '');
+  row('QR code', qrLen && qrLen <= SHR_QR_MAX ? 'Fits' : 'Too long', qrLen && qrLen <= SHR_QR_MAX ? 'ok' : 'bad', qrLen ? qrLen.toLocaleString('en-US') + ' of ' + SHR_QR_MAX.toLocaleString('en-US') + ' characters a QR code can hold' : '');
   /* the compiled artifact */
   if(art.state === 'none') row('Compiled artifact', 'None in this session', 'missing', 'ABI and bytecode exports need a compile: compile and deploy in section 07');
   else if(art.state === 'exact') row('Compiled artifact', art.items + ' ABI items', 'ok', 'Compiled from this exact source: a deployment made on this page used the same bytecode');

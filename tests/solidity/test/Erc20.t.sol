@@ -42,7 +42,7 @@ contract Erc20Test is Base {
         IERC20 t = _new();
         t.transferOwnership(b); vm.prank(b); t.acceptOwnership();
         require(t.owner() == b && t.owner() != address(0), "rotated, never zero");
-        t.transferOwnership(c); vm.prank(c); t.acceptOwnership();
+        vm.prank(b); t.transferOwnership(c); vm.prank(c); t.acceptOwnership();   // the second rotation must be started by the current owner (b)
         require(t.owner() == c, "rotated again");
     }
     function testTransferOwnershipIsTwoSteps() public {

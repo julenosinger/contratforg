@@ -23,6 +23,7 @@ const save = (file, rename) => {
 };
 for (const [id, file] of [['erc20', 'Erc20'], ['erc721', 'Nft'], ['escrow', 'Escrow'], ['vesting', 'Vesting'], ['paywall', 'Paywall'], ['dao', 'Dao'], ['smartwallet', 'Wallet'], ['staking', 'Staking']]) {
   ev(`renderSimpleForm('${id}')`); fillAddresses(app, 'arcMain'); clearTokens();
+  if (id === 'erc20') set('s_supply', '0');   // the Erc20 tests assume zero initial supply (mint/cap/burn/renounce start from 0)
   if (id === 'erc721') set('s_price', '10');
   if (id === 'staking') set('s_reward', '');
   if (id === 'dao') set('s_token', '0x' + '5'.repeat(40));
@@ -30,9 +31,9 @@ for (const [id, file] of [['erc20', 'Erc20'], ['erc721', 'Nft'], ['escrow', 'Esc
   ev(`genSimple('${id}')`); save(file);
 }
 // A burn-enabled ERC-20 (the default build has no burn function): the burn path and the renounce supply-fix are tested.
-ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_burn', 'yes'); ev("genSimple('erc20')"); save('Erc20Burn');
+ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_supply', '0'); set('s_burn', 'yes'); ev("genSimple('erc20')"); save('Erc20Burn');
 // A capped ERC-20 with a small cap, so the supply invariants reach the cap.
-ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_cap', '1000'); ev("genSimple('erc20')"); save('Erc20Cap');
+ev("renderSimpleForm('erc20')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_supply', '0'); set('s_cap', '1000'); ev("genSimple('erc20')"); save('Erc20Cap');
 // A collection that can hold exactly one token: the supply limit is the property under test for a hostile payment token.
 ev("renderSimpleForm('erc721')"); fillAddresses(app, 'arcMain'); clearTokens(); set('s_price', '10'); set('s_supply', '1'); ev("genSimple('erc721')"); save('NftOne');
 // five tokens at most: small enough for the supply invariants to reach the limit

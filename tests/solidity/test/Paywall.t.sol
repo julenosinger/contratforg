@@ -55,7 +55,8 @@ contract PaywallTest is Base {
         vm.prank(b); p.acceptOwnership();
         require(p.owner() == b, "rotated");
         vm.prank(address(this)); vm.expectRevert(bytes("not owner")); p.setPrice(1);
-        vm.prank(b); p.setPrice(p.pricePerPeriod() * 2);   // the new owner sets the price
+        uint256 newPrice = p.pricePerPeriod() * 2;   // read the price first, so the prank below applies to setPrice (a prank applies to the next call)
+        vm.prank(b); p.setPrice(newPrice);           // the new owner sets the price
         require(p.beneficiary() == ben, "beneficiary still the configured one");
     }
     function testPendingOwnerHasNoPowersAndNonPendingCannotAccept() public {

@@ -74,7 +74,7 @@ const NETS = (a) => JSON.parse(a.ev('JSON.stringify(Object.entries(NETWORKS).map
   await a.click('[data-onclick="generateShareUrl()"]');
   const link = d.getElementById('shareUrl').value;
   ok(/#cfg=/.test(link) && !link.slice(link.indexOf('#cfg=') + 5).includes(' '), 'Generate URL puts the link in the field');
-  eq([a.rows()['Share link'].state, a.rows()['Share link'].text, a.rows()['Share link'].flag], ['ok', link.length.toLocaleString() + ' characters', 'Holds the network and the full source'], 'the overview states its real size and what it holds');
+  eq([a.rows()['Share link'].state, a.rows()['Share link'].text, a.rows()['Share link'].flag], ['ok', link.length.toLocaleString('en-US') + ' characters', 'Holds the network and the full source'], 'the overview states its real size and what it holds');
   const cfg = JSON.parse(decodeURIComponent(escape(Buffer.from(link.split('#cfg=')[1], 'base64').toString('binary'))));
   eq([cfg.network, cfg.name, cfg.code === code, Object.keys(cfg).sort()], ['sepolia', name, true, ['code', 'name', 'network']], 'the link holds exactly the network, the name and the source');
   await a.click('[data-onclick="copyShareUrl()"]'); eq(a.clip, [link], 'Copy URL copies the link');
