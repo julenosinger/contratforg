@@ -213,8 +213,8 @@ async function mdWaitForChain(key){
    must still be connected, and the operation's source/mode/account identity must be unchanged. mdWaitForChain (above)
    absorbs a delayed chain-change event; this is the final, single-shot verification right before the signature. */
 async function mdAssertReady(key, op){
-  if(!account || !signer) throw new Error('Wallet disconnected before signing on '+NETWORKS[key].label+'.');
-  assertOpUnchanged(op, { allowNetworkChange: true });
+  if(!account || !signer) throw fatalDeployError('Wallet disconnected before signing on '+NETWORKS[key].label+'.');
+  assertOpUnchanged(op, { allowNetworkChange: true });   // source/account/mode violations are fatal
   const want = NETWORKS[key].chainIdDec;
   let got = null;
   try{ got = (await provider.getNetwork()).chainId; }catch(_){ /* wallet unreachable */ }
@@ -261,32 +261,38 @@ async function multiDeploy(){
 
     for(const key of keys){
       const net = NETWORKS[key];
-      assertOpUnchanged(op, { allowNetworkChange: true });   // the per-network switch below is an internal transition
+      assertOpUnchanged(op, { allowNetworkChange: true });   // fatal; the per-network switch below is an internal transition
+      // Primary contract
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
         logConsole('step','— '+net.label+' —');
         if(net.isMainnet && !(await mainnetDeployConfirm({ args: mdSummary(key), multi: true, maturity: matDialogInfo(pendingSource.template), facts: (typeof compilerFacts === 'function' ? compilerFacts(main) : []).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Skipped '+net.label+' (mainnet deployment cancelled).'); results.push([net.label,'skipped']); continue; }
         await switchWalletNetwork();
         if(!(await mdWaitForChain(key))){ throw new Error('wallet did not switch to '+net.label+' (chainId '+net.chainIdDec+')'); }
-        await mdAssertReady(key, op);   // expected chain + intended account + identity, immediately before signing
+        await mdAssertReady(key, op);   // expected chain + intended account + identity, immediately before the primary signature
         const values = mdRowValues(key, mainInputs);
         const c = await deployCompiled(main, values, key);
         results.push([net.label, c.address]);
-        if(bridge){
-          const cc = cctpV2(key);
-          if(!cc){ logConsole('warn','No CCTP V2 on '+net.label+', bridge skipped.'); results.push([net.label+' bridge','skipped']); }
-          else {
-            const bvals = [cc.tokenMessenger, cc.messageTransmitter, net.usdc];
-            if(bvals.some(v => !v)) { logConsole('warn','Missing USDC address on '+net.label+', bridge skipped.'); results.push([net.label+' bridge','skipped']); }
-            else {
-              const b = await deployCompiled({ ...bridge, name: pendingSource.name+'Bridge' }, bvals.map((v,i)=>coerceCtorValue(bridgeInputs[i].type, v, bridgeInputs[i].name)), key);
-              results.push([net.label+' bridge', b.address]);
-            }
-          }
-        }
       }catch(e){
+        if(e && e.fatal) throw e;   // identity violation: abort the whole batch, preserving already-confirmed results
         logConsole('err', net.label+': '+(e.message || e));
         results.push([net.label, 'failed']);
+        continue;   // primary failed — never attempt the bridge for this network
+      }
+      // Bridge contract (only after a confirmed primary, and only where CCTP V2 is supported)
+      if(!bridge) continue;
+      const cc = cctpV2(key);
+      if(!cc){ logConsole('warn','No CCTP V2 on '+net.label+', bridge skipped.'); results.push([net.label+' bridge','skipped']); continue; }
+      const bvals = [cc.tokenMessenger, cc.messageTransmitter, net.usdc];
+      if(bvals.some(v => !v)) { logConsole('warn','Missing USDC address on '+net.label+', bridge skipped.'); results.push([net.label+' bridge','skipped']); continue; }
+      try{
+        await mdAssertReady(key, op);   // every independent signature re-validates wallet + chain identity
+        const b = await deployCompiled({ ...bridge, name: pendingSource.name+'Bridge' }, bvals.map((v,i)=>coerceCtorValue(bridgeInputs[i].type, v, bridgeInputs[i].name)), key);
+        results.push([net.label+' bridge', b.address]);
+      }catch(e){
+        if(e && e.fatal) throw e;   // identity violation after the primary: abort, primary result is already recorded
+        logConsole('err', net.label+' bridge: '+(e.message || e));
+        results.push([net.label+' bridge', 'failed']);
       }
     }
   }catch(e){

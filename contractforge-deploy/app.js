@@ -442,19 +442,21 @@ async function refreshBalance(){
   if(!provider || !account) return;
   const net = NETWORKS[activeNetwork];
   try{
-    // Show native gas token balance
+    // Native gas-token balance, formatted with this network's own gas decimals (never a fixed 18).
     const nativeBal = await provider.getBalance(account);
-    const nativeFmt = parseFloat(ethers.utils.formatUnits(nativeBal, 18)).toFixed(4);
+    const nativeFmt = parseFloat(ethers.utils.formatUnits(nativeBal, net.gasDecimals || 18)).toFixed(4);
 
-    // Additionally show USDC balance if address is known
+    // Additionally show the ERC-20 USDC balance when its address is known.
     if(net.usdc && net.usdc !== ''){
       try{
         const usdc = new ethers.Contract(net.usdc, ERC20_BALANCE_ABI, provider);
         const dec  = await usdc.decimals();
         const bal  = await usdc.balanceOf(account);
         const fmt  = parseFloat(ethers.utils.formatUnits(bal, dec)).toFixed(2);
+        // On Arc the native gas token is USDC, but it is a distinct pool from the ERC-20 USDC (different decimals):
+        // show both, never substitute the ERC-20 balance for the native gas balance.
         document.getElementById('balanceBadge').textContent = net.gasSymbol==='USDC'
-          ? fmt+' USDC'   // Arc: native gas and ERC-20 USDC are one pool, show it once
+          ? nativeFmt+' '+net.gasSymbol+' (gas)  /  '+fmt+' USDC (ERC-20)'
           : fmt+' USDC  /  '+nativeFmt+' '+net.gasSymbol;
       }catch(_){
         document.getElementById('balanceBadge').textContent = nativeFmt+' '+net.gasSymbol;
@@ -3427,19 +3429,27 @@ function deployOpSnapshot(){
     network: activeNetwork
   };
 }
+/* A fatal operation-identity violation: the operation (or the whole batch) must stop scheduling new transactions, never
+   continue to the next network. Recoverable per-network failures (a rejected transaction, a wrong-chain switch that
+   timed out, an unsupported optional bridge) are ordinary Errors without this flag. */
+function fatalDeployError(message){
+  const err = new Error(message);
+  err.fatal = true;
+  return err;
+}
 function assertOpUnchanged(op, opts){
   opts = opts || {};
   if(op.sourceHash && pendingSource && pendingSource.code && matHash(pendingSource.code) !== op.sourceHash){
-    throw new Error('The contract source changed. Compile and deploy again.');
+    throw fatalDeployError('The contract source changed. Compile and deploy again.');
   }
   if((account || '') !== op.account){
-    throw new Error('The wallet account changed. Connect the same account and deploy again.');
+    throw fatalDeployError('The wallet account changed. Connect the same account and deploy again.');
   }
   if((typeof multichainMode !== 'undefined') && multichainMode !== op.mode){
-    throw new Error('The deployment mode changed. Start the deployment again.');
+    throw fatalDeployError('The deployment mode changed. Start the deployment again.');
   }
   if(!opts.allowNetworkChange && op.network && activeNetwork !== op.network){
-    throw new Error('The network changed. Switch back to the network you confirmed, then deploy again.');
+    throw fatalDeployError('The network changed. Switch back to the network you confirmed, then deploy again.');
   }
 }
 
