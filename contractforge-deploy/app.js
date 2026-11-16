@@ -3349,7 +3349,7 @@ function deployFromBuffer(){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
-/* ---- Deterministic contract resolution (phase 11.1) ---- */
+/* ---- Deterministic contract resolution (phase 11.1 / 11.1.1) ---- */
 /* A compiled contract is deployable only when it has non-empty creation bytecode (abstract contracts, interfaces and
    libraries have none). */
 function isDeployableArtifact(c){
@@ -3359,6 +3359,25 @@ function isDeployableArtifact(c){
 function deployableContractNames(contracts){
   return Object.keys(contracts || {}).filter((n) => isDeployableArtifact(contracts[n]));
 }
+/* Library references still to be linked (solc `evm.bytecode.linkReferences`): the names of any library the creation
+   bytecode references but has not been linked. Empty array => no external linking required. */
+function unresolvedLibraries(c){
+  const lr = c && c.evm && c.evm.bytecode && c.evm.bytecode.linkReferences;
+  if(!lr || typeof lr !== 'object') return [];
+  const names = [];
+  for(const file of Object.keys(lr)){
+    const libs = lr[file] || {};
+    for(const lib of Object.keys(libs)){
+      if(Array.isArray(libs[lib]) && libs[lib].length) names.push(lib);
+    }
+  }
+  return names;
+}
+function libraryLinkError(name, libs){
+  const err = new Error('Contract "' + name + '" needs these libraries linked before it can be deployed: ' + libs.join(', ') + '.');
+  err.libraries = libs.slice();
+  return err;
+}
 function ambiguousContractError(names){
   const err = new Error('This source contains ' + names.length + ' deployable contracts (' + names.join(', ') + '). Pick the one to deploy.');
   err.ambiguous = true;
@@ -3367,28 +3386,65 @@ function ambiguousContractError(names){
 }
 /* Resolves the contract to deploy from the compiler output. An exact requested name wins and is never substituted by
    another contract. Without a requested name, a single deployable contract is selected automatically; several require
-   the caller to pick one (the error carries the list). */
+   the caller to pick one (the error carries the list). A contract whose bytecode still references unlinked libraries is
+   never selected or offered in the selector — it is refused with a clear diagnostic. */
 function resolveContract(contracts, requestedName){
   const all = Object.keys(contracts || {});
   if (!all.length) throw new Error('The compiler returned no contract for this source.');
   if (requestedName) {
-    if (Object.prototype.hasOwnProperty.call(contracts, requestedName)) {
-      if (isDeployableArtifact(contracts[requestedName])) return requestedName;
-      throw new Error('Contract "' + requestedName + '" is not deployable (abstract, interface or library?).');
-    }
-    throw new Error('Contract "' + requestedName + '" was not found in the compiler output.');
+    if (!Object.prototype.hasOwnProperty.call(contracts, requestedName)) throw new Error('Contract "' + requestedName + '" was not found in the compiler output.');
+    const c = contracts[requestedName];
+    if (!isDeployableArtifact(c)) throw new Error('Contract "' + requestedName + '" is not deployable (abstract, interface or library?).');
+    const libs = unresolvedLibraries(c);
+    if (libs.length) throw libraryLinkError(requestedName, libs);
+    return requestedName;
   }
-  const deployable = deployableContractNames(contracts);
-  if (deployable.length === 1) return deployable[0];
-  if (!deployable.length) throw new Error('No deployable contract in this source (only abstract contracts, interfaces or libraries?).');
-  throw ambiguousContractError(deployable);
+  const withBytecode = all.filter((n) => isDeployableArtifact(contracts[n]));
+  if (!withBytecode.length) throw new Error('No deployable contract in this source (only abstract contracts, interfaces or libraries?).');
+  const ready = withBytecode.filter((n) => !unresolvedLibraries(contracts[n]).length);
+  if (ready.length === 1) return ready[0];
+  if (ready.length > 1) throw ambiguousContractError(ready);
+  // every bytecode-bearing contract needs library linking
+  throw libraryLinkError(withBytecode[0], unresolvedLibraries(contracts[withBytecode[0]]));
 }
 
 /* ======================================================================
    COMPILE + DEPLOY (self-hosted solc-js, verified against vendor/MANIFEST.json)
    ====================================================================== */
 
+/* ---- Operation-scoped guards (phase 11.1.1) ----
+   A deploy is a sequence of async steps (compile → confirm → sign → broadcast). If the source, wallet or mode changes
+   mid-flight, the operation must stop before signing rather than broadcast stale data. `deployInFlight` stops
+   double-click/concurrent runs; `deployOpSnapshot`/`assertOpUnchanged` re-check the operation's identity at each signing
+   boundary. Multi-deploy's own per-network wallet switch is an internal transition that changes neither the account nor
+   the mode, so it does not trip these guards. */
+let deployInFlight = false;
+function deployOpSnapshot(){
+  return {
+    sourceHash: (pendingSource && pendingSource.code) ? matHash(pendingSource.code) : '',
+    account: account || '',
+    mode: (typeof multichainMode !== 'undefined') ? multichainMode : 'single',
+    network: activeNetwork
+  };
+}
+function assertOpUnchanged(op, opts){
+  opts = opts || {};
+  if(op.sourceHash && pendingSource && pendingSource.code && matHash(pendingSource.code) !== op.sourceHash){
+    throw new Error('The contract source changed. Compile and deploy again.');
+  }
+  if((account || '') !== op.account){
+    throw new Error('The wallet account changed. Connect the same account and deploy again.');
+  }
+  if((typeof multichainMode !== 'undefined') && multichainMode !== op.mode){
+    throw new Error('The deployment mode changed. Start the deployment again.');
+  }
+  if(!opts.allowNetworkChange && op.network && activeNetwork !== op.network){
+    throw new Error('The network changed. Switch back to the network you confirmed, then deploy again.');
+  }
+}
+
 async function compileAndDeploy(){
+  if(deployInFlight){ logConsole('warn','A deployment is already in progress.'); return; }
   if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
   if(!signer){ logConsole('err','Connect your wallet first.'); return; }
   const draftReason = reqBlockReason();   // on every network: a draft is never compiled or deployed
@@ -3400,34 +3456,44 @@ async function compileAndDeploy(){
   if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
   logConsole('step','Starting compilation of '+pendingSource.name+'.sol…');
 
+  deployInFlight = true;
+  const op = deployOpSnapshot();
   try{
-    const compiled = await compilePending();
-    await finishDeploy(compiled);
+    const compiled = await compilePendingResolved();
+    if(!compiled){ logConsole('warn','Deployment cancelled (no contract selected).'); return; }
+    await finishDeploy(compiled, op);
   }catch(e){
-    if(e && e.ambiguous && typeof uiContractSelect === 'function'){
-      const target = await uiContractSelect(e.deployable);
-      if(!target){ logConsole('warn','Deployment cancelled (no contract selected).'); return; }
-      logConsole('step','Compiling '+target+'…');
-      try{
-        const compiled = await compileSource(pendingSource.name, pendingSource.code, target);
-        await finishDeploy(compiled);
-      }catch(e2){
-        if(e2 && e2.handled) return;
-        logConsole('err','Error: '+(e2.message||e2));
-      }
-      return;
-    }
     if(e && e.handled) return; // already reported in the console
     logConsole('err','Error: '+(e.message||e));
+  }finally{
+    deployInFlight = false;
   }
 }
 
 /* The shared tail of compileAndDeploy: constructor values, mainnet confirmation, then the actual deploy. */
-async function finishDeploy(compiled){
+async function finishDeploy(compiled, op){
+  assertOpUnchanged(op);
   const ctorInputs = (compiled.abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs;
   const ctorValues = collectCtorValues(ctorInputs);
   if(!(await mainnetDeployConfirm({ args: typeof ctorSummary === 'function' ? ctorSummary() : [], maturity: matDialogInfo(pendingSource.template), facts: compilerFacts(compiled).concat(pendingSource.facts || []), acks: pendingSource.acks || [] }))){ logConsole('warn','Mainnet deployment cancelled.'); return; }
+  assertOpUnchanged(op);   // the confirmation dialog is the last chance before signing
   await deployCompiled(compiled, ctorValues, activeNetwork);
+}
+
+/* Compiles pendingSource once, resolving an ambiguous multi-contract source through the selector. Returns the compiled
+   artifact, or null when the user cancels. Shared by Single and Multi-deploy so both resolve the exact same way. */
+async function compilePendingResolved(){
+  try{
+    return await compilePending();
+  }catch(e){
+    if(e && e.ambiguous && typeof uiContractSelect === 'function'){
+      const target = await uiContractSelect(e.deployable);
+      if(!target){ logConsole('warn','Deployment cancelled (no contract selected).'); return null; }
+      logConsole('step','Compiling '+target+'…');
+      return await compilePending(target);
+    }
+    throw e;
+  }
 }
 
 /* Compiles any source with the selected solc; resolves { name, target, abi, bytecode }. An explicitTarget (chosen in the
@@ -3439,7 +3505,7 @@ async function compileSource(name, code, explicitTarget){
   const input = {
     language: 'Solidity',
     sources: { [name+'.sol']: { content: code } },
-    settings: { outputSelection: { '*': { '*': ['abi','evm.bytecode.object'] } }, optimizer:{enabled:true, runs:200} }
+    settings: { outputSelection: { '*': { '*': ['abi','evm.bytecode.object','evm.bytecode.linkReferences'] } }, optimizer:{enabled:true, runs:200} }
   };
 
   const output = JSON.parse(await solcCompile(JSON.stringify(input)));
@@ -3459,20 +3525,32 @@ async function compileSource(name, code, explicitTarget){
     ? explicitTarget
     : ((pendingSource && Array.isArray(pendingSource.aiTargets) && pendingSource.aiTargets.length > 1) ? undefined : name);
   const target = resolveContract(contracts, requested);
-  const abi = contracts[target].abi;
-  const bytecode = '0x'+contracts[target].evm.bytecode.object;
+  const artifact = contracts[target];
+  const rawObject = artifact.evm.bytecode.object;
+  if(typeof rawObject !== 'string' || !/^[0-9a-fA-F]*$/.test(rawObject)){
+    const err = new Error('Cannot deploy "' + target + '": the creation bytecode is malformed or still holds an unlinked library placeholder.');
+    err.handled = true; throw err;
+  }
+  const abi = artifact.abi;
+  const bytecode = '0x'+rawObject;
   const bytecodeKeccak256 = (typeof ethers !== 'undefined' && ethers.utils && ethers.utils.keccak256) ? ethers.utils.keccak256(bytecode) : '';
 
   logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
   return { name, target, abi, bytecode, sourceHash: matHash(code), compilerVersion: SOLC_VERSION, compilerSha256: SOLC_SHA256, bytecodeKeccak256 };
 }
 
-async function compilePending(){
-  const compiled = await compileSource(pendingSource.name, pendingSource.code);
+async function compilePending(explicitTarget){
+  const compiled = await compileSource(pendingSource.name, pendingSource.code, explicitTarget);
   // Store for Playground, Gas Estimator, Share
   window.__lastCompiledABI      = compiled.abi;
   window.__lastCompiledBytecode = compiled.bytecode;
   document.getElementById('auditContractLabel').value = pendingSource.name+'.sol';
+  // The form must reflect the resolved target's actual ABI (a selected contract may differ from the source's first).
+  pendingSource.resolvedTarget = compiled.target;
+  if(typeof syncCtorArgsFromAbi === 'function'){
+    const abi = (compiled && Array.isArray(compiled.abi)) ? compiled.abi : [];
+    syncCtorArgsFromAbi((abi.find(x=>x.type==='constructor') || { inputs: [] }).inputs);
+  }
   return compiled;
 }
 

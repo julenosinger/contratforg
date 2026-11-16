@@ -210,7 +210,7 @@ async function mdWaitForChain(key){
 }
 
 async function multiDeploy(){
-  if(mdState.running) return;
+  if(deployInFlight || mdState.running) return;
   if(!pendingSource.code){ logConsole('err','Generate a contract first.'); return; }
   if(!signer || !account){ logConsole('err','Connect your wallet first.'); return; }
   const keys = [...mdState.selected].filter(k => NETWORKS[k]);
@@ -230,22 +230,26 @@ async function multiDeploy(){
   }
 
   mdSetRunning(true);
+  deployInFlight = true;
+  const op = deployOpSnapshot();
   const original = activeNetwork;
   const results = [];
   try{
     if(typeof uiResetDeployResults === 'function') uiResetDeployResults();
     logConsole('step','Multi-deploy: compiling '+pendingSource.name+'.sol once…');
-    const main = await compilePending();
+    const main = await compilePendingResolved();
+    if(!main){ logConsole('warn','Multi-deploy cancelled (no contract selected).'); return results; }
     const mainInputs = (main.abi.find(x => x.type === 'constructor') || { inputs: [] }).inputs;
     let bridge = null, bridgeInputs = [];
     const wantBridge = multichainMode === 'cross' && mdState.includeBridge;
     if(wantBridge){
-      bridge = await compileSource(bname, bridgeCode);
+      bridge = await compileSource(bname, bridgeCode, bname);
       bridgeInputs = (bridge.abi.find(x => x.type === 'constructor') || { inputs: [] }).inputs;
     }
 
     for(const key of keys){
       const net = NETWORKS[key];
+      assertOpUnchanged(op, { allowNetworkChange: true });   // the per-network switch below is an internal transition
       try{
         activeNetwork = key; renderNetBar(); updateSideNet();
         logConsole('step','— '+net.label+' —');
@@ -278,6 +282,7 @@ async function multiDeploy(){
     activeNetwork = original; renderNetBar(); updateSideNet();
     try{ if(account) await switchWalletNetwork(); }catch(_){ /* ignore */ }
     mdSetRunning(false);
+    deployInFlight = false;
   }
   logConsole('ok','Multi-deploy finished: '+results.map(r => r[0]+' → '+r[1]).join(' · '));
   return results;

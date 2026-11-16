@@ -157,12 +157,38 @@ function parseCtorParams(src, contractName){
   });
 }
 
-/* Keeps pendingCtorArgs in sync with the constructor of the pending source (also for AI / shared contracts). */
+/* Keeps pendingCtorArgs in sync with the constructor of the pending source (also for AI / shared contracts). When a
+   specific contract was resolved (a selected target), the form is driven by that target's compiled ABI instead, so the
+   source re-parse is skipped — otherwise it would overwrite the ABI-synced form with the first contract's constructor. */
 function syncCtorArgsFromSource(){
+  if(pendingSource && pendingSource.resolvedTarget) return;
   const parsed = parseCtorParams(pendingSource.code, pendingSource.name);
   const known = new Map(pendingCtorArgs.map(a => [a.param, a]));
   if(parsed.length === pendingCtorArgs.length && parsed.every(p => known.has(p.param))) return;
   pendingCtorArgs = parsed.map(p => known.get(p.param) || { param:p.param, type:p.type, hint:'static', value:'', userSet:false, genNetwork:activeNetwork });
+}
+
+/* Rebuilds the constructor form schema from the selected contract's compiled ABI — the authoritative source. A selected
+   target may have a different constructor than the contract the form was first parsed from. Values are kept only for
+   parameters whose name still matches (their type is re-labelled from the ABI); everything else is cleared, never
+   silently carried across to another contract. A no-op when the form already matches, so builder defaults are untouched. */
+function syncCtorArgsFromAbi(ctorInputs){
+  ctorInputs = ctorInputs || [];
+  const prev = pendingCtorArgs || [];
+  const names = ctorInputs.map((inp) => inp.name || '');
+  const prevNames = prev.map((a) => a.param || '');
+  const same = names.length === prevNames.length && names.every((n, i) => n === prevNames[i]);
+  if(same) return;
+  if(!ctorInputs.length){
+    if(prev.length){ pendingCtorArgs = []; renderCtorArgs(); }
+    return;
+  }
+  pendingCtorArgs = ctorInputs.map((inp, i) => {
+    const name = inp.name || ('arg' + i);
+    const match = prev.find((a) => (a.param || '') === name);
+    return match ? { ...match, type: inp.type } : { param: name, type: inp.type, hint:'static', value:'', userSet:false, genNetwork:activeNetwork };
+  });
+  renderCtorArgs();
 }
 
 function coerceCtorValue(type, raw, label, opts){
