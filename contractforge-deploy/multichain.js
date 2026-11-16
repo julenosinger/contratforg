@@ -109,7 +109,15 @@ function portabilize(code, specs){
       const s = scaleAmount(sp.expr);
       if(s.isZero) continue; // zero stays zero, no token call needed
       needsDecimals = true;
+      if(sp.requireNonZero){
+        // A positive cap must never silently truncate to zero: bound the decimals first (so 10**decimals() cannot
+        // overflow) and then reject a positive value that resolves to zero base units.
+        assigns.push(`require(IERC20(${sp.tokenParam}).decimals() <= 38, "asset decimals out of range");`);
+      }
       assigns.push(`${sp.name} = ${s.digits} * 10**uint256(IERC20(${sp.tokenParam}).decimals())${s.scale ? ' / 10**' + s.scale : ''};`);
+      if(sp.requireNonZero){
+        assigns.push(`require(${sp.name} > 0, "deposit cap is not representable");`);
+      }
     } else if(sp.kind === 'uint'){
       const re = new RegExp('^([ \\t]*)uint256\\s+public\\s+constant\\s+' + sp.name + '(\\s*)=\\s*' + escRe(sp.rhs) + ';', 'm');
       if(!re.test(code)) throw new Error('portabilize: declaration of "' + sp.name + '" not found');

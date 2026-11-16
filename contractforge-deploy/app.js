@@ -2184,12 +2184,14 @@ CFBuilder.register(TRE_CONFIG);
    SECTION 04 — VAULT (ERC-4626 minimal)
    ====================================================================== */
 /* Parses a human-readable amount ("500" or "1.5") into the digits and fractional scale needed to express it in the
-   token's base units as `digits * 10**decimals() / 10**scale`. Throws for a non-numeric amount. */
+   token's base units as `digits * 10**decimals() / 10**scale`. Throws for a non-numeric amount. Leading zeros are
+   stripped (Solidity rejects 0-prefixed integer literals as octal). */
 function scaleAmount(amount){
   const m = /^(\d+)(?:\.(\d+))?$/.exec(String(amount).trim());
   if(!m) throw new Error('portabilize: "' + amount + '" is not a number');
-  const digits = m[1] + (m[2] || ''), scale = (m[2] || '').length;
-  return { digits, scale, isZero: /^0+$/.test(digits) };
+  const scale = (m[2] || '').length;
+  const digits = (m[1] + (m[2] || '')).replace(/^0+/, '');
+  return { digits, scale, isZero: digits === '' };
 }
 
 function genVault(){
@@ -2204,6 +2206,13 @@ function genVault(){
   // The cap is human-readable asset units, scaled to base units by the asset's own decimals at deployment (never a fixed 6).
   const capS = scaleAmount(cap);
   const capExpr = capS.isZero ? '0' : (capS.digits + ' * 10**uint256(asset.decimals())' + (capS.scale ? ' / 10**' + capS.scale : ''));
+  // A positive cap must never silently truncate to zero (which the vault reads as "unlimited"). Guard the constructor:
+  // reject absurd asset decimals (so 10**decimals() cannot overflow) and reject a positive cap that resolves to zero base
+  // units. An explicit zero cap (unlimited) needs no guard. In the portable modes the guard is added by portabilize (with
+  // the constructor asset), so the single-mode guard is only emitted here for the single mode.
+  const capGuardLines = (capS.isZero || (typeof isPortable === 'function' && isPortable()))
+    ? ''
+    : '        require(asset.decimals() <= 38, "asset decimals out of range");\n        require(depositCap > 0, "deposit cap is not representable");\n';
 
   if(!/^\d+$/.test(String(perf).trim()) || Number(perf) > 9999){
     alert('Performance fee must be a whole number of basis points from 0 to 9999 (1000 = 10%).');
@@ -2261,7 +2270,9 @@ contract ${name} {
         _locked = 1;
     }
 
-    constructor() { owner = msg.sender; }
+    constructor() {
+        owner = msg.sender;
+${capGuardLines}    }
 
     /// @notice Total assets that belong to share holders (unclaimed performance fees are excluded)
     function totalAssets() public view returns (uint256) {
@@ -2388,7 +2399,7 @@ contract ${name} {
 
   code = portabilize(code, [
     { kind:'addr', name:'asset', type:'IERC20', value:asset, param:'asset_', hint:'usdc', userSet:!!document.getElementById('vault_asset').value.trim() },
-    { kind:'scaled', name:'depositCap', expr:cap, tokenParam:'asset_' }
+    { kind:'scaled', name:'depositCap', expr:cap, tokenParam:'asset_', requireNonZero:true }
   ]);
   code = matStamp(code, 'vault');
   showCode('vaultCode', name+'.sol', code);
