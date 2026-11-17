@@ -3898,6 +3898,150 @@ function buildAuditMarkdown(r){
   return lines.join('\n');
 }
 
+/* ---- AI Auditor overview (Phase 12.2): read-only. runAudit(), renderAuditReport(), downloadAuditReport() and buildAuditMarkdown() are untouched. This only
+   notes, at the click on Run AI Audit, what runAudit() reads at that moment (the contract and the focus), and watches the page's own results, so it can say whether the
+   report on screen was written for the source on screen. ---- */
+const AUD_MAX_CODE = 60000;   // the most source the AI service accepts for an audit (AI_MAX_BODY in functions/api/ai.js and api/ai.js; a test keeps them equal)
+let audRun = null;            // the latest click: what the form held, and how it ended
+let audLast = null;           // the latest click that ended with a report on screen
+let audTap = null;            // while a run is waiting: a pass-through on alert(), only to learn the reason runAudit() gives when it fails
+
+function audNow(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) ? pendingSource : null;
+  const code = ps && ps.code ? ps.code : '';
+  const f = document.getElementById('audit_focus');
+  return { name: ps && ps.name ? ps.name : '', code, hash: code && typeof matHash === 'function' ? matHash(code) : '', template: ps && ps.template ? ps.template : '', focus: (f && f.value) || 'full' };
+}
+
+function audTapOn(){
+  if(audTap) return;
+  const orig = window.alert;
+  const tap = { orig, wrap: function(m){ if(audTap === tap && audRun && !audRun.done && /^Audit error: /.test(String(m))) audRun.error = String(m).replace(/^Audit error: /, ''); return orig.apply(window, arguments); } };
+  audTap = tap; window.alert = tap.wrap;
+}
+function audTapOff(){
+  if(!audTap) return;
+  if(window.alert === audTap.wrap) window.alert = audTap.orig;   // if something else replaced alert meanwhile, leave it alone
+  audTap = null;
+}
+
+function audSeverityCounts(report){
+  const counts = {};
+  ((report && report.findings) || []).forEach((f) => {
+    const sev = (typeof AUDIT_SEVERITIES !== 'undefined' && AUDIT_SEVERITIES.includes(String(f && f.severity).toLowerCase())) ? String(f.severity).toLowerCase() : 'info';
+    counts[sev] = (counts[sev] || 0) + 1;
+  });
+  return ['critical', 'high', 'medium', 'low', 'info'].filter((k) => counts[k]).map((k) => counts[k] + ' ' + k).join(' · ');
+}
+
+function audFinish(){
+  if(!audRun || audRun.done) return;
+  const btn = document.getElementById('runAuditBtn');
+  if(!btn || btn.disabled) return;                       // still waiting for the AI
+  audRun.done = true;
+  audTapOff();
+  const res = document.getElementById('auditResults');
+  if(typeof lastAuditReport !== 'undefined' && lastAuditReport && lastAuditReport !== audRun.prev && res && res.style.display === 'block'){
+    audLast = { name: audRun.name, hash: audRun.hash, focus: audRun.focus, report: lastAuditReport };
+  } else audRun.error = audRun.error || 'The page did not receive a report.';
+}
+
+function audRead(){
+  const now = audNow();
+  const net = (typeof NETWORKS !== 'undefined' && typeof activeNetwork !== 'undefined') ? NETWORKS[activeNetwork] : null;
+  const btn = document.getElementById('runAuditBtn');
+  const working = !!(btn && btn.disabled);
+  const why = (now.code && typeof reqBlockReason === 'function') ? reqBlockReason() : '';
+  let state = 'none', outdated = '';
+  if(working) state = 'working';
+  else if(audRun && audRun.done && audRun.error) state = 'failed';
+  else if(audLast){
+    const sameSrc = audLast.hash === now.hash && audLast.name === now.name;
+    const sameFocus = audLast.focus === now.focus;
+    state = sameSrc && sameFocus ? 'current' : 'outdated';
+    outdated = !sameSrc ? 'source' : (!sameFocus ? 'focus' : '');
+  }
+  const unavailable = state === 'failed' && /not configured|not available/i.test(audRun.error || '');
+  return { now, net, working, why, state, outdated, unavailable, mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '' };
+}
+
+const AUD_FOCUS = { full: 'Full audit (all categories)', security: 'Security only', gas: 'Gas optimization only', logic: 'Business logic only' };
+
+function audRender(){
+  const sum = document.getElementById('audSummary'), prog = document.getElementById('audProgress'), notes = document.getElementById('audNotes');
+  if(!sum || !prog || !notes) return;
+  const v = audRead(), n = v.now, last = audLast;
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  const lvl = n.code && typeof matInfo === 'function' ? (matInfo(n.template) || {}).level : '';
+  row('Contract', n.name ? n.name + '.sol' : 'None', n.name ? 'ok' : 'missing', n.name ? (lvl ? 'Maturity: ' + lvl : '') : 'Generate a contract in a builder first', true);
+  if(n.code){
+    row('Source', v.why ? 'Draft' : 'Ready', v.why ? 'missing' : 'ok', v.why ? 'A draft can be audited; it cannot be deployed: ' + v.why : '');
+    const big = n.code.length > AUD_MAX_CODE;
+    row('Size', n.code.length.toLocaleString('en-US') + ' characters', big ? 'bad' : 'ok', big ? 'More than the ' + AUD_MAX_CODE.toLocaleString('en-US') + ' the AI service accepts: it will refuse this source' : 'The AI service accepts up to ' + AUD_MAX_CODE.toLocaleString('en-US'));
+  }
+  CFBuilder.networkRow(row, v.net);
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  row('Focus', AUD_FOCUS[n.focus] || n.focus, 'ok', n.focus === 'full' ? '' : 'The score and its label refer to this focus only');
+  if(v.state === 'none') row('Report', 'No audit yet', 'missing', 'Press Run AI Audit');
+  else if(v.state === 'working') row('Report', 'Waiting for the AI…', 'missing');
+  else if(v.state === 'failed') row('Report', v.unavailable ? 'AI unavailable' : 'Audit failed', 'bad', audRun.error + (last ? ' · Download would still save the earlier report (of ' + last.name + ')' : ''));
+  else {
+    row('Report', 'Of ' + last.name + '.sol (' + (AUD_FOCUS[last.focus] || last.focus) + ')', v.state === 'current' ? 'ok' : 'missing',
+      v.state === 'outdated' ? (v.outdated === 'source' ? 'The contract on screen is not the one this report is about' : 'The focus changed since this report') : '');
+    const score = Math.max(0, Math.min(100, last.report.score || 0));
+    const label = (document.getElementById('auditScoreLabel') || {}).textContent || '';
+    row('Score', score + '/100', 'ok', 'A number given by the AI' + (label && label !== '—' && v.state === 'current' ? ', shown above as "' + label + '"' : '') + ': not computed by this page and not a guarantee');
+    const counts = audSeverityCounts(last.report);
+    row('Findings', counts || 'None', 'ok');
+    if(last.name !== n.name) row('Download saves', n.name + '_audit.md', 'missing', 'Titled with the contract on screen now (' + n.name + '), but the report is about ' + last.name, true);
+    else row('Download saves', n.name + '_audit.md', 'ok', '', true);
+  }
+  // progress: only what really happened
+  const hasSrc = !!n.code;
+  step('Source', hasSrc ? (v.why ? 'draft' : 'done') : 'todo', hasSrc ? (v.why ? 'A draft: it can be audited, but it cannot be deployed yet.' : n.name + '.sol is on screen.') : 'Generate a contract in a builder first.');
+  if(!hasSrc) step('Audit run', 'locked', 'Available once there is a contract.');
+  else if(v.state === 'working') step('Audit run', 'todo', 'Waiting for the AI…');
+  else if(v.state === 'failed') step('Audit run', 'attention', v.unavailable ? 'The AI is unavailable: ' + audRun.error : 'The audit did not complete: ' + audRun.error);
+  else if(v.state === 'current') step('Audit run', 'done', 'The AI answered for this source, with this focus.');
+  else if(v.state === 'outdated') step('Audit run', 'stale', v.outdated === 'source' ? 'The contract changed after this report. Run the audit again.' : 'The focus changed after this report.');
+  else step('Audit run', 'todo', 'Press Run AI Audit to ask the AI.');
+  step('Review', hasSrc && (v.state === 'current' || v.state === 'outdated') ? 'todo' : 'locked', 'Not tracked here: read each finding and decide. An AI audit is advisory and is not a security guarantee.');
+  [
+    'The score is a number the AI returns with the findings. This page does not compute it, and the word next to it (Secure, Moderate risk...) only follows that number.',
+    'The AI service limits the answer to about 2,000 tokens. A long report can arrive cut off, which this page cannot read: it then shows an error.',
+    'Download Report titles the file and the report with the contract on screen when you press it, which may not be the one that was audited.',
+    'Opening this tab from the contract bar does not start an audit: press Run AI Audit.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const fn = document.getElementById('audFocusNote'); if(fn) fn.textContent = n.focus === 'full' ? '' : 'The score and its label refer to "' + (AUD_FOCUS[n.focus] || n.focus) + '" only.';
+  const empty = document.getElementById('audEmpty'); if(empty) empty.hidden = document.getElementById('auditResults').style.display === 'block';
+}
+
+(function audInit(){
+  const sec = document.getElementById('sec-auditor'), btn = document.getElementById('runAuditBtn');
+  if(!sec || !btn || sec.dataset.audBound) return;
+  sec.dataset.audBound = '1';
+  // what the form held at the click (runAudit reads the same values, synchronously, before it waits for the AI)
+  btn.addEventListener('click', () => {
+    const n = audNow();
+    if(!n.code) return;
+    audTapOff();
+    audRun = { name: n.name, hash: n.hash, focus: n.focus, prev: typeof lastAuditReport !== 'undefined' ? lastAuditReport : null, done: false, error: '' };
+    audTapOn();
+  }, true);
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; audFinish(); audRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(btn, { attributes: true, attributeFilter: ['disabled'] });
+    watch(document.getElementById('auditResults'), { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+  }
+  CFBuilder.addView('auditor', audRender);
+})();
+
 /* 09 — ABI PLAYGROUND lives in playground.js */
 
 /* ======================================================================
@@ -4194,6 +4338,159 @@ async function estimateGas(){
   }
 }
 
+/* ---- Gas Estimator overview (Phase 12.3): read-only. estimateGas() and logGas() are untouched. This notes, at the click on Estimate Gas, what the page held (the contract, the
+   network, the two overrides) and reads the page's own log lines and meter afterwards, so the overview can say where each number came from and whether it still matches what is on
+   screen. It never asks the wallet, the node or CoinGecko for anything. ---- */
+const GAS_MAX_BYTES = 24576, GAS_WARN_BYTES = 20000;   // the page's own limits (EIP-170, and where it starts to warn)
+let gasRun = null;   // the latest click: what the form held, and how it ended
+let gasEst = null;   // the latest click that ended with an estimate on screen
+
+function gasNow(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) ? pendingSource : null;
+  const code = ps && ps.code ? ps.code : '';
+  const el = (id) => document.getElementById(id);
+  return {
+    name: ps && ps.name ? ps.name : '', code, template: ps && ps.template ? ps.template : '',
+    hash: code && typeof matHash === 'function' ? matHash(code) : '',
+    net: typeof activeNetwork !== 'undefined' ? activeNetwork : '',
+    gwei: parseFloat(el('gas_gweioverride') && el('gas_gweioverride').value) || 0,
+    price: parseFloat(el('gas_ethprice') && el('gas_ethprice').value) || 0
+  };
+}
+
+function gasLines(from){ return [...document.querySelectorAll('#gasLog .line .msg')].map((m) => m.textContent).slice(from || 0); }
+
+function gasFinish(){
+  if(!gasRun || gasRun.done) return;
+  const lines = gasLines(gasRun.startLen);
+  const blocked = lines.find((t) => /^(Generate and compile a contract first\.|Connect your wallet first\.|Compile the contract first)/.test(t));
+  const err = lines.find((t) => /^Error: /.test(t));
+  const fin = lines.find((t) => /^Estimate complete: /.test(t));
+  if(blocked){ gasRun.done = true; gasRun.kind = 'blocked'; gasRun.msg = blocked; return; }
+  if(fin){
+    const txt = (id) => (document.getElementById(id) || {}).textContent || '';
+    gasRun.done = true; gasRun.kind = 'ok';
+    gasRun.approx = lines.some((t) => /using approximation/.test(t));
+    gasRun.priceNote = gasRun.price > 0 ? 'manual' : (lines.some((t) => /^Could not fetch live price/.test(t)) ? 'unavailable' : (lines.some((t) => /^Gas token is USDC/.test(t)) ? 'fixed' : 'live'));
+    gasRun.est = { units: txt('g_units'), gasPrice: txt('g_gwei'), native: txt('g_native'), sym: txt('g_nativesub'), usd: txt('g_usd'), usdsub: txt('g_usdsub'), bytes: txt('g_bytecode') };
+    gasEst = Object.assign({ name: gasRun.name, hash: gasRun.hash, net: gasRun.net, gwei: gasRun.gwei, price: gasRun.price, approx: gasRun.approx, priceNote: gasRun.priceNote }, gasRun.est);
+    return;
+  }
+  if(err){ gasRun.done = true; gasRun.kind = 'failed'; gasRun.msg = err.replace(/^Error: /, ''); }
+}
+
+function gasWalletChain(){
+  const id = typeof window !== 'undefined' && window.ethereum && window.ethereum.chainId;   // a property the wallet already holds: nothing is requested
+  const n = id ? parseInt(id, 16) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function gasRead(){
+  const now = gasNow();
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[now.net]) ? NETWORKS[now.net] : null;
+  const why = (now.code && typeof reqBlockReason === 'function') ? reqBlockReason() : '';
+  const wallet = (typeof signer !== 'undefined' && !!signer);
+  const bc = window.__lastCompiledBytecode || '';
+  const art = (typeof shrArtifact === 'function') ? shrArtifact({ hash: now.hash, name: now.name }) : { state: 'none' };
+  const bytes = bc ? Math.max(0, (String(bc).length - 2) / 2) : 0;
+  const ctor = (typeof pendingCtorArgs !== 'undefined' ? pendingCtorArgs : []).length;
+  let state = 'none', outdated = '';
+  if(gasRun && !gasRun.done) state = 'working';
+  else if(gasRun && gasRun.done && gasRun.kind === 'failed') state = 'failed';
+  else if(gasRun && gasRun.done && gasRun.kind === 'blocked') state = 'blocked';
+  else if(gasEst){
+    const sameSrc = gasEst.hash === now.hash && gasEst.name === now.name;
+    const sameNet = gasEst.net === now.net;
+    const sameIn = gasEst.gwei === now.gwei && gasEst.price === now.price;
+    state = sameSrc && sameNet && sameIn ? 'current' : 'outdated';
+    outdated = !sameSrc ? 'source' : (!sameNet ? 'network' : (!sameIn ? 'inputs' : ''));
+  }
+  return { now, net, why, wallet, bc, art, bytes, ctor, state, outdated, wchain: gasWalletChain(),
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '' };
+}
+
+function gasRender(){
+  const sum = document.getElementById('gasSummary'), prog = document.getElementById('gasProgress'), notes = document.getElementById('gasNotes');
+  if(!sum || !prog || !notes) return;
+  const v = gasRead(), n = v.now, sym = v.net ? v.net.gasSymbol : '';
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  const lvl = n.code && typeof matInfo === 'function' ? (matInfo(n.template) || {}).level : '';
+  row('Contract', n.name ? n.name + '.sol' : 'None', n.name ? 'ok' : 'missing', n.name ? (lvl ? 'Maturity: ' + lvl : '') : 'Generate a contract in a builder first', true);
+  CFBuilder.networkRow(row, v.net);
+  if(v.wchain != null && v.net){
+    const same = v.wchain === v.net.chainIdDec;
+    const known = typeof NETWORKS !== 'undefined' ? Object.values(NETWORKS).find((x) => x.chainIdDec === v.wchain) : null;
+    row('Wallet chain', same ? 'The same chain' : 'Chain ' + v.wchain + (known ? ' (' + known.label + ')' : ''), same ? 'ok' : 'bad', same ? '' : 'The numbers come from your wallet\'s chain, but this page labels them with ' + v.net.label);
+  }
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  row('Wallet', v.wallet ? 'Connected' : 'Not connected', v.wallet ? 'ok' : 'missing', v.wallet ? '' : 'The estimate goes through your wallet\'s connection');
+  if(v.art.state === 'none') row('Compiled bytecode', 'None yet', 'missing', 'Compile and deploy in section 07 to get it; nothing is compiled here');
+  else row('Compiled bytecode', v.art.state === 'exact' ? 'From this exact source' : 'From the last compile', v.art.state === 'exact' ? 'ok' : 'missing', v.art.state === 'exact' ? 'A deployment made on this page proves it' : 'This page cannot tell it is from the contract on screen');
+  if(v.bc){
+    const big = v.bytes > GAS_MAX_BYTES, large = v.bytes > GAS_WARN_BYTES;
+    row('Bytecode size', v.bytes.toLocaleString('en-US') + ' of ' + GAS_MAX_BYTES.toLocaleString('en-US') + ' bytes', big ? 'bad' : (large ? 'missing' : 'ok'), big ? 'Over the EIP-170 limit: it cannot be deployed' : (large ? 'Large: consider splitting the contract' : ''));
+  }
+  row('Constructor', v.ctor ? v.ctor + (v.ctor === 1 ? ' argument' : ' arguments') : 'No arguments', 'ok', v.ctor ? 'Not included: the node is asked about the creation bytecode only' : '');
+  row('Gas price', n.gwei > 0 ? n.gwei + ' gwei (your override)' : 'From the network', 'ok', n.gwei > 0 ? '' : 'Asked of your wallet\'s connection when you press Estimate');
+  if(n.price > 0) row('Dollar price', '$' + n.price + ' per ' + sym + ' (yours)', 'ok');
+  else if(sym === 'USDC') row('Dollar price', 'Fixed at $1', 'ok', 'The gas token here is USDC');
+  else if(sym === 'AVAX' || sym === 'BNB') row('Dollar price', 'The Ethereum price', 'bad', 'This page asks CoinGecko for the Ethereum price for ' + sym + ' (KNOWN): set your own price above');
+  else row('Dollar price', 'CoinGecko', 'ok', 'An outside service, asked when you press Estimate and no price is set');
+  // what the page last estimated
+  const e = gasEst;
+  if(v.state === 'none') row('Estimate', 'Not made yet', 'missing', 'Press Estimate Gas');
+  else if(v.state === 'working') row('Estimate', 'Working…', 'missing');
+  else if(v.state === 'blocked') row('Estimate', 'Not made', 'bad', gasRun.msg);
+  else if(v.state === 'failed') row('Estimate', 'Failed', 'bad', gasRun.msg + (e ? ' · The meter still shows the earlier estimate (' + e.name + ')' : ''));
+  else {
+    row('Estimate', e.units + ' gas × ' + e.gasPrice + ' gwei = ' + e.native + ' ' + e.sym, v.state === 'current' ? 'ok' : 'missing',
+      v.state === 'outdated' ? ({ source: 'The contract on screen is not the one estimated', network: 'The network changed since', inputs: 'An override changed since' }[v.outdated]) : '');
+    row('Gas units from', e.approx ? 'A formula' : 'The node', e.approx ? 'missing' : 'ok', e.approx ? 'The node could not estimate, so the page used 32,000 + 200 per non-zero byte + 4 per byte: a rough number' : 'eth_estimateGas on the creation bytecode');
+    row('Cost in dollars', e.usd, e.usd === '—' ? 'missing' : 'ok', { manual: 'At the price you set', fixed: 'At $1: the gas token is USDC', live: 'At the CoinGecko price', unavailable: 'The price service could not be reached: nothing is invented' }[e.priceNote] || '');
+  }
+  const hasSrc = !!n.code, ready = hasSrc && v.wallet && !!v.bc;
+  step('Ready to estimate', hasSrc ? (ready ? 'done' : 'todo') : 'todo', ready ? 'A contract, a wallet and compiled bytecode.' : 'Needs: ' + [!hasSrc && 'a contract', !v.wallet && 'a connected wallet', !v.bc && 'compiled bytecode'].filter(Boolean).join(', ') + '.');
+  if(!ready) step('Estimate', 'locked', 'Available once it is ready.');
+  else if(v.state === 'working') step('Estimate', 'todo', 'Working…');
+  else if(v.state === 'blocked' || v.state === 'failed') step('Estimate', 'attention', gasRun.msg);
+  else if(v.state === 'current') step('Estimate', 'done', e.approx ? 'Made for this source, but with the formula: a rough number.' : 'Made for this source, on this network, with these settings.');
+  else if(v.state === 'outdated') step('Estimate', 'stale', { source: 'The contract changed after this estimate.', network: 'The network changed after this estimate.', inputs: 'An override changed after this estimate.' }[v.outdated]);
+  else step('Estimate', 'todo', 'Press Estimate Gas.');
+  step('Before you deploy', ready && (v.state === 'current' || v.state === 'outdated') ? 'todo' : 'locked', 'Not tracked here: gas prices move, so estimate again right before deploying, and add what the constructor arguments cost.');
+  [
+    'The node is asked about the creation bytecode only. Constructor arguments are not part of the estimate, so a contract that takes arguments will cost a little more.',
+    'If the node cannot estimate, the page uses a formula (32,000 + 200 per non-zero byte + 4 per byte) and says so in the log: treat that number as rough.',
+    'The numbers come from your wallet\'s connection. If your wallet is on another chain than the one labelled here, the figures belong to that chain.',
+    'The dollar price is yours, or fixed at $1 where the gas token is USDC, or fetched from CoinGecko. For Avalanche (AVAX) and BNB Chain (BNB) the page asks CoinGecko for the Ethereum price: set your own.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const pn = document.getElementById('gasPriceNote');
+  if(pn) pn.textContent = n.price > 0 ? '' : (sym === 'USDC' ? 'Not needed here: the gas token is USDC ($1).' : ((sym === 'AVAX' || sym === 'BNB') ? 'Set a price for ' + sym + ': the live price asked for is the Ethereum one.' : ''));
+}
+
+(function gasInit(){
+  const sec = document.getElementById('sec-gas'), btn = document.getElementById('estimateGasBtn');
+  if(!sec || !btn || sec.dataset.gasBound) return;
+  sec.dataset.gasBound = '1';
+  // what the form held at the click (estimateGas reads the same values before it asks anything)
+  btn.addEventListener('click', () => {
+    const n = gasNow();
+    gasRun = { name: n.name, hash: n.hash, net: n.net, gwei: n.gwei, price: n.price, startLen: gasLines().length, done: false, kind: '', msg: '', approx: false, priceNote: '' };
+  }, true);
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; gasFinish(); gasRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('gasLog'), { childList: true });
+    watch(document.getElementById('gasMeter'), { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+    watch(document.getElementById('walletStatus'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  CFBuilder.addView('gas', gasRender);
+})();
+
 /* ======================================================================
    12 — VERIFY ON EXPLORER
    ====================================================================== */
@@ -4335,10 +4632,7 @@ function verRender(){
   const list = document.getElementById('verSummary'), prog = document.getElementById('verProgress');
   if(!list || !prog) return;
   const v = verRead(); list.textContent = ''; prog.textContent = '';
-  const row = (label, value, state, flag, mono) => {
-    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok'); r.appendChild(swbEl('dt', '', label));
-    const dd = swbEl('dd', mono ? 'mono' : '', value); if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag)); r.appendChild(dd); list.appendChild(r);
-  };
+  const row = CFBuilder.rowWriter(list);
   const apiHost = (u) => { try{ return new URL(u).host; }catch(_){ return u; } };
   const expSolc = 'v' + SOLC_VERSION;
   const compilerOk = v.compiler.indexOf(expSolc) === 0, runsOk = v.runs === '200';
@@ -4373,11 +4667,7 @@ function verRender(){
   if(lb) lb.hidden = !lat;
   setNote('verLatestNote', lat ? 'Latest deployment on ' + (v.net ? v.net.label : 'this network') + ' (from ' + lat.from + '): ' + lat.address.slice(0, 10) + '…' + lat.address.slice(-6) : '', 'info');
   /* progress */
-  const step = (title, state, text) => {
-    const li = swbEl('li'); li.setAttribute('data-state', state);
-    const mark = swbEl('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
-    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'bld-t', text)); li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
-  };
+  const step = CFBuilder.stepWriter(prog);
   const r = v.run, rNet = r && NETWORKS[r.network] ? NETWORKS[r.network].label : '';
   step('Ready to submit', problems.length ? 'todo' : 'done', problems.length ? 'Still needed: ' + problems.join('; ') + '.' : 'Everything the explorer asks for is filled in.');
   if(r && r.submitted) step('Submitted', 'done', 'Accepted by the explorer for ' + r.address.slice(0, 10) + '…' + r.address.slice(-6) + ' on ' + rNet + (r.guid ? ' (GUID ' + r.guid + ')' : '') + '.');
@@ -4589,10 +4879,7 @@ function shrRender(){
   if(!list || !notes) return;
   const v = shrRead(); list.textContent = ''; notes.textContent = '';
   const isMain = !!(v.net && v.net.isMainnet), art = shrArtifact(v);
-  const row = (label, value, state, flag, mono) => {
-    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok'); r.appendChild(swbEl('dt', '', label));
-    const dd = swbEl('dd', mono ? 'mono' : '', value); if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag)); r.appendChild(dd); list.appendChild(r);
-  };
+  const row = CFBuilder.rowWriter(list);
   row('Contract', v.code ? v.name + '.sol' : 'None generated yet', v.code ? 'ok' : 'missing', v.code ? (v.ps.template || '') + (v.level ? ' · ' + v.level : '') : 'Generate one in a builder first');
   CFBuilder.networkRow(row, v.net);
   row('Deployment Mode', v.dmode || 'Unknown', v.dmode ? 'ok' : 'bad');
@@ -5690,13 +5977,7 @@ function wzRender(){
   const subs = WIZARD_SUBTYPES[wizardState.category] || [], sub = subs.find(s => s.id === wizardState.subtype);
   const info = sub ? WZ_INFO[sub.id] : null;
   list.textContent = '';
-  const row = (label, value, state, flag, mono) => {
-    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
-    r.appendChild(swbEl('dt', '', label));
-    const dd = swbEl('dd', mono ? 'mono' : '', value);
-    if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag));
-    r.appendChild(dd); list.appendChild(r);
-  };
+  const row = CFBuilder.rowWriter(list);
   row('Step', (wizardState.step + 1) + ' of 4: ' + WZ_STEPS[wizardState.step], 'ok');
   row('Goal', WZ_CATEGORY[wizardState.category] || 'Not chosen yet', WZ_CATEGORY[wizardState.category] ? 'ok' : 'missing');
   row('Contract', sub ? sub.name : 'Not chosen yet', sub ? 'ok' : 'missing');
@@ -5783,13 +6064,7 @@ function dplRender(){
   const v = dplRead();
   list.textContent = ''; prog.textContent = '';
   const net = v.net, isMain = !!(net && net.isMainnet), blocked = !!(v.block || v.sameDeployer);
-  const row = (label, value, state, flag, mono) => {
-    const r = swbEl('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
-    r.appendChild(swbEl('dt', '', label));
-    const dd = swbEl('dd', mono ? 'mono' : '', value);
-    if(flag) dd.appendChild(swbEl('span', 'bld-flag', flag));
-    r.appendChild(dd); list.appendChild(r);
-  };
+  const row = CFBuilder.rowWriter(list);
   /* header strip */
   const head = document.getElementById('dplHead');
   if(head){
@@ -5854,12 +6129,7 @@ function dplRender(){
     if(v.code && net) item(isMain ? (approved ? 'ok' : 'warn') : 'ok', isMain ? (approved ? 'Mainnet: the maturity confirmation is given for this source.' : 'Mainnet: the maturity confirmation is asked when you press Compile and deploy.') : 'Testnet deployment (no maturity approval).');
   }
   /* progress */
-  const step = (title, state, text) => {
-    const li = swbEl('li'); li.setAttribute('data-state', state);
-    const mark = swbEl('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'draft' || state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
-    const body = swbEl('div'); body.appendChild(swbEl('b', '', title)); body.appendChild(swbEl('span', 'bld-t', text));
-    li.appendChild(mark); li.appendChild(body); prog.appendChild(li);
-  };
+  const step = CFBuilder.stepWriter(prog);
   if(!v.code) step('Source', 'todo', 'No contract yet. Generate one in a builder.');
   else if(blocked) step('Source', 'draft', 'The source cannot be deployed yet: ' + (v.block || (v.sameDeployer + ' cannot be the wallet that deploys it')));
   else step('Source', 'done', v.name + '.sol is ready to compile.');
@@ -6593,6 +6863,152 @@ function renderAnalyticsHistoryPills(){
     <div class="pill" data-onclick="setAnalyticsAddress('${escapeHtml(h.address)}')">${escapeHtml(h.name)} (${escapeHtml(h.network)})</div>`).join('');
 }
 
+/* ---- Analytics overview (Phase 12.5): read-only. loadAnalytics(), refreshAnalytics(), setAnalyticsAddress() and the pills are untouched. This notes, at the click on Load Analytics or
+   Refresh, what the page held (the address, the look-back, the network) and reads the page's own cards and console line afterwards, so the overview can say where the numbers come
+   from and whether they still match what is on screen. It never asks the wallet or a node for anything. ---- */
+let anRun = null;    // the latest click: what the form held, and how it ended
+let anLast = null;   // the latest click that ended with numbers on screen
+
+function anNow(){
+  const el = (id) => document.getElementById(id);
+  const raw = el('an_blocks') ? el('an_blocks').value : '';
+  return { addr: ((el('an_address') && el('an_address').value) || '').trim(), raw, look: parseInt(raw || '10000'), net: typeof activeNetwork !== 'undefined' ? activeNetwork : '' };   // the look-back is read exactly as loadAnalytics() reads it
+}
+
+function anCards(){
+  return [...document.querySelectorAll('#an_kpis .an-card')].map((c) => ({ label: (c.querySelector('.anl') || {}).textContent || '', value: (c.querySelector('.anv') || {}).textContent || '', sub: (c.querySelector('.ans') || {}).textContent || '' }));
+}
+
+function anFinish(){
+  if(!anRun || anRun.done) return;
+  const k = document.getElementById('an_kpis');
+  const lines = [...document.querySelectorAll('#deployConsole .line .msg')].map((m) => m.textContent).slice(anRun.startLen);
+  const err = lines.find((t) => /^Analytics error: /.test(t));
+  if(err){ anRun.done = true; anRun.kind = 'failed'; anRun.msg = err.replace(/^Analytics error: /, ''); return; }
+  if(k && k.firstChild && k.firstChild !== anRun.firstKpi && document.getElementById('analyticsData').style.display === 'block'){
+    anRun.done = true; anRun.kind = 'ok';
+    anLast = { addr: anRun.addr, net: anRun.net, raw: anRun.raw, look: anRun.look, cards: anCards() };
+  }
+}
+
+function anRead(){
+  const now = anNow();
+  const net = (typeof NETWORKS !== 'undefined' && NETWORKS[now.net]) ? NETWORKS[now.net] : null;
+  const valid = typeof isAddr === 'function' && isAddr(now.addr);
+  const wallet = (typeof provider !== 'undefined' && !!provider);
+  const rec = valid ? loadDeployHistory().find((h) => h && h.address && String(h.address).toLowerCase() === now.addr.toLowerCase()) : null;
+  let state = 'none', outdated = '';
+  if(anRun && !anRun.done) state = 'working';
+  else if(anRun && anRun.done && (anRun.kind === 'failed' || anRun.kind === 'blocked')) state = anRun.kind;
+  else if(anLast){
+    const sameAddr = anLast.addr.toLowerCase() === now.addr.toLowerCase();
+    const sameNet = anLast.net === now.net, sameLook = anLast.look === now.look || (Number.isNaN(anLast.look) && Number.isNaN(now.look));
+    state = sameAddr && sameNet && sameLook ? 'current' : 'outdated';
+    outdated = !sameAddr ? 'address' : (!sameNet ? 'network' : (!sameLook ? 'range' : ''));
+  }
+  return { now, net, valid, wallet, rec, wchain: gasWalletChain(), state, outdated,
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '' };
+}
+
+function anShort(a){ return a ? String(a).slice(0, 8) + '…' + String(a).slice(-4) : ''; }
+
+function anRender(){
+  const sum = document.getElementById('anSummary'), prog = document.getElementById('anProgress'), notes = document.getElementById('anNotes');
+  if(!sum || !prog || !notes) return;
+  const v = anRead(), n = v.now, last = anLast;
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  if(!n.addr) row('Address', 'None yet', 'missing', 'Type an address or pick a deployment below', true);
+  else if(!v.valid) row('Address', n.addr.length > 46 ? n.addr.slice(0, 44) + '…' : n.addr, 'bad', 'Not a valid address: the node will refuse it', true);
+  else row('Address', n.addr, 'ok', '', true);
+  if(v.rec){
+    const rn = NETWORKS[v.rec.network];
+    const same = v.rec.network === n.net;
+    row('Known deployment', (v.rec.name || 'Contract') + ' on ' + (rn ? rn.label : 'an unknown network'), same ? 'ok' : 'bad', same ? '' : 'Analytics reads from your wallet\'s chain and labels with ' + (v.net ? v.net.label : 'the app\'s network') + ', not with ' + (rn ? rn.label : 'that network'));
+  } else if(v.valid) row('Known deployment', 'Not in this browser\'s history', 'ok');
+  CFBuilder.networkRow(row, v.net);
+  if(v.wchain != null && v.net){
+    const same = v.wchain === v.net.chainIdDec;
+    const known = typeof NETWORKS !== 'undefined' ? Object.values(NETWORKS).find((x) => x.chainIdDec === v.wchain) : null;
+    row('Wallet chain', same ? 'The same chain' : 'Chain ' + v.wchain + (known ? ' (' + known.label + ')' : ''), same ? 'ok' : 'bad', same ? '' : 'Everything is read from your wallet\'s chain, but this page labels it with ' + v.net.label);
+  }
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  row('Reads through', 'Your wallet\'s connection', 'ok', 'Not the network\'s public node: the chain is the one your wallet is on');
+  row('Wallet', v.wallet ? 'Connected' : 'Not connected', v.wallet ? 'ok' : 'missing', v.wallet ? '' : 'Analytics needs it to read');
+  const lk = n.look;
+  if(Number.isNaN(lk)) row('Look-back', 'Not a number', 'bad', 'The page cannot read it');
+  else if(lk < 0) row('Look-back', lk.toLocaleString('en-US') + ' blocks', 'bad', 'The range would start after the latest block: the node will answer with an error');
+  else if(lk === 0) row('Look-back', '0 blocks', 'ok', 'Only the latest block');
+  else row('Look-back', lk.toLocaleString('en-US') + ' blocks', 'ok', lk > 10000 ? 'Longer than the default: some nodes refuse big ranges and answer with their own limit' : '');
+  if(v.state === 'none') row('Result', 'Not loaded yet', 'missing', 'Press Load Analytics');
+  else if(v.state === 'working') row('Result', 'Working…', 'missing');
+  else if(v.state === 'blocked') row('Result', 'Not loaded', 'bad', anRun.msg);
+  else if(v.state === 'failed') row('Result', 'Failed', 'bad', anRun.msg + (last ? ' · The cards still show the earlier result (for ' + anShort(last.addr) + ')' : ''));
+  else {
+    const rn = NETWORKS[last.net];
+    row('Result', 'For ' + anShort(last.addr) + ' on ' + (rn ? rn.label : last.net), v.state === 'current' ? 'ok' : 'missing',
+      v.state === 'outdated' ? ({ address: 'The address on screen is another one', network: 'The network changed since', range: 'The look-back changed since' }[v.outdated]) : '');
+    const card = (l) => last.cards.find((c) => c.label === l) || { value: '—', sub: '' };
+    row('Events in range', card('Events (range)').value + ' (' + card('Events (range)').sub + ')', 'ok', 'Counted over the whole range; the list below shows the newest 20');
+    row('Native balance', card('Native balance').value + ' ' + card('Native balance').sub, 'ok');
+    row('USDC balance', card('USDC balance').value, 'ok', card('USDC balance').value === '—' ? 'Not available here: this network has no USDC address, or your wallet is on another chain' : '');
+    row('"Transactions" card', card('Transactions').value, 'missing', 'This is the account\'s nonce: for a contract it is not the number of transactions sent to it (KNOWN)');
+    row('Range', 'From block ' + card('From block').value + ' to ' + card('Latest block').value, 'ok', 'The head when you pressed the button');
+  }
+  const ready = n.addr && v.valid && v.wallet;
+  step('Ready to load', ready ? 'done' : 'todo', ready ? 'A valid address and a connected wallet.' : 'Needs: ' + [!n.addr ? 'an address' : (!v.valid ? 'a valid address' : ''), !v.wallet ? 'a connected wallet' : ''].filter(Boolean).join(', ') + '.');
+  if(!ready) step('Loaded', 'locked', 'Available once it is ready.');
+  else if(v.state === 'working') step('Loaded', 'todo', 'Working…');
+  else if(v.state === 'failed' || v.state === 'blocked') step('Loaded', 'attention', anRun.msg);
+  else if(v.state === 'current') step('Loaded', 'done', 'Loaded for this address, network and look-back.');
+  else if(v.state === 'outdated') step('Loaded', 'stale', { address: 'The address changed after this load.', network: 'The network changed after this load.', range: 'The look-back changed after this load.' }[v.outdated]);
+  else step('Loaded', 'todo', 'Press Load Analytics.');
+  step('Reading the numbers', ready && (v.state === 'current' || v.state === 'outdated') ? 'todo' : 'locked', 'Not tracked here: a snapshot of the chain head when you pressed the button. Press Refresh for a new one.');
+  [
+    'Everything is read through your wallet\'s connection, so it describes the chain your wallet is on. Picking a deployment from the pills only fills in the address: it does not switch network.',
+    'The "Transactions" card is the account\'s nonce. For a contract that is the number of contracts it created (it starts at 1), not the number of transactions sent to it.',
+    'Events are counted over the whole range, but the list shows only the newest 20. The ten bars split the range into equal parts.',
+    'A node may refuse a large look-back. The page then shows the node\'s own message and keeps the earlier numbers on screen.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const an = document.getElementById('anAddrNote'); if(an) an.textContent = (v.rec && v.rec.network !== n.net) ? 'This deployment lives on another network than the one selected.' : '';
+  const bn = document.getElementById('anBlocksNote'); if(bn) bn.textContent = n.raw === '' ? 'Empty reads as the default, 10,000.' : '';
+  const empty = document.getElementById('anEmpty'); if(empty) empty.hidden = document.getElementById('analyticsData').style.display === 'block';
+}
+
+(function anInit(){
+  const sec = document.getElementById('sec-analytics');
+  if(!sec || sec.dataset.anBound) return;
+  sec.dataset.anBound = '1';
+  // what the form held at the click (loadAnalytics reads the same values before it asks anything)
+  sec.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-onclick]');
+    const h = b ? b.getAttribute('data-onclick') : '';
+    if(b && b.closest('#an_history_pills')){ setTimeout(draw, 0); return; }   // a pill fills the address without an input event: draw after its handler has run
+    if(h !== 'loadAnalytics()' && h !== 'refreshAnalytics()') return;
+    const n = anNow(), k = document.getElementById('an_kpis');
+    anRun = { addr: n.addr, raw: n.raw, look: n.look, net: n.net, startLen: document.querySelectorAll('#deployConsole .line').length, firstKpi: k ? k.firstChild : null, done: false, kind: '', msg: '' };
+    // the two checks loadAnalytics() makes first, answered with an alert
+    if(!n.addr){ anRun.done = true; anRun.kind = 'blocked'; anRun.msg = 'Enter a contract address.'; }
+    else if(typeof provider === 'undefined' || !provider){ anRun.done = true; anRun.kind = 'blocked'; anRun.msg = 'Connect your wallet first.'; }
+    if(anRun.done) draw();   // nothing in the page changes when it only alerts, so draw it here
+  }, true);
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; anFinish(); anRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('an_kpis'), { childList: true });
+    watch(document.getElementById('analyticsData'), { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('deployConsole'), { childList: true });
+    watch(document.getElementById('an_history_pills'), { childList: true });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+    watch(document.getElementById('walletStatus'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  CFBuilder.addView('analytics', anRender);
+  anRender();
+})();
+
 /* ======================================================================
    TEST GENERATOR
    ====================================================================== */
@@ -6639,6 +7055,142 @@ function copyTests(){
   if(!lastTestCode) return;
   navigator.clipboard.writeText(lastTestCode).then(()=>logConsole('ok','Test code copied.'));
 }
+
+/* ---- Test Generator overview (Phase 12.1): read-only. generateTests(), copyTests() and downloadTests() are untouched; this only notes what the page
+   already shows and what the click captured, so it can say whether the tests on screen belong to the source on screen. ---- */
+let tgRun = null;   // the latest click on Generate Tests: what the form held at that moment, and how it ended
+let tgLast = null;  // the latest click that ended with tests on screen: what they were written for
+
+function tgNow(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) ? pendingSource : null;
+  const code = ps && ps.code ? ps.code : '';
+  const el = (id) => document.getElementById(id);
+  return {
+    name: ps && ps.name ? ps.name : '',
+    code,
+    hash: code && typeof matHash === 'function' ? matHash(code) : '',
+    template: ps && ps.template ? ps.template : '',
+    framework: (el('test_framework') && el('test_framework').value) || 'foundry',
+    coverage: (el('test_coverage') && el('test_coverage').value) || 'full'
+  };
+}
+
+function tgFinish(){
+  if(!tgRun || tgRun.done) return;
+  const btn = document.getElementById('genTestsBtn');
+  if(!btn || btn.disabled) return;                       // still waiting for the AI
+  const lines = [...document.querySelectorAll('#deployConsole .line .msg')].map((m) => m.textContent).slice(tgRun.consoleLen);
+  const err = lines.find((t) => /^Test gen error: /.test(t));
+  tgRun.done = true;
+  if(err){ tgRun.error = err.replace(/^Test gen error: /, ''); return; }
+  const out = document.getElementById('testOutput');
+  if(out && out.style.display === 'block'){
+    const code = typeof lastTestCode === 'string' ? lastTestCode : '';
+    tgLast = { name: tgRun.name, hash: tgRun.hash, framework: tgRun.framework, coverage: tgRun.coverage, code };
+  }
+}
+
+function tgCount(code, framework){
+  if(framework === 'hardhat') return { n: (code.match(/\bit\(/g) || []).length, what: 'it() blocks' };
+  return { n: (code.match(/function test_?[A-Za-z]/g) || []).length, what: '"function test" lines' };
+}
+
+function tgRead(){
+  const now = tgNow();
+  const net = (typeof NETWORKS !== 'undefined' && typeof activeNetwork !== 'undefined') ? NETWORKS[activeNetwork] : null;
+  const btn = document.getElementById('genTestsBtn');
+  const working = !!(btn && btn.disabled);
+  const why = (now.code && typeof reqBlockReason === 'function') ? reqBlockReason() : '';
+  let state = 'none', outdated = '';
+  if(working) state = 'working';
+  else if(tgRun && tgRun.done && tgRun.error) state = 'failed';
+  else if(tgLast){
+    const sameSrc = tgLast.hash === now.hash && tgLast.name === now.name;
+    const sameSet = tgLast.framework === now.framework && tgLast.coverage === now.coverage;
+    state = sameSrc && sameSet ? 'current' : 'outdated';
+    outdated = !sameSrc ? 'source' : (!sameSet ? 'settings' : '');
+    if(!tgLast.code.trim() && state === 'current') state = 'empty';
+  }
+  const unavailable = state === 'failed' && /not configured|not available/i.test(tgRun.error || '');
+  return { now, net, working, why, state, outdated, unavailable, mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '' };
+}
+
+const TG_COVER = { basic: 'Happy paths only', full: 'Happy paths, edge cases and reverts', security: 'Access control and fuzz stubs' };
+const TG_FW = { foundry: 'Foundry', hardhat: 'Hardhat (Mocha/Chai)', both: 'Foundry and Hardhat' };
+
+function tgRender(){
+  const sum = document.getElementById('tgSummary'), prog = document.getElementById('tgProgress'), notes = document.getElementById('tgNotes');
+  if(!sum || !prog || !notes) return;
+  const v = tgRead(), n = v.now;
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  const lvl = n.code && typeof matInfo === 'function' ? (matInfo(n.template) || {}).level : '';
+  row('Contract', n.name ? n.name + '.sol' : 'None', n.name ? 'ok' : 'missing', n.name ? (lvl ? 'Maturity: ' + lvl : '') : 'Generate a contract in a builder first', true);
+  if(n.code) row('Source', v.why ? 'Draft' : 'Ready', v.why ? 'missing' : 'ok', v.why ? 'Tests can still be written for a draft; it cannot be deployed: ' + v.why : '');
+  CFBuilder.networkRow(row, v.net);
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  row('Framework', TG_FW[n.framework] || n.framework, 'ok', n.framework === 'both' ? 'One text for both: saving it gives a single .t.sol file' : '');
+  row('Coverage', TG_COVER[n.coverage] || n.coverage, 'ok');
+  // what is on screen
+  const last = tgLast;
+  if(v.state === 'none') row('Tests', 'Not generated yet', 'missing', 'Press Generate Tests');
+  else if(v.state === 'working') row('Tests', 'Waiting for the AI…', 'missing');
+  else if(v.state === 'failed') row('Tests', v.unavailable ? 'AI unavailable' : 'Request failed', 'bad', tgRun.error + (last ? ' · Download would still save the earlier tests for ' + last.name : ''));
+  else {
+    const c = tgCount(last.code, last.framework);
+    const label = v.state === 'empty' ? 'The AI answered with no text' : 'For ' + last.name + '.sol (' + (TG_FW[last.framework] || last.framework) + ', ' + last.coverage + ')';
+    row('Tests', label, v.state === 'current' ? 'ok' : (v.state === 'empty' ? 'bad' : 'missing'),
+      v.state === 'outdated' ? (v.outdated === 'source' ? 'The contract on screen is not the one these were written for' : 'The framework or coverage changed since') : '');
+    if(last.code.trim()) row('Counted in the text', c.n + ' ' + c.what, 'ok', 'Counted by the page from the text; the tests were not compiled or run');
+  }
+  if(last && last.code.trim()){
+    const ext = (document.getElementById('test_framework') || {}).value === 'hardhat' ? '.test.js' : '.t.sol';
+    row('Download saves', n.name + ext, last.hash === n.hash && last.name === n.name ? 'ok' : 'missing', 'The file name follows the contract and the framework chosen now, not the ones the text was written for', true);
+  }
+  // progress: only what really happened
+  const hasSrc = !!n.code;
+  step('Source', hasSrc ? (v.why ? 'draft' : 'done') : 'todo', hasSrc ? (v.why ? 'A draft: tests can be written, but it cannot be deployed yet.' : n.name + '.sol is on screen.') : 'Generate a contract in a builder first.');
+  if(!hasSrc) step('Tests written', 'locked', 'Available once there is a contract.');
+  else if(v.state === 'working') step('Tests written', 'todo', 'Waiting for the AI…');
+  else if(v.state === 'failed') step('Tests written', 'attention', v.unavailable ? 'The AI is unavailable: ' + tgRun.error : 'The request failed: ' + tgRun.error);
+  else if(v.state === 'current') step('Tests written', 'done', 'Written for this source, with these settings.');
+  else if(v.state === 'empty') step('Tests written', 'attention', 'The AI answered with no text.');
+  else if(v.state === 'outdated') step('Tests written', 'stale', v.outdated === 'source' ? 'The contract changed after these tests were written. Generate again.' : 'The framework or coverage changed after these tests were written.');
+  else step('Tests written', 'todo', 'Press Generate Tests to ask the AI.');
+  step('Review and run', hasSrc && (v.state === 'current' || v.state === 'outdated') ? 'todo' : 'locked', 'Not tracked here: read the tests and run them yourself (forge test or npx hardhat test). This page never compiles or runs them.');
+  // notes
+  [
+    'The tests are written by an AI from the source on screen alone. They are a starting point: read them before you trust them.',
+    'The page counts test functions from the text it receives. It does not compile or run them, so a count is not a result.',
+    'The file name and extension follow the framework and the contract chosen when you press Download, which may differ from what the text was written for.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const fw = document.getElementById('tgFwNote'); if(fw) fw.textContent = n.framework === 'both' ? 'Both comes as one text and is saved as a single .t.sol file.' : '';
+  const empty = document.getElementById('tgEmpty'); if(empty) empty.hidden = document.getElementById('testOutput').style.display === 'block';
+}
+
+(function tgInit(){
+  const sec = document.getElementById('sec-tests'), btn = document.getElementById('genTestsBtn');
+  if(!sec || !btn || sec.dataset.tgBound) return;
+  sec.dataset.tgBound = '1';
+  // what the form held at the click (generateTests reads the same values, synchronously, before it waits for the AI)
+  btn.addEventListener('click', () => {
+    const n = tgNow();
+    if(!n.code) return;
+    tgRun = { name: n.name, hash: n.hash, framework: n.framework, coverage: n.coverage, consoleLen: document.querySelectorAll('#deployConsole .line').length, done: false, error: '' };
+  }, true);
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; tgFinish(); tgRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(btn, { attributes: true, attributeFilter: ['disabled'] });
+    watch(document.getElementById('testOutput'), { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    watch(document.getElementById('deployConsole'), { childList: true });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+  }
+  CFBuilder.addView('tests', tgRender);
+})();
 
 /* ======================================================================
    WIRE NEW TEMPLATES INTO genSimple

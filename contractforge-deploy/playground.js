@@ -583,3 +583,126 @@ function pgInit(){
   }
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pgInit); else pgInit();
+
+/* ---- Playground overview (Phase 12.4): read-only. Nothing above is changed: loading, calling, sending, watching and subscribing work exactly as before, and the page's own
+   context line (#pg_context) stays where it was. This only reads the page's state (the loaded contract, its ABI, the wallet's chain id the wallet already holds, the session's
+   calls) and notes two things the page does not keep: which ABI source was chosen when a contract was loaded, and which contract a watch or a subscription was started for. ---- */
+let pgSeenAbi = null, pgSrcAtLoad = '', pgSubCtx = null, pgWatchCtx = null, pgPending = null;
+
+function pgChainNow(){
+  const id = typeof window !== 'undefined' && window.ethereum && window.ethereum.chainId;   // a property the wallet already holds: nothing is requested
+  const n = id ? parseInt(id, 16) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function pgAbiCounts(abi){
+  const c = { read: 0, write: 0, event: 0 };
+  (Array.isArray(abi) ? abi : []).forEach((it) => {
+    if(!it || it.type === 'constructor' || it.type === 'fallback' || it.type === 'receive' || it.type === 'error') return;
+    if(it.type === 'event') c.event++; else if(pgIsRead(it)) c.read++; else if(it.type === 'function') c.write++;
+  });
+  return c;
+}
+
+/* the ABI in use came from the last compile: is it the one of a deployment this page made at this address? (the same proof as the Gas and Share tabs) */
+function pgLastProven(addr){
+  const bc = window.__lastCompiledBytecode, abi = window.__lastCompiledABI;
+  if(!bc || !abi || playgroundABI !== abi || !addr) return false;
+  let kk = ''; try{ kk = ethers.utils.keccak256(bc); }catch(_){ kk = ''; }
+  const results = (typeof uiDeployResults !== 'undefined' ? uiDeployResults : []);
+  return !!(kk && results.some((r) => r && String(r.address || '').toLowerCase() === String(addr).toLowerCase() && r.bytecodeKeccak256 === kk));
+}
+
+function pgRender(){
+  const sum = document.getElementById('pgSummary'), prog = document.getElementById('pgProgress'), notes = document.getElementById('pgNotes');
+  if(!sum || !prog || !notes) return;
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  const loaded = !!(pgReadContract && playgroundABI);
+  const addr = loaded ? pgReadContract.address : '';
+  const key = pgNetKey(), net = NETWORKS[key] || null;
+  const active = NETWORKS[activeNetwork] || null;
+  const wallet = !!signer, wchain = pgChainNow();
+  const counts = pgAbiCounts(playgroundABI);
+  const mode = (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '';
+  const chainOk = !!(net && wchain != null && wchain === net.chainIdDec);
+
+  if(loaded) row('Loaded contract', addr, 'ok', '', true); else row('Loaded contract', 'None yet', 'missing', 'Pick a deployment or paste an address and an ABI, then press Load contract');
+  CFBuilder.networkRow(row, loaded ? net : active);
+  if(loaded && active && key !== activeNetwork) row('App network', active.label, 'missing', 'The app is on ' + active.label + ', but this contract lives on ' + net.label + ': calls go to ' + net.label);
+  row('Deployment Mode', mode || 'Unknown', mode ? 'ok' : 'bad');
+  if(loaded){
+    const srcLabel = { last: 'The last compiled ABI', custom: 'An ABI you pasted', history: 'The deploy history' }[pgSrcAtLoad] || 'Unknown';
+    const proven = pgSrcAtLoad === 'last' && pgLastProven(addr);
+    row('ABI', counts.read + ' read, ' + counts.write + ' write, ' + counts.event + ' events', 'ok',
+      pgSrcAtLoad === 'last' ? (proven ? 'The ABI of the deployment this page made at this address' : 'From the last compile: this page cannot tell it belongs to this address') : (pgSrcAtLoad === 'history' ? 'Stored with the deployment record' : (pgSrcAtLoad === 'custom' ? 'Pasted by you' : '')));
+    row('ABI source', srcLabel, pgSrcAtLoad === 'last' && !proven ? 'missing' : 'ok');
+    row('Reading', 'Through ' + (() => { try{ return new URL(net.rpc).host; }catch(_){ return 'the network\'s public node'; } })(), 'ok', 'No wallet needed');
+    if(!wallet) row('Sending', 'Read-only', 'missing', 'Connect a wallet to send transactions');
+    else if(wchain == null) row('Sending', 'Wallet connected', 'ok', 'The wallet\'s chain is not visible to this page');
+    else if(chainOk) row('Sending', 'Wallet is on ' + net.label, 'ok', net.isMainnet ? 'Real funds: each transaction is checked first and you confirm it' : 'Each transaction is checked first with a dry run');
+    else row('Sending', 'Wallet is on another chain', 'bad', 'Chain ' + wchain + ', not ' + net.chainIdDec + ': switch the wallet to ' + net.label + ' (the line above has the button)');
+  }
+  const subAddr = pgSubCtx && eventSubscriptions.length ? pgSubCtx : null, watchAddr = pgWatchCtx && pgPoll ? pgWatchCtx : null;
+  const lines = [];
+  if(watchAddr) lines.push({ t: 'Watching ' + watchAddr.fn + '() every 5 seconds', a: watchAddr.address, k: 'watch' });
+  if(subAddr) lines.push({ t: 'Subscribed to ' + eventSubscriptions.length + (eventSubscriptions.length === 1 ? ' event' : ' events'), a: subAddr.address, k: 'sub' });
+  if(!lines.length) row('Live updates', 'None', 'ok');
+  lines.forEach((l) => {
+    const stale = loaded && addr.toLowerCase() !== String(l.a).toLowerCase();
+    row('Live updates', l.t, stale ? 'bad' : 'ok', stale ? 'Started for ' + l.a.slice(0, 8) + '…' + l.a.slice(-4) + ' and still running: ' + (l.k === 'sub' ? 'press Subscribe to Events again to move it here' : 'start another watch to replace it') : (l.k === 'watch' ? 'Starting another watch stops this one' : ''));
+  });
+  const total = pgCalls.length, fails = pgCalls.filter((c) => !c.ok).length, txs = pgCalls.filter((c) => c.write).length;
+  row('Calls this session', total ? total + ' (' + (total - txs) + ' reads, ' + txs + ' transactions' + (fails ? ', ' + fails + ' failed' : '') + ')' : 'None', 'ok');
+
+  step('Contract loaded', loaded ? 'done' : 'todo', loaded ? counts.read + counts.write + counts.event + ' ABI items for ' + addr.slice(0, 10) + '… on ' + net.label + '.' : 'Pick a deployment, or paste an address and an ABI, and press Load contract.');
+  if(!loaded) step('Ready to send', 'locked', 'Available once a contract is loaded. Reading needs no wallet.');
+  else if(!wallet) step('Ready to send', 'todo', 'Reading works now. Sending needs a connected wallet on ' + net.label + '.');
+  else if(wchain != null && !chainOk) step('Ready to send', 'attention', 'The wallet is on chain ' + wchain + '. Switch it to ' + net.label + ' to send.');
+  else step('Ready to send', 'done', 'A connected wallet' + (wchain != null ? ' on ' + net.label : '') + '.');
+  if(!loaded) step('Calls', 'locked', 'Available once a contract is loaded.');
+  else step('Calls', total ? (fails === total ? 'attention' : 'done') : 'todo', total ? total + ' this session, ' + fails + ' failed. Only this session\'s calls are listed.' : 'No call made yet in this session.');
+  [
+    'Reading goes to the network\'s public node and needs no wallet. Sending needs your wallet on the contract\'s own network, and on a mainnet it asks you to confirm and uses real funds.',
+    'Every transaction is dry-run first: if it would fail you see the reason before any gas is spent.',
+    '"Use last compiled ABI" is the ABI of the last compile, whatever address you type: it is only proven to belong to an address when a deployment made on this page created it.',
+    'Loading another contract does not stop an earlier watch or event subscription: they keep running for the contract they were started for.',
+    'Recent events looks at the last 2,000 blocks only, and the call list holds this session\'s last 25 calls.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const empty = document.getElementById('pgEmpty'); if(empty) empty.hidden = loaded;
+}
+
+(function pgOverviewInit(){
+  const sec = document.getElementById('sec-playground');
+  if(!sec || sec.dataset.pgBound) return;
+  sec.dataset.pgBound = '1';
+  // what was chosen when a contract was loaded, and which contract a watch or a subscription was started for
+  const seen = () => {
+    if(playgroundABI !== pgSeenAbi){ pgSeenAbi = playgroundABI; const s = document.getElementById('pg_abisrc'); pgSrcAtLoad = s ? s.value : ''; }
+    if(pgPending && pgPending.kind === 'sub'){ pgSubCtx = eventSubscriptions.length ? pgPending : null; pgPending = null; }
+    else if(pgPending && pgPending.kind === 'watch'){ if(pgPoll) pgWatchCtx = pgPending; pgPending = null; }
+  };
+  sec.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-onclick]');
+    if(!b || !pgReadContract) return;
+    const h = b.getAttribute('data-onclick') || '';
+    if(h === 'subscribeEvents()') pgPending = { kind: 'sub', address: pgReadContract.address };
+    else { const m = /^watchRead\((\d+)\)$/.exec(h); if(m && playgroundABI && playgroundABI[Number(m[1])]) pgPending = { kind: 'watch', address: pgReadContract.address, fn: playgroundABI[Number(m[1])].name }; }
+  }, true);
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; seen(); pgRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('pg_functions'), { childList: true });
+    watch(document.getElementById('pg_context'), { childList: true, attributes: true, characterData: true, subtree: true });
+    watch(document.getElementById('pg_calls'), { childList: true, attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('pg_log'), { childList: true });
+    watch(document.getElementById('pg_deployments'), { childList: true });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+    watch(document.getElementById('walletStatus'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  CFBuilder.addView('playground', pgRender);
+  pgRender();
+})();

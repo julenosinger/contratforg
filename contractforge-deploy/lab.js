@@ -572,3 +572,117 @@ function labInit(){
   labRenderHeader();
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', labInit); else labInit();
+
+/* ---- Test Lab overview (Phase 12.6): read-only. Nothing above is changed: the simulator, the compile, the accounts, the time, the mocks, the calls and the page's own status line and
+   header work exactly as before. This only reads the lab's own state (LAB, the engine's chain id, time and block, the page's status line) and the contract on screen, so it can say what the
+   simulation is, which contract is in it, and whether that is still the contract on screen. It never starts the engine, compiles, deploys or calls anything. ---- */
+function labRealCctp(code){
+  const set = new Set();
+  Object.values(NETWORKS).forEach((n) => { if(n && n.cctp){ ['tokenMessenger', 'messageTransmitter'].forEach((k) => { if(n.cctp[k]) set.add(String(n.cctp[k]).toLowerCase()); }); } });
+  if(typeof CCTP_V2_ADDR !== 'undefined' && CCTP_V2_ADDR){ Object.values(CCTP_V2_ADDR).forEach((o) => { if(o) Object.values(o).forEach((a) => { if(typeof a === 'string' && /^0x[0-9a-fA-F]{40}$/.test(a)) set.add(a.toLowerCase()); }); }); }
+  return [...new Set((String(code).match(/0x[0-9a-fA-F]{40}/g) || []).map((s) => s.toLowerCase()).filter((s) => set.has(s)))];
+}
+
+function labOvRead(){
+  const ps = (typeof pendingSource !== 'undefined' && pendingSource) ? pendingSource : null;
+  const code = ps && ps.code ? ps.code : '';
+  const st = document.getElementById('labStatus');
+  const stKind = st ? (/lab-status-(\w+)/.exec(st.className) || [])[1] || '' : '';
+  const calls = LAB.txs.filter((t) => t.kind !== 'deploy');
+  return {
+    ps, code, name: ps && ps.name ? ps.name : '', template: ps && ps.template ? ps.template : '',
+    why: code && typeof reqBlockReason === 'function' ? reqBlockReason() : '',
+    net: NETWORKS[activeNetwork] || null,
+    mode: (typeof MC_MODES !== 'undefined' && typeof multichainMode !== 'undefined' && MC_MODES[multichainMode]) ? MC_MODES[multichainMode].label : '',
+    started: !!LAB.lab, busy: !!LAB.busy, statusText: st ? st.textContent : '', stKind,
+    stale: !!(LAB.contract && code && LAB.loadedHash !== labHash(code)),
+    nameDiffers: !!(LAB.compiled && ps && LAB.compiled.name !== ps.name),
+    calls, fails: calls.filter((t) => !t.ok).length, reads: calls.filter((t) => t.kind === 'read').length,
+    cctp: code ? labRealCctp(code) : [],
+  };
+}
+
+function labOvRender(){
+  const sum = document.getElementById('labSummary'), prog = document.getElementById('labProgress'), notes = document.getElementById('labNotes');
+  if(!sum || !prog || !notes) return;
+  sum.textContent = ''; prog.textContent = ''; notes.textContent = '';
+  const v = labOvRead(), row = CFBuilder.rowWriter(sum), step = CFBuilder.stepWriter(prog);
+  const lvl = v.code && typeof matInfo === 'function' ? (matInfo(v.template) || {}).level : '';
+  row('Simulation', 'A private chain in this page', 'ok', 'No wallet, no network node and no real funds: nothing here can reach a real chain');
+  if(v.started){
+    const known = Object.values(NETWORKS).find((n) => n.chainIdDec === LAB.lab.chainId);
+    row('Chain', 'Chain id ' + LAB.lab.chainId + (known ? ' (' + known.label + ')' : ''), 'ok', v.net && v.net.chainIdDec !== LAB.lab.chainId ? 'The app is now on ' + v.net.label + ': press Load current contract to follow it' : 'Only the id the contract sees; it is not that network');
+  } else row('Chain', v.busy ? 'Starting…' : 'Not started', 'missing', v.net ? 'It will use the chain id of ' + v.net.label + ' (' + v.net.chainIdDec + ')' : '');
+  row('Contract on screen', v.name ? v.name + '.sol' : 'None', v.name ? 'ok' : 'missing', v.name ? (lvl ? 'Maturity: ' + lvl : '') : 'Generate a contract in a builder first', true);
+  if(v.code) row('Source', v.why ? 'Draft' : 'Ready', v.why ? 'bad' : 'ok', v.why ? 'A draft cannot be loaded into the lab: ' + v.why : '');
+  if(LAB.contract){
+    row('In the lab', LAB.contract.name + ' at ' + pgShort(LAB.contract.address), v.stale || v.nameDiffers ? 'missing' : 'ok',
+      v.stale ? 'The contract changed since it was loaded: press Load current contract' : (v.nameDiffers ? 'The file has no contract called ' + v.name + ', so the lab deployed ' + LAB.compiled.name : ''), true);
+  } else if(v.busy && !LAB.compiled) row('In the lab', v.statusText || 'Working…', 'missing');
+  else if(LAB.compiled) row('In the lab', LAB.compiled.name + ': not deployed yet', v.stKind === 'err' ? 'bad' : 'missing', v.statusText);
+  else row('In the lab', v.stKind === 'err' || v.stKind === 'warn' ? v.statusText : 'Nothing loaded', v.stKind === 'err' ? 'bad' : 'missing', v.stKind === 'err' || v.stKind === 'warn' ? '' : 'Press Load current contract');
+  if(LAB.compiled){
+    const n = (LAB.ctorInputs || []).length;
+    row('Constructor', n ? n + (n === 1 ? ' argument' : ' arguments') : 'No arguments', 'ok', n ? 'Filled with test values where the lab can supply them; the rest is yours to set' : '');
+  }
+  if(v.started){
+    row('Time', new Date(Number(LAB.lab.timestamp) * 1000).toISOString().replace('T', ' ').slice(0, 19) + ' UTC · block ' + LAB.lab.number, 'ok', 'Starts at your clock and moves only when you move it; blocks move with each call or Mine blocks');
+    const a = labActing();
+    row('Acting as', a.name, 'ok', 'Five test accounts, each with 1,000 native units');
+    const real = LAB.tokens.usdc && LAB.tokens.usdc !== LAB_AUX.usdc;
+    const dec = v.net && v.net.usdcDecimals && v.net.usdcDecimals !== 6;
+    row('Test USDC and EURC', pgShort(LAB.tokens.usdc) + ' · ' + pgShort(LAB.tokens.eurc), 'ok', (real ? 'At the real address the source hard-codes. ' : 'At fixed fake addresses. ') + 'Always 6 decimals' + (dec ? ': the real USDC on ' + v.net.label + ' has ' + v.net.usdcDecimals : ''), true);
+  }
+  row('Test CCTP', 'Stand-ins at ' + pgShort(LAB_AUX.messenger) + ' and ' + pgShort(LAB_AUX.transmitter), v.cctp.length && LAB.contract ? 'bad' : 'ok',
+    v.cctp.length && LAB.contract ? 'This contract calls Circle\'s real CCTP address (' + pgShort(v.cctp[0]) + '), which does not exist in the lab: a call that reaches it reverts without a reason. A portable mode takes the messenger as an argument and uses the stand-in.' : 'The CCTP V2 shape; a contract that is given the messenger as an argument gets them', true);
+  row('Calls', v.calls.length ? v.calls.length + ' (' + v.reads + ' reads, ' + (v.calls.length - v.reads) + ' transactions' + (v.fails ? ', ' + v.fails + ' failed' : '') + ')' : 'None', 'ok', LAB.txs.length >= 40 ? 'The page keeps the last 40' : '');
+  row('Deployment Mode', v.mode || 'Unknown', v.mode ? 'ok' : 'bad');
+  const hasSrc = !!v.code && !v.why;
+  step('Contract ready', v.code ? (v.why ? 'draft' : 'done') : 'todo', v.code ? (v.why ? 'A draft cannot be loaded: ' + v.why : v.name + '.sol is on screen.') : 'Generate a contract in a builder first.');
+  if(!hasSrc) step('Loaded in the lab', 'locked', 'Available once the contract is ready.');
+  else if(LAB.contract && v.stale) step('Loaded in the lab', 'stale', 'The contract changed after it was loaded. Press Load current contract.');
+  else if(LAB.contract) step('Loaded in the lab', 'done', LAB.contract.name + ' is deployed in the lab.');
+  else if(v.busy && !LAB.compiled) step('Loaded in the lab', 'todo', v.statusText || 'Working…');
+  else if(LAB.compiled && v.stKind !== 'err') step('Loaded in the lab', 'todo', v.statusText || 'Waiting for constructor arguments.');
+  else if(v.stKind === 'err') step('Loaded in the lab', 'attention', v.statusText);
+  else step('Loaded in the lab', 'todo', 'Press Load current contract.');
+  if(!LAB.contract) step('Try it', 'locked', 'Available once the contract is in the lab.');
+  else if(!v.calls.length) step('Try it', 'todo', 'No call made yet: use the function cards, or Quick check.');
+  else step('Try it', v.fails === v.calls.length ? 'attention' : 'done', v.calls.length + ' call(s), ' + v.fails + ' failed. Only the lab\'s own calls are listed.');
+  step('Before you publish', LAB.contract ? 'todo' : 'locked', 'Not tracked here: passing in the lab is a simulation, not a guarantee. Review the code, have it audited and try a testnet first.');
+  [
+    'Everything here runs on a private chain inside this page, with the real EVM rules. It uses no wallet, no node and no funds, and nothing it does can reach a real chain.',
+    'Time and blocks move only when you move them or when a call runs. A contract that counts blocks (a voting period, for example) needs Mine blocks.',
+    'The test USDC and EURC always have 6 decimals. A contract that hard-codes the real USDC or EURC address gets the test token at that address.',
+    'The CCTP messenger and transmitter are stand-ins at fixed addresses. A contract built with Circle\'s real addresses (the crosschain payments contract in Single network mode) reverts without a reason when it reaches them; the portable bridge takes the messenger as an argument.',
+    'A call may use up to 15,000,000 gas, a contract larger than 24 KB cannot be deployed, and the page lists the last 40 transactions.'
+  ].forEach((t) => { const li = document.createElement('li'); li.textContent = t; notes.appendChild(li); });
+  const empty = document.getElementById('labFnEmpty'); if(empty) empty.hidden = !!LAB.contract;
+  // the page clears its "busy" flag after its last visible change, so look again shortly while it is busy
+  if(LAB.busy && !labOvRender.retry) labOvRender.retry = setTimeout(() => { labOvRender.retry = null; labOvRender(); }, 40);
+}
+
+(function labOvInit(){
+  const sec = document.getElementById('sec-lab');
+  if(!sec || sec.dataset.labBound) return;
+  sec.dataset.labBound = '1';
+  let queued = false;
+  const draw = () => { if(queued) return; queued = true; queueMicrotask(() => { queued = false; labOvRender(); }); };
+  sec.addEventListener('input', draw); sec.addEventListener('change', draw);
+  if(typeof MutationObserver === 'function'){
+    const watch = (el, opts) => { if(el) new MutationObserver(draw).observe(el, opts); };
+    watch(sec, { attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('labStatus'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    watch(document.getElementById('labContract'), { childList: true, subtree: true });
+    watch(document.getElementById('lab_time'), { childList: true, characterData: true, subtree: true });
+    watch(document.getElementById('lab_acting_addr'), { childList: true, characterData: true, subtree: true });
+    watch(document.getElementById('lab_balances'), { childList: true });
+    watch(document.getElementById('lab_txs'), { childList: true, attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('lab_functions'), { childList: true });
+    watch(document.getElementById('lab_log'), { childList: true });
+    watch(document.getElementById('labArgs'), { childList: true, attributes: true, attributeFilter: ['style'] });
+    watch(document.getElementById('sidenet'), { childList: true, characterData: true, subtree: true });
+  }
+  CFBuilder.addView('lab', labOvRender);
+  labOvRender();
+})();

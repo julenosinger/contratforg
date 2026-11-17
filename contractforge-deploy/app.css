@@ -1074,6 +1074,64 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 }
 @media (prefers-reduced-motion:reduce){.bld *{transition:none !important;animation:none !important;}}
 
+/* ---- Test Lab (section 18): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-lab .lab-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+.bld#sec-lab #lab_balances{overflow-x:auto;}
+.bld#sec-lab #lab_log{max-height:260px;overflow:auto;overflow-wrap:anywhere;}
+.bld#sec-lab #lab_functions,.bld#sec-lab #lab_txs,.bld#sec-lab #labContract,.bld#sec-lab #labArgs{overflow-wrap:anywhere;}
+.bld#sec-lab .lab-bar{margin-bottom:12px;}
+@media (max-width:860px){
+  .bld#sec-lab .lab-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---- Contract Analytics (section 16): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-analytics .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.bld#sec-analytics .bld-sub code{color:var(--gold);font-size:11px;}
+.bld#sec-analytics .analytics-grid{margin-bottom:14px;}
+.bld#sec-analytics #an_events{overflow:auto;overflow-wrap:anywhere;}
+.bld#sec-analytics .chart-wrap{margin-bottom:14px;}
+@media (max-width:640px){
+  .bld#sec-analytics .field-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---- ABI Playground (section 09): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-playground .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.bld#sec-playground .field-grid .full{grid-column:1/-1;}
+.bld#sec-playground #pg_log{max-height:240px;overflow:auto;overflow-wrap:anywhere;}
+.bld#sec-playground #pg_functions,.bld#sec-playground #pg_calls{overflow-wrap:anywhere;}
+.bld#sec-playground .pg-toolbar{margin-bottom:12px;}
+@media (max-width:640px){
+  .bld#sec-playground .field-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---- Gas Estimator (section 11): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-gas .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.bld#sec-gas .bld-sub code{color:var(--gold);font-size:11px;}
+.bld#sec-gas .gas-meter{margin-bottom:14px;}
+.bld#sec-gas #gasLog{max-height:220px;overflow:auto;overflow-wrap:anywhere;}
+@media (max-width:640px){
+  .bld#sec-gas .field-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---- AI Security Auditor (section 08): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-auditor .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.bld#sec-auditor .bld-sub b{color:var(--gold);}
+.bld#sec-auditor #auditResults{margin-top:14px !important;}
+.bld#sec-auditor .audit-finding{overflow-wrap:anywhere;}
+@media (max-width:640px){
+  .bld#sec-auditor .field-grid{grid-template-columns:minmax(0,1fr);}
+}
+
+/* ---- Test Generator (section 17): the shared .bld screen with a few touches. Scoped to this section. ---- */
+.bld#sec-tests .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.bld#sec-tests .field-grid .bld-wide{grid-column:1/-1;}
+.bld#sec-tests .bld-sub code{color:var(--gold);font-size:11px;}
+.bld#sec-tests .test-result{max-height:460px;overflow:auto;overflow-wrap:anywhere;}
+.bld#sec-tests .test-card{margin-bottom:10px;}
+@media (max-width:640px){
+  .bld#sec-tests .field-grid{grid-template-columns:minmax(0,1fr);}
+}
+
 /* ---- Share & Export (section 13): the cards and an overview, scoped to #sec-share within the shared .bld styles ---- */
 .bld#sec-share .bld-main{display:grid;gap:14px;min-width:0;}
 .bld#sec-share .bld-side{display:grid;gap:14px;min-width:0;align-content:start;}

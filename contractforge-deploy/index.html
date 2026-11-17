@@ -691,102 +691,155 @@
     </section>
 
     <!-- ============ 08 AI AUDITOR ============ -->
-    <section class="section" id="sec-auditor" style="display:none;">
+    <section class="section bld" id="sec-auditor" style="display:none;">
       <div class="section-head"><span class="n">08</span><h2>AI Security Auditor</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Sends the generated Solidity source to the <b style="color:var(--gold);">Anthropic API</b> for a structured security audit. Detects reentrancy, access-control flaws, integer overflows, uninitialized storage, gas inefficiencies, and more. A security score (0–100) is computed from the findings.
-        </p>
-        <div class="field-grid" style="margin-bottom:18px;">
-          <div class="field">
-            <label>Audit focus</label>
-            <select id="audit_focus">
-              <option value="full">Full audit (all categories)</option>
-              <option value="security">Security only</option>
-              <option value="gas">Gas optimization only</option>
-              <option value="logic">Business logic only</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Pending contract</label>
-            <input id="auditContractLabel" value="— generate a contract first" disabled />
-          </div>
-        </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" id="runAuditBtn" data-onclick="runAudit()">Run AI Audit</button>
-          <button class="btn btn-ghost" data-onclick="downloadAuditReport()">Download Report</button>
-        </div>
-        <div id="auditResults" style="margin-top:22px;display:none;">
-          <div class="audit-score" id="auditScoreBox">
-            <div class="audit-score-ring" id="auditRing"></div>
-            <div>
-              <div style="font-family:var(--display);font-size:18px;font-weight:600;" id="auditScoreLabel">—</div>
-              <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;margin-top:4px;" id="auditScoreSub">—</div>
+      <p class="bld-sub">
+        Sends the generated Solidity source to the <b>Anthropic API</b> for a structured security audit. Detects reentrancy, access-control flaws, integer overflows, uninitialized storage, gas inefficiencies, and more. The AI returns a security score (0–100) together with the findings; this page does not compute it, and an AI audit is advisory, not a guarantee.
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="audSetH">
+            <h3 class="bld-h" id="audSetH"><span class="bld-n" aria-hidden="true">1</span>Contract and focus</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="audit_focus">Audit focus</label>
+                <select id="audit_focus">
+                  <option value="full">Full audit (all categories)</option>
+                  <option value="security">Security only</option>
+                  <option value="gas">Gas optimization only</option>
+                  <option value="logic">Business logic only</option>
+                </select>
+                <div class="hint" id="audFocusNote"></div>
+              </div>
+              <div class="field">
+                <label for="auditContractLabel">Pending contract</label>
+                <input id="auditContractLabel" value="— generate a contract first" disabled />
+              </div>
             </div>
-          </div>
-          <div id="auditFindings"></div>
+            <div class="btnrow">
+              <button class="btn btn-primary" id="runAuditBtn" data-onclick="runAudit()">Run AI Audit</button>
+              <button class="btn btn-ghost" data-onclick="downloadAuditReport()">Download Report</button>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="audOutH">
+            <h3 class="bld-h" id="audOutH"><span class="bld-n" aria-hidden="true">2</span>Audit report</h3>
+            <p class="bld-note" id="audEmpty">No audit has run in this session yet.</p>
+            <div id="auditResults" style="margin-top:22px;display:none;">
+              <div class="audit-score" id="auditScoreBox">
+                <div class="audit-score-ring" id="auditRing"></div>
+                <div>
+                  <div style="font-family:var(--display);font-size:18px;font-weight:600;" id="auditScoreLabel">—</div>
+                  <div style="font-family:var(--mono);font-size:11px;color:#7E8C86;margin-top:4px;" id="auditScoreSub">—</div>
+                </div>
+              </div>
+              <div id="auditFindings"></div>
+            </div>
+          </section>
         </div>
+        <aside class="bld-side" aria-label="Audit overview">
+          <section class="bld-card" aria-labelledby="audSumH">
+            <h3 id="audSumH">Audit Overview</h3>
+            <dl class="bld-sum" id="audSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="audProgH">
+            <h3 id="audProgH">Progress</h3>
+            <ol class="bld-prog" id="audProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="audNotesH">
+            <h3 id="audNotesH">Good to know</h3>
+            <ul class="bld-notes" id="audNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 
     <!-- ============ 09 ABI PLAYGROUND ============ -->
-    <section class="section" id="sec-playground" style="display:none;">
+    <section class="section bld" id="sec-playground" style="display:none;">
       <div class="section-head"><span class="n">09</span><h2>ABI Playground</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Talk to a contract you have published. Pick it from your deployments, or paste an address and ABI. Reading works without a wallet; sending needs your wallet on the same network. Each transaction is dry-run first, so a failure shows its reason before any gas is spent.
-        </p>
-        <div class="field-grid" style="margin-bottom:14px;">
-          <div class="field full">
-            <label>Your deployed contracts</label>
-            <select id="pg_deployments" data-onchange="pgSelectDeployment()"><option value="">No deployments yet (section 07)</option></select>
-          </div>
-          <div class="field">
-            <label>Contract address</label>
-            <input id="pg_address" placeholder="0x..." />
-          </div>
-          <div class="field">
-            <label>ABI source</label>
-            <select id="pg_abisrc" data-onchange="onAbiSrcChange()">
-              <option value="last">Use last compiled ABI</option>
-              <option value="custom">Paste custom ABI</option>
-              <option value="history">Load from deploy history</option>
-            </select>
-          </div>
-          <div class="field full" id="pg_customAbiField" style="display:none;">
-            <label>Paste ABI (JSON array)</label>
-            <textarea id="pg_customAbi" style="height:100px;font-size:11px;" placeholder='[{"type":"function","name":"transfer",...}]'></textarea>
-          </div>
+      <p class="bld-sub">
+        Talk to a contract you have published. Pick it from your deployments, or paste an address and ABI. Reading works without a wallet; sending needs your wallet on the same network. Each transaction is dry-run first, so a failure shows its reason before any gas is spent.
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="pgSetH">
+            <h3 class="bld-h" id="pgSetH"><span class="bld-n" aria-hidden="true">1</span>Contract and ABI</h3>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="pg_deployments">Your deployed contracts</label>
+                <select id="pg_deployments" data-onchange="pgSelectDeployment()"><option value="">No deployments yet (section 07)</option></select>
+              </div>
+              <div class="field">
+                <label for="pg_address">Contract address</label>
+                <input id="pg_address" placeholder="0x..." />
+              </div>
+              <div class="field">
+                <label for="pg_abisrc">ABI source</label>
+                <select id="pg_abisrc" data-onchange="onAbiSrcChange()">
+                  <option value="last">Use last compiled ABI</option>
+                  <option value="custom">Paste custom ABI</option>
+                  <option value="history">Load from deploy history</option>
+                </select>
+              </div>
+              <div class="field full" id="pg_customAbiField" style="display:none;">
+                <label for="pg_customAbi">Paste ABI (JSON array)</label>
+                <textarea id="pg_customAbi" style="height:100px;font-size:11px;" placeholder='[{"type":"function","name":"transfer",...}]'></textarea>
+              </div>
+            </div>
+            <div class="btnrow" style="margin-bottom:14px;">
+              <button class="btn btn-primary" data-onclick="loadPlayground()">Load contract</button>
+              <button class="btn btn-ghost" data-onclick="subscribeEvents()">Subscribe to Events</button>
+            </div>
+            <div id="pg_context" class="pg-context" style="display:none;" role="status"></div>
+          </section>
+          <section class="bld-card" aria-labelledby="pgFnH">
+            <h3 class="bld-h" id="pgFnH"><span class="bld-n" aria-hidden="true">2</span>Functions</h3>
+            <div class="pg-toolbar">
+              <div class="pill-row" id="pg_filter">
+                <div class="pill active" data-filter="all" data-onclick="filterFns('all',this)">All</div>
+                <div class="pill" data-filter="read" data-onclick="filterFns('read',this)">Read</div>
+                <div class="pill" data-filter="write" data-onclick="filterFns('write',this)">Write</div>
+                <div class="pill" data-filter="event" data-onclick="filterFns('event',this)">Events</div>
+              </div>
+              <input id="pg_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
+            </div>
+            <p class="bld-note" id="pgEmpty">Load a contract to see its functions.</p>
+            <div id="pg_functions"></div>
+            <div id="pg_calls" class="pg-calls" style="display:none;"></div>
+          </section>
+          <section class="bld-card" aria-labelledby="pgLogH">
+            <h3 class="bld-h" id="pgLogH"><span class="bld-n" aria-hidden="true">3</span>Activity</h3>
+            <div class="console" id="pg_log">
+              <div class="line"><span class="t">[boot]</span><span class="msg">Pick a contract above to start interacting with it.</span></div>
+            </div>
+          </section>
         </div>
-        <div class="btnrow" style="margin-bottom:14px;">
-          <button class="btn btn-primary" data-onclick="loadPlayground()">Load contract</button>
-          <button class="btn btn-ghost" data-onclick="subscribeEvents()">Subscribe to Events</button>
-        </div>
-        <div id="pg_context" class="pg-context" style="display:none;" role="status"></div>
-        <div class="pg-toolbar">
-          <div class="pill-row" id="pg_filter">
-            <div class="pill active" data-filter="all" data-onclick="filterFns('all',this)">All</div>
-            <div class="pill" data-filter="read" data-onclick="filterFns('read',this)">Read</div>
-            <div class="pill" data-filter="write" data-onclick="filterFns('write',this)">Write</div>
-            <div class="pill" data-filter="event" data-onclick="filterFns('event',this)">Events</div>
-          </div>
-          <input id="pg_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
-        </div>
-        <div id="pg_functions"></div>
-        <div id="pg_calls" class="pg-calls" style="display:none;"></div>
-        <div class="console" id="pg_log" style="margin-top:14px;">
-          <div class="line"><span class="t">[boot]</span><span class="msg">Pick a contract above to start interacting with it.</span></div>
-        </div>
+        <aside class="bld-side" aria-label="Contract overview">
+          <section class="bld-card" aria-labelledby="pgSumH">
+            <h3 id="pgSumH">Contract Overview</h3>
+            <dl class="bld-sum" id="pgSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="pgProgH">
+            <h3 id="pgProgH">Progress</h3>
+            <ol class="bld-prog" id="pgProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="pgNotesH">
+            <h3 id="pgNotesH">Good to know</h3>
+            <ul class="bld-notes" id="pgNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 
         <!-- ============ 18 TEST LAB ============ -->
-    <section class="section" id="sec-lab" style="display:none;">
+    <section class="section bld" id="sec-lab" style="display:none;">
       <div class="section-head"><span class="n">18</span><h2>Test Lab</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Try the contract you just generated before you publish it. It runs on a private simulated chain inside this page: no wallet, no network, no real funds. Five test accounts hold test USDC and EURC, you can move time forward (for vesting, timelocks and streams), and every call shows its events and the reason when it fails.
-        </p>
+      <p class="bld-sub">
+        Try the contract you just generated before you publish it. It runs on a private simulated chain inside this page: no wallet, no network, no real funds. Five test accounts hold test USDC and EURC, you can move time forward (for vesting, timelocks and streams), and every call shows its events and the reason when it fails.
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="labSetH">
+            <h3 class="bld-h" id="labSetH"><span class="bld-n" aria-hidden="true">1</span>Contract and simulation</h3>
         <div class="lab-bar">
           <span id="labStatus" class="lab-status" role="status">Not started</span>
           <div class="btnrow" style="margin:0;">
@@ -796,6 +849,9 @@
         </div>
         <div id="labContract" class="lab-note" style="margin-bottom:12px;"></div>
         <div id="labArgs" style="display:none;margin-bottom:14px;"></div>
+          </section>
+          <section class="bld-card" aria-labelledby="labAccH">
+            <h3 class="bld-h" id="labAccH"><span class="bld-n" aria-hidden="true">2</span>Accounts, time and test tokens</h3>
         <div class="lab-card" style="margin-bottom:14px;">
           <h4>Acting as</h4>
           <div class="lab-actrow"><select id="lab_acting" data-onchange="labSelectAccount()" aria-label="Acting account"></select><code id="lab_acting_addr" class="lab-addr"></code></div>
@@ -835,6 +891,9 @@
             <p class="lab-note" style="margin-top:8px;">Contracts that hard-code the real USDC or EURC address work unchanged: the test tokens are placed at those addresses.</p>
           </div>
         </div>
+          </section>
+          <section class="bld-card" aria-labelledby="labFnH">
+            <h3 class="bld-h" id="labFnH"><span class="bld-n" aria-hidden="true">3</span>Functions</h3>
         <div class="pg-toolbar">
           <div class="pill-row" id="lab_filter">
             <div class="pill active" data-filter="all" data-onclick="labFilter('all',this)">All</div>
@@ -844,11 +903,31 @@
           </div>
           <input id="lab_search" class="pg-search" placeholder="Search functions…" aria-label="Search functions" />
         </div>
+            <p class="bld-note" id="labFnEmpty">Load a contract to see its functions.</p>
         <div id="lab_functions"></div>
         <div id="lab_txs" class="pg-calls" style="display:none;"></div>
+          </section>
+          <section class="bld-card" aria-labelledby="labLogH">
+            <h3 class="bld-h" id="labLogH"><span class="bld-n" aria-hidden="true">4</span>Activity</h3>
         <div class="console" id="lab_log" style="margin-top:14px;">
           <div class="line"><span class="t">[boot]</span><span class="msg">Press "Load current contract" to start.</span></div>
         </div>
+          </section>
+        </div>
+        <aside class="bld-side" aria-label="Simulation overview">
+          <section class="bld-card" aria-labelledby="labSumH">
+            <h3 id="labSumH">Simulation Overview</h3>
+            <dl class="bld-sum" id="labSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="labProgH">
+            <h3 id="labProgH">Progress</h3>
+            <ol class="bld-prog" id="labProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="labNotesH">
+            <h3 id="labNotesH">Good to know</h3>
+            <ul class="bld-notes" id="labNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 
@@ -882,36 +961,59 @@
     </section>
 
     <!-- ============ 11 GAS ESTIMATOR ============ -->
-    <section class="section" id="sec-gas" style="display:none;">
+    <section class="section bld" id="sec-gas" style="display:none;">
       <div class="section-head"><span class="n">11</span><h2>Gas Estimator</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Estimates the gas cost of deploying the current contract before sending any transaction. Pulls live <code style="font-size:11px;color:var(--gold);">eth_gasPrice</code> and <code style="font-size:11px;color:var(--gold);">eth_estimateGas</code> from the selected network. USD price is fetched from CoinGecko.
-        </p>
-        <div class="field-grid" style="margin-bottom:18px;">
-          <div class="field">
-            <label>ETH/USD override (0 = live price)</label>
-            <input id="gas_ethprice" type="number" value="0" placeholder="e.g. 3200" />
-          </div>
-          <div class="field">
-            <label>Gas price override (gwei, 0 = live)</label>
-            <input id="gas_gweioverride" type="number" value="0" />
-          </div>
+      <p class="bld-sub">
+        Estimates the gas cost of deploying the current contract before sending any transaction. Pulls live <code>eth_gasPrice</code> and <code>eth_estimateGas</code> from the selected network through your wallet's connection. The USD price is yours, or fixed where the gas token is USDC, or fetched from CoinGecko (an outside service).
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="gasSetH">
+            <h3 class="bld-h" id="gasSetH"><span class="bld-n" aria-hidden="true">1</span>Price inputs</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="gas_ethprice">ETH/USD override (0 = live price)</label>
+                <input id="gas_ethprice" type="number" value="0" placeholder="e.g. 3200" />
+                <div class="hint" id="gasPriceNote"></div>
+              </div>
+              <div class="field">
+                <label for="gas_gweioverride">Gas price override (gwei, 0 = live)</label>
+                <input id="gas_gweioverride" type="number" value="0" />
+              </div>
+            </div>
+            <div class="btnrow">
+              <button class="btn btn-primary" id="estimateGasBtn" data-onclick="estimateGas()">Estimate Gas</button>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="gasOutH">
+            <h3 class="bld-h" id="gasOutH"><span class="bld-n" aria-hidden="true">2</span>Estimate</h3>
+            <div class="gas-meter" id="gasMeter" style="display:none;">
+              <div class="gas-card"><div class="gval" id="g_units">—</div><div class="glabel">Gas units</div><div class="gsub" id="g_unitssub">estimated</div></div>
+              <div class="gas-card"><div class="gval" id="g_gwei">—</div><div class="glabel">Gas price</div><div class="gsub" id="g_gweisub">gwei</div></div>
+              <div class="gas-card"><div class="gval" id="g_native">—</div><div class="glabel">Cost (native)</div><div class="gsub" id="g_nativesub">ETH / USDC</div></div>
+              <div class="gas-card"><div class="gval" id="g_usd">—</div><div class="glabel">Cost (USD)</div><div class="gsub" id="g_usdsub">at live price</div></div>
+              <div class="gas-card"><div class="gval" id="g_bytecode">—</div><div class="glabel">Bytecode size</div><div class="gsub">bytes (max 24 576)</div></div>
+              <div class="gas-card"><div class="gval" id="g_functions">—</div><div class="glabel">ABI items</div><div class="gsub">functions + events</div></div>
+            </div>
+            <div class="console" id="gasLog">
+              <div class="line"><span class="t">[boot]</span><span class="msg">Generate and compile a contract, then estimate its deployment cost.</span></div>
+            </div>
+          </section>
         </div>
-        <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-primary" data-onclick="estimateGas()">Estimate Gas</button>
-        </div>
-        <div class="gas-meter" id="gasMeter" style="display:none;">
-          <div class="gas-card"><div class="gval" id="g_units">—</div><div class="glabel">Gas units</div><div class="gsub" id="g_unitssub">estimated</div></div>
-          <div class="gas-card"><div class="gval" id="g_gwei">—</div><div class="glabel">Gas price</div><div class="gsub" id="g_gweisub">gwei</div></div>
-          <div class="gas-card"><div class="gval" id="g_native">—</div><div class="glabel">Cost (native)</div><div class="gsub" id="g_nativesub">ETH / USDC</div></div>
-          <div class="gas-card"><div class="gval" id="g_usd">—</div><div class="glabel">Cost (USD)</div><div class="gsub" id="g_usdsub">at live price</div></div>
-          <div class="gas-card"><div class="gval" id="g_bytecode">—</div><div class="glabel">Bytecode size</div><div class="gsub">bytes (max 24 576)</div></div>
-          <div class="gas-card"><div class="gval" id="g_functions">—</div><div class="glabel">ABI items</div><div class="gsub">functions + events</div></div>
-        </div>
-        <div class="console" id="gasLog">
-          <div class="line"><span class="t">[boot]</span><span class="msg">Generate and compile a contract, then estimate its deployment cost.</span></div>
-        </div>
+        <aside class="bld-side" aria-label="Estimate overview">
+          <section class="bld-card" aria-labelledby="gasSumH">
+            <h3 id="gasSumH">Estimate Overview</h3>
+            <dl class="bld-sum" id="gasSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="gasProgH">
+            <h3 id="gasProgH">Progress</h3>
+            <ol class="bld-prog" id="gasProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="gasNotesH">
+            <h3 id="gasNotesH">Good to know</h3>
+            <ul class="bld-notes" id="gasNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 
@@ -1181,80 +1283,129 @@
     </section>
 
     <!-- ============ 16 ANALYTICS ============ -->
-    <section class="section" id="sec-analytics" style="display:none;">
+    <section class="section bld" id="sec-analytics" style="display:none;">
       <div class="section-head"><span class="n">16</span><h2>Contract Analytics</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Live on-chain analytics for deployed contracts. Pulls real transaction data via <code style="color:var(--gold);font-size:11px;">eth_getLogs</code> and <code style="color:var(--gold);font-size:11px;">eth_getTransactionCount</code>.
-        </p>
-        <div class="field-grid" style="margin-bottom:14px;">
-          <div class="field">
-            <label>Contract address</label>
-            <input id="an_address" placeholder="0x... or select from deploy history" />
-          </div>
-          <div class="field">
-            <label>Lookback (blocks)</label>
-            <input id="an_blocks" type="number" value="10000" />
-          </div>
+      <p class="bld-sub">
+        Live on-chain analytics for deployed contracts. Pulls real transaction data via <code>eth_getLogs</code> and <code>eth_getTransactionCount</code>, through your wallet's connection.
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="anSetH">
+            <h3 class="bld-h" id="anSetH"><span class="bld-n" aria-hidden="true">1</span>Contract and range</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="an_address">Contract address</label>
+                <input id="an_address" placeholder="0x... or select from deploy history" />
+                <div class="hint" id="anAddrNote"></div>
+              </div>
+              <div class="field">
+                <label for="an_blocks">Lookback (blocks)</label>
+                <input id="an_blocks" type="number" value="10000" />
+                <div class="hint" id="anBlocksNote"></div>
+              </div>
+            </div>
+            <div class="pill-row" id="an_history_pills" style="margin-bottom:14px;"></div>
+            <div class="btnrow">
+              <button class="btn btn-primary" data-onclick="loadAnalytics()">Load Analytics</button>
+              <button class="btn btn-ghost" data-onclick="refreshAnalytics()">Refresh</button>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="anOutH">
+            <h3 class="bld-h" id="anOutH"><span class="bld-n" aria-hidden="true">2</span>Analytics</h3>
+            <p class="bld-note" id="anEmpty">Nothing loaded in this session yet.</p>
+            <div id="analyticsData" style="display:none;">
+              <div class="analytics-grid" id="an_kpis"></div>
+              <div class="chart-wrap">
+                <h4>Transaction volume (last 10 periods)</h4>
+                <div class="bar-chart" id="an_bars"></div>
+                <div class="bar-labels" id="an_barlabels"></div>
+              </div>
+              <div class="chart-wrap">
+                <h4>Recent events</h4>
+                <div class="console" id="an_events" style="max-height:200px;"></div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="pill-row" id="an_history_pills" style="margin-bottom:14px;"></div>
-        <div class="btnrow" style="margin-bottom:18px;">
-          <button class="btn btn-primary" data-onclick="loadAnalytics()">Load Analytics</button>
-          <button class="btn btn-ghost" data-onclick="refreshAnalytics()">Refresh</button>
-        </div>
-        <div id="analyticsData" style="display:none;">
-          <div class="analytics-grid" id="an_kpis"></div>
-          <div class="chart-wrap">
-            <h4>Transaction volume (last 10 periods)</h4>
-            <div class="bar-chart" id="an_bars"></div>
-            <div class="bar-labels" id="an_barlabels"></div>
-          </div>
-          <div class="chart-wrap">
-            <h4>Recent events</h4>
-            <div class="console" id="an_events" style="max-height:200px;"></div>
-          </div>
-        </div>
+        <aside class="bld-side" aria-label="Analytics overview">
+          <section class="bld-card" aria-labelledby="anSumH">
+            <h3 id="anSumH">Analytics Overview</h3>
+            <dl class="bld-sum" id="anSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="anProgH">
+            <h3 id="anProgH">Progress</h3>
+            <ol class="bld-prog" id="anProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="anNotesH">
+            <h3 id="anNotesH">Good to know</h3>
+            <ul class="bld-notes" id="anNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 
     <!-- ============ 17 TEST GENERATOR ============ -->
-    <section class="section" id="sec-tests" style="display:none;">
+    <section class="section bld" id="sec-tests" style="display:none;">
       <div class="section-head"><span class="n">17</span><h2>Test Generator</h2><div class="rule"></div></div>
-      <div class="form-panel">
-        <p style="font-size:13px;color:#92A199;line-height:1.6;margin-bottom:18px;">
-          Automatically generates a comprehensive test suite for the current contract using the Anthropic API. Covers happy paths, edge cases, access control, and reentrancy. Download as <code style="color:var(--gold);font-size:11px;">.t.sol</code> (Foundry) or <code style="color:var(--gold);font-size:11px;">.test.js</code> (Hardhat).
-        </p>
-        <div class="field-grid" style="margin-bottom:14px;">
-          <div class="field">
-            <label>Framework</label>
-            <select id="test_framework">
-              <option value="foundry">Foundry (.t.sol)</option>
-              <option value="hardhat">Hardhat (Mocha/Chai .js)</option>
-              <option value="both">Both</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Coverage level</label>
-            <select id="test_coverage">
-              <option value="basic">Basic (happy paths only)</option>
-              <option value="full">Full (happy + edge + reverts)</option>
-              <option value="security">Security-focused (access control + fuzz stubs)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Pending contract</label>
-            <input id="test_contractLabel" value="— generate a contract first" disabled />
-          </div>
+      <p class="bld-sub">
+        Automatically generates a comprehensive test suite for the current contract using the Anthropic API. Covers happy paths, edge cases, access control, and reentrancy. Download as <code>.t.sol</code> (Foundry) or <code>.test.js</code> (Hardhat). The text comes from the AI: this page never compiles it or runs it.
+      </p>
+      <div class="bld-grid">
+        <div class="bld-main">
+          <section class="bld-card" aria-labelledby="tgSetH">
+            <h3 class="bld-h" id="tgSetH"><span class="bld-n" aria-hidden="true">1</span>Contract and test settings</h3>
+            <div class="field-grid">
+              <div class="field">
+                <label for="test_framework">Framework</label>
+                <select id="test_framework">
+                  <option value="foundry">Foundry (.t.sol)</option>
+                  <option value="hardhat">Hardhat (Mocha/Chai .js)</option>
+                  <option value="both">Both</option>
+                </select>
+                <div class="hint" id="tgFwNote"></div>
+              </div>
+              <div class="field">
+                <label for="test_coverage">Coverage level</label>
+                <select id="test_coverage">
+                  <option value="basic">Basic (happy paths only)</option>
+                  <option value="full">Full (happy + edge + reverts)</option>
+                  <option value="security">Security-focused (access control + fuzz stubs)</option>
+                </select>
+              </div>
+              <div class="field bld-wide">
+                <label for="test_contractLabel">Pending contract</label>
+                <input id="test_contractLabel" value="— generate a contract first" disabled />
+              </div>
+            </div>
+            <div class="btnrow">
+              <button class="btn btn-primary" id="genTestsBtn" data-onclick="generateTests()">Generate Tests</button>
+              <button class="btn btn-ghost" data-onclick="downloadTests()">Download</button>
+              <button class="btn btn-ghost" data-onclick="copyTests()">Copy</button>
+            </div>
+          </section>
+          <section class="bld-card" aria-labelledby="tgOutH">
+            <h3 class="bld-h" id="tgOutH"><span class="bld-n" aria-hidden="true">2</span>Generated tests</h3>
+            <p class="bld-note" id="tgEmpty">No tests generated in this session yet.</p>
+            <div id="testOutput" style="display:none;margin-top:14px;">
+              <div id="testCards"></div>
+              <div class="test-result" id="testCode"></div>
+            </div>
+          </section>
         </div>
-        <div class="btnrow">
-          <button class="btn btn-primary" id="genTestsBtn" data-onclick="generateTests()">Generate Tests</button>
-          <button class="btn btn-ghost" data-onclick="downloadTests()">Download</button>
-          <button class="btn btn-ghost" data-onclick="copyTests()">Copy</button>
-        </div>
-        <div id="testOutput" style="display:none;margin-top:14px;">
-          <div id="testCards"></div>
-          <div class="test-result" id="testCode"></div>
-        </div>
+        <aside class="bld-side" aria-label="Test generation overview">
+          <section class="bld-card" aria-labelledby="tgSumH">
+            <h3 id="tgSumH">Test Overview</h3>
+            <dl class="bld-sum" id="tgSummary"></dl>
+          </section>
+          <section class="bld-card" aria-labelledby="tgProgH">
+            <h3 id="tgProgH">Progress</h3>
+            <ol class="bld-prog" id="tgProgress"></ol>
+          </section>
+          <section class="bld-card" aria-labelledby="tgNotesH">
+            <h3 id="tgNotesH">Good to know</h3>
+            <ul class="bld-notes" id="tgNotes"></ul>
+          </section>
+        </aside>
       </div>
     </section>
 

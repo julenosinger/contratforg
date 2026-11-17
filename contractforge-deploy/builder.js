@@ -188,6 +188,26 @@ const CFBuilder = (function(){
     return m;
   }
 
+  /* The two writers every overview uses (summary rows and progress steps). They only build DOM nodes with textContent, so nothing from storage, the
+     page or an answer can become markup. A view calls rowWriter(list) once per redraw and gets the same `row(label, value, state, flag, mono)` function. */
+  function rowWriter(list){
+    return function(label, value, state, flag, mono){
+      const r = el('div', 'bld-row'); r.setAttribute('data-state', state || 'ok');
+      r.appendChild(el('dt', '', label));
+      const dd = el('dd', mono ? 'mono' : '', value);
+      if(flag) dd.appendChild(el('span', 'bld-flag', flag));
+      r.appendChild(dd); list.appendChild(r);
+    };
+  }
+  function stepWriter(list){
+    return function(title, state, text){
+      const li = el('li'); li.setAttribute('data-state', state);
+      const mark = el('span', 'bld-mark', state === 'done' ? '\u2713' : (state === 'draft' || state === 'attention' ? '!' : '')); mark.setAttribute('aria-hidden', 'true');
+      const body = el('div'); body.appendChild(el('b', '', title)); body.appendChild(el('span', 'bld-t', text));
+      li.appendChild(mark); li.appendChild(body); list.appendChild(li);
+    };
+  }
+
   /* The Network row every builder shows. A mainnet carries the same warning everywhere; the text states only what the deploy path really does
      (the maturity confirmation and the typed network name), nothing about the contract itself. */
   function networkRow(row, net){
@@ -196,7 +216,7 @@ const CFBuilder = (function(){
   }
 
   return {
-    el, register, TEXTS, networkRow,
+    el, register, TEXTS, networkRow, rowWriter, stepWriter,
     render: (key) => { if(modules[key]) render(modules[key]); },
     renderAll: () => { Object.keys(modules).forEach(k => render(modules[k])); Object.keys(views).forEach(k => { try { views[k](); } catch(_) { /* a view must never break the others */ } }); },
     /* A screen with no code panel (the Contract Wizard) registers a plain redraw function; renderAll() runs it with the screens. */
