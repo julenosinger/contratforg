@@ -4764,7 +4764,7 @@ function generateShareUrl(){
     code: pendingSource.code||''
   };
   const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
-  const url = window.location.href.split('#')[0]+'#cfg='+encoded;
+  const url = window.location.origin + '/#cfg=' + encoded;
   document.getElementById('shareUrl').value = url;
   logConsole('ok','Share URL generated ('+encoded.length+' chars encoded).');
 }
@@ -4907,7 +4907,7 @@ function shrConfig(){
   const ps = (typeof pendingSource !== 'undefined' && pendingSource) || {};
   return { network: activeNetwork, name: ps.name || '', code: ps.code || '' };
 }
-function shrLinkFor(cfg){ return window.location.href.split('#')[0] + '#cfg=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))); }
+function shrLinkFor(cfg){ return window.location.origin + '/#cfg=' + btoa(unescape(encodeURIComponent(JSON.stringify(cfg)))); }
 function shrArtifact(v){
   const abi = window.__lastCompiledABI, bc = window.__lastCompiledBytecode;
   if(!Array.isArray(abi) || !abi.length || !bc) return { state: 'none' };
