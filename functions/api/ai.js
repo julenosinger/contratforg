@@ -30,7 +30,7 @@ const AI_FRAMEWORK = {
   hardhat: () => 'Write a Hardhat test file (JavaScript). Use ethers.js v5 and Mocha/Chai. describe/it/beforeEach. Verify events. Include revert tests.',
   both: () => 'Write BOTH a Foundry .t.sol AND a Hardhat .test.js. Separate with: // ===== HARDHAT TEST ====='
 };
-const AI_MAX_TOKENS = { audit: 2000, generate: 4096, tests: 4096, chat: 4096 };
+const AI_MAX_TOKENS = { audit: 2000, generate: 4096, tests: 4096, chat: 8192 };
 const AI_NAME_RE = /^[A-Za-z0-9_]{1,80}$/;
 const AI_LABEL_RE = /^[A-Za-z0-9 .()\-]{1,40}$/;
 const AI_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -230,7 +230,7 @@ const AI_ADAPTERS = {
     body: (model, built) => {
       const messages = built.messages ? built.messages.slice() : [{ role: 'user', content: built.user }];
       if (built.system) messages.unshift({ role: 'system', content: built.system });
-      return { model, max_tokens: built.maxTokens, messages };
+      return { model, max_tokens: built.maxTokens, messages, thinking: { type: 'disabled' } };
     },
     parse: (data) => {
       const msg = data && Array.isArray(data.choices) && data.choices[0] && data.choices[0].message;
@@ -255,11 +255,11 @@ const AI_PRICING_VERSION = 1;
 /* Catalog of approved models. An unknown or disabled model is a controlled config error (503). Token/context limits
    are conservative and documented, not independently verified per model. */
 const AI_CATALOG = {
-  'anthropic:claude-sonnet-4-6': { id: 'anthropic:claude-sonnet-4-6', provider: 'anthropic', model: 'claude-sonnet-4-6', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
-  'openai:gpt-4o-mini':          { id: 'openai:gpt-4o-mini', provider: 'openai', model: 'gpt-4o-mini', enabled: true, verified: false, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
-  'openai:gpt-4o':               { id: 'openai:gpt-4o', provider: 'openai', model: 'gpt-4o', enabled: true, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
-  'deepseek:deepseek-flash':     { id: 'deepseek:deepseek-flash', provider: 'deepseek', model: 'deepseek-flash', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
-  'deepseek:deepseek-reasoner':  { id: 'deepseek:deepseek-reasoner', provider: 'deepseek', model: 'deepseek-reasoner', enabled: false, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+  'anthropic:claude-sonnet-4-6': { id: 'anthropic:claude-sonnet-4-6', provider: 'anthropic', model: 'claude-sonnet-4-6', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 8192 },
+  'openai:gpt-4o-mini':          { id: 'openai:gpt-4o-mini', provider: 'openai', model: 'gpt-4o-mini', enabled: true, verified: false, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 8192 },
+  'openai:gpt-4o':               { id: 'openai:gpt-4o', provider: 'openai', model: 'gpt-4o', enabled: true, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 8192 },
+  'deepseek:deepseek-flash':     { id: 'deepseek:deepseek-flash', provider: 'deepseek', model: 'deepseek-flash', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 8192 },
+  'deepseek:deepseek-reasoner':  { id: 'deepseek:deepseek-reasoner', provider: 'deepseek', model: 'deepseek-reasoner', enabled: false, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 8192 },
 };
 
 /* Existing wire action -> commercial operation (for pricing/quotes). `chat` defaults to the cheapest operation; a

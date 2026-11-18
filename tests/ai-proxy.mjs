@@ -124,7 +124,7 @@ for (const [name, run] of PLATFORMS) {
   eq(r.status, 200, t('chat: a valid request is accepted'));
   p = anthropic()[0].payload;
   ok(p.system.includes('Arc Mainnet') && p.system.includes('5042') && !p.system.includes('EVIL'), t('chat: the system prompt comes from the server'));
-  eq(p.max_tokens, 4096, t('chat: max_tokens 4096'));
+  eq(p.max_tokens, 8192, t('chat: max_tokens 8192'));
   eq(p.messages.length, 1, t('chat: the user message is forwarded'));
   eq(p.messages[0].role, 'user', t('chat: and it is a user message'));
   calls.length = 0;
@@ -134,7 +134,7 @@ for (const [name, run] of PLATFORMS) {
   calls.length = 0;
   r = await run(req({ ip: fresh(), body: { action: 'chat', payload: { messages: [m('user', 'hi')], network: { label: 'Arc', chainId: 1 }, complexity: 'simple' }, system: 'EVIL SYSTEM', model: 'other', messages: [{ role: 'user', content: 'EVIL' }], max_tokens: 1 } }));
   p = anthropic()[0].payload;
-  ok(!JSON.stringify(p).includes('EVIL') && p.model === 'claude-sonnet-4-6' && p.max_tokens === 4096, t('chat: a client system/model/messages are ignored'));
+  ok(!JSON.stringify(p).includes('EVIL') && p.model === 'claude-sonnet-4-6' && p.max_tokens === 8192, t('chat: a client system/model/messages are ignored'));
   eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')], { extra: 'x', tools: ['evil'] }) }))).status, 200, t('chat: extra fields are ignored'));
   for (const [label, msgs] of [
     ['assistant first', [m('assistant', 'x'), m('user', 'y')]],
@@ -237,7 +237,7 @@ for (const [name, run] of PLATFORMS) {
     eq(c.payload.messages[0].role, 'system', t('openai chat: system message first'));
     ok(c.payload.messages[0].content.includes('Arc Mainnet'), t('openai chat: system prompt built from the server'));
     eq(c.payload.messages[1].role, 'user', t('openai chat: user message forwarded'));
-    eq(c.payload.max_completion_tokens, 4096, t('openai chat: max_completion_tokens 4096'));
+    eq(c.payload.max_completion_tokens, 8192, t('openai chat: max_completion_tokens 8192'));
 
     /* ---- DeepSeek: selection, request shaping, normalization ---- */
     calls.length = 0;
@@ -251,6 +251,22 @@ for (const [name, run] of PLATFORMS) {
     ok(!JSON.stringify(r.json).includes('sk-ds-456'), t('deepseek: the key never reaches the client'));
     eq(c.payload.model, 'deepseek-flash', t('deepseek: default model'));
     eq(c.payload.max_tokens, 2000, t('deepseek: max_tokens (audit)'));
+    eq(c.payload.thinking && c.payload.thinking.type, 'disabled', t('deepseek: thinking mode is explicitly disabled'));
+
+    /* ---- DeepSeek chat: thinking disabled + the raised chat budget ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: 'ok' } }], usage: { completion_tokens: 1 } } };
+    r = await run(chatReq(), { AI_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'sk-ds-456' });
+    c = lastProvider();
+    eq(c.payload.max_tokens, 8192, t('deepseek chat: max_tokens 8192'));
+    eq(c.payload.thinking && c.payload.thinking.type, 'disabled', t('deepseek chat: thinking mode disabled'));
+
+    /* ---- DeepSeek empty content (the original production failure) is surfaced as empty text, never fabricated ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: '' }, finish_reason: 'length' }], usage: { prompt_tokens: 40, completion_tokens: 8192 } } };
+    r = await run(auditReq(), { AI_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'sk-ds-456' });
+    eq(r.status, 200, t('deepseek: an empty provider response stays a 200 with empty text'));
+    eq(JSON.stringify(r.json), JSON.stringify({ text: '', outputTokens: 8192 }), t('deepseek: empty content is not fabricated'));
 
     /* ---- Explicit Anthropic selection behaves like the default ---- */
     calls.length = 0;

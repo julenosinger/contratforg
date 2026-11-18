@@ -35,6 +35,7 @@ for (const [name, T] of builds) {
   eq(T.aiCatalogEntry('openai', 'gpt-4o-mini') && T.aiCatalogEntry('openai', 'gpt-4o-mini').enabled, true, t('OpenAI default is enabled'));
   eq(T.aiCatalogEntry('openai', 'gpt-4o-mini').verified, false, t('OpenAI default is marked unverified'));
   eq(T.aiCatalogEntry('deepseek', 'deepseek-flash') && T.aiCatalogEntry('deepseek', 'deepseek-flash').enabled, true, t('DeepSeek default is enabled'));
+  eq(T.aiCatalogEntry('deepseek', 'deepseek-flash').maxOutputTokens, 8192, t('DeepSeek max output is 8192'));
   eq(T.aiCatalogEntry('deepseek', 'deepseek-reasoner').enabled, false, t('deprecated deepseek-reasoner is disabled'));
   eq(T.aiCatalogEntry('openai', 'no-such-model'), null, t('unknown model -> null'));
 
