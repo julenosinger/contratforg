@@ -161,11 +161,11 @@ const NETWORKS = {
   },
 };
 
-let activeNetwork = 'arc';
+let activeNetwork = 'arcMain';
 let provider=null, signer=null, account=null;
 let pendingSource = { name:'', code:'' };
 
-let netFilter = 'testnet'; // 'testnet' | 'mainnet' | 'all'
+let netFilter = 'mainnet'; // 'testnet' | 'mainnet' | 'all'
 
 /* ---------------- Network bar ---------------- */
 function renderNetBar(){

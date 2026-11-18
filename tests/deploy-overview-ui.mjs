@@ -70,7 +70,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   const a = fresh(); const { d } = a;
   await a.go('deploy');
   const r = a.rows(), p = a.prog();
-  eq([r.Contract.text, r.Contract.state, r.Wallet.text, r.Compiler.text, r.Network.text, r['Deployment Mode'].text], ['None generated yet', 'missing', 'Not connected', 'solc 0.8.24', 'Arc Testnet (5042002)', 'Single network'], 'start: no contract, no wallet, the real compiler, network and mode');
+  eq([r.Contract.text, r.Contract.state, r.Wallet.text, r.Compiler.text, r.Network.text, r['Deployment Mode'].text], ['None generated yet', 'missing', 'Not connected', 'solc 0.8.24', 'Arc Mainnet (5042)', 'Single network'], 'start: no contract, no wallet, the real compiler, network and mode');
   ok(!r.Source && !r.Constructor && !r['Maturity check'], 'start: no source, constructor or maturity rows without a contract');
   eq([p.Source.state, p['Ready to deploy'].state, p.Deployed.state], ['todo', 'locked', 'locked'], 'start: progress claims nothing');
   eq(d.getElementById('dplSummary').children.length, 5, 'start: five rows');
@@ -227,11 +227,11 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   const a = fresh(); const { d, ev, w } = a;
   const chips = () => Object.fromEntries([...d.querySelectorAll('#dplHead .dpl-chip')].map((c) => [c.querySelector('i').textContent, c.querySelector('b').textContent]));
   await a.go('deploy');
-  eq(chips(), { Contract: 'None yet', Compiler: 'solc 0.8.24', Mode: 'Single network', Network: 'Arc Testnet' }, 'start: the header shows only what is real');
+  eq(chips(), { Contract: 'None yet', Compiler: 'solc 0.8.24', Mode: 'Single network', Network: 'Arc Mainnet · LIVE' }, 'start: the header shows only what is real');
   eq([d.getElementById('dplSource').textContent, /generate a contract first/.test(d.getElementById('dplSrcSum').textContent), d.getElementById('dplSrcBox').open], ['', true, false], 'start: the preview is empty and closed');
   eq([d.getElementById('dplCtorEmpty').hidden, d.getElementById('dplCtorEmpty').textContent], [false, 'Generate a contract to see its constructor arguments.'], 'start: the constructor card has its empty state');
   eq(d.getElementById('dplNetCount').textContent, '1 network', 'start (single mode): one network, the active one');
-  ok(/Single and Portable modes deploy to the active network: Arc Testnet/.test(d.getElementById('dplNetNote').textContent), 'start: the note says which network');
+  ok(/Single and Portable modes deploy to the active network: Arc Mainnet \(live, real funds\)/.test(d.getElementById('dplNetNote').textContent), 'start: the note says which network');
   eq([...d.querySelectorAll('#dplReady li')].map((l) => l.dataset.state), ['todo', 'warn'], 'start: readiness has no false check');
   a.GEN.erc20(); await a.go('home'); await a.go('deploy');
   const code = ev('pendingSource.code');
@@ -240,7 +240,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   ok(/Solidity preview · \d+ lines · read only/.test(d.getElementById('dplSrcSum').textContent), 'and says how long it is');
   eq(d.querySelectorAll('#dplSrcBox textarea, #dplSrcBox input, #dplSrcBox [contenteditable]').length, 0, 'there is nothing to edit in the preview');
   eq([d.getElementById('dplCtorEmpty').hidden, d.getElementById('dplCtorEmpty').textContent, d.getElementById('dplCtorCount').textContent], [false, 'This contract has no constructor arguments in this Deployment Mode.', 'none'], 'erc20: the empty state says there is no constructor argument');
-  eq([...d.querySelectorAll('#dplReady li')].map((l) => l.dataset.state + ':' + l.textContent), ['ok:Contract source is ready.', 'ok:No constructor arguments.', 'warn:Connect your wallet to deploy.', 'ok:Testnet deployment (no maturity approval).'], 'readiness: the same facts as the summary, as a checklist');
+  eq([...d.querySelectorAll('#dplReady li')].map((l) => l.dataset.state + ':' + l.textContent), ['ok:Contract source is ready.', 'ok:No constructor arguments.', 'warn:Connect your wallet to deploy.', 'warn:Mainnet: the maturity confirmation is asked when you press Compile and deploy.'], 'readiness: the same facts as the summary, as a checklist');
   // the source buttons still work, and never touch the source
   const clip = []; Object.defineProperty(w.navigator, 'clipboard', { value: { writeText: (x) => { clip.push(x); return Promise.resolve(); } }, configurable: true });
   d.getElementById('btnCopySol').click(); await tick(); eq(clip, [code], 'Copy code copies exactly the source');
@@ -280,7 +280,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
 /* 10. a real deploy run through the page's own compileAndDeploy (compiler, deployment and wallet stubbed: nothing is sent) ties the result to the exact source */
 {
   const a = fresh(); const { d, ev } = a;
-  ev("account = '" + A + "'; signer = {};"); a.GEN.erc20(); await a.go('deploy');
+  ev("account = '" + A + "'; signer = {}; activeNetwork = 'arc'; updateSideNet();"); a.GEN.erc20(); await a.go('deploy');
   ev("window.__ran = []; compilePending = async () => { window.__ran.push('compile'); return { name: pendingSource.name, abi: [], bytecode: '0x', sourceHash: matHash(pendingSource.code) }; }; deployCompiled = async (c, v, k) => { window.__ran.push('deploy:' + k); uiAddDeployResult({ name: c.name, network: k, address: '0x' + '8'.repeat(40), txHash: '0x8' }); };");
   await a.w.eval('compileAndDeploy()'); await a.settle();
   eq(ev('JSON.stringify(window.__ran)'), '["compile","deploy:arc"]', 'the page ran its own flow: compile, then deploy on the active network');

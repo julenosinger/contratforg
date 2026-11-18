@@ -101,7 +101,7 @@ function screen(app, key, extra = {}) {
   // stale: the network changed
   ev("activeNetwork = 'sepolia'; updateSideNet();"); await tick();
   eq(s.prog()[1], 'stale', 'a network change makes the code stale (it is network specific)');
-  ev("activeNetwork = 'arc'; updateSideNet();"); await tick();
+  ev("activeNetwork = 'arcMain'; updateSideNet();"); await tick();
   eq(s.prog()[1], 'done', 'and back');
   // stale: someone else took the deploy buffer
   ev("pendingSource = { name: 'Other', code: 'contract Z {}', template: 'treasury' }"); cf(w).render('three');

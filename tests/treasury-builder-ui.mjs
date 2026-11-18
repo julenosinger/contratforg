@@ -152,7 +152,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
 {
   const a = fresh(); const { d, ev } = a;
   let r = a.rows();
-  eq([r.Project.text, r.Signers.state, r.Signers.text, r.Streaming.text, r.Network.text, r['Deployment Mode'].text], ['ArcTreasury', 'missing', 'None yet', 'Enabled', 'Arc Testnet (5042002)', 'Single network'], 'summary: starts from the real defaults');
+  eq([r.Project.text, r.Signers.state, r.Signers.text, r.Streaming.text, r.Network.text, r['Deployment Mode'].text], ['ArcTreasury', 'missing', 'None yet', 'Enabled', 'Arc Mainnet (5042)', 'Single network'], 'summary: starts from the real defaults');
   a.set('tre_signers', S(3).join('\n')); r = a.rows();
   eq([r.Signers.text, r.Signers.state, r.Approval.text, r.Approval.state], ['3 signers', 'ok', '2 of 3', 'ok'], 'summary: counts the signers and the approval');
   eq(d.getElementById('treOf').textContent, '2 of 3', 'the threshold chip reads 2 of 3');

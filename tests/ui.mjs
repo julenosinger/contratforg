@@ -41,6 +41,7 @@ eq(items.filter((i) => i.hasAttribute('aria-current')).length, 1, 'one current i
   change.click(); ok(panel.classList.contains('open') && doc.getElementById('netChangeBtn').getAttribute('aria-expanded') === 'true', 'Change network opens the panel');
   ok(panel.querySelectorAll('.netbtn').length > 0, 'panel lists networks');
   eq(top.contains(doc.getElementById('netbar')), true, 'network selector lives in the top bar');
+  ev("netFilter='testnet'; renderNetBar();");   // the default filter is now Mainnets; pick a testnet so no confirm dialog is involved
   const pick = [...panel.querySelectorAll('.netbtn')].find((b) => !b.classList.contains('active') && !/LIVE/.test(b.textContent));
   const chosen = pick.textContent.trim();
   pick.click(); await new Promise((r) => setTimeout(r, 0));

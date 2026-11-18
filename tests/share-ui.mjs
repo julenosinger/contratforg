@@ -85,7 +85,7 @@ const NETS = (a) => JSON.parse(a.ev('JSON.stringify(Object.entries(NETWORKS).map
   // a link that names a template or an unknown network is not trusted
   const evil = Buffer.from(unescape(encodeURIComponent(JSON.stringify({ network: 'nope', name: 'X', code: '// x', template: 'erc20', level: 'reviewed' }))), 'binary').toString('base64');
   const c = fresh(); c.w.location.hash = '#cfg=' + evil; c.ev('loadFromUrlHash()');
-  eq([c.ev('activeNetwork'), c.ev('pendingSource.template')], ['arc', 'imported'], 'an unknown network is ignored and a template named in the link is never trusted');
+  eq([c.ev('activeNetwork'), c.ev('pendingSource.template')], ['arcMain', 'imported'], 'an unknown network is ignored and a template named in the link is never trusted');
   // out of date
   await a.net('base'); eq([a.rows()['Share link'].state, a.rows()['Share link'].text], ['bad', 'Out of date'], 'the network changed after the link was made: out of date');
   await a.net('sepolia'); eq(a.rows()['Share link'].state, 'ok', 'back to the same network: current again');

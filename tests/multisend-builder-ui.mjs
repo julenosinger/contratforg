@@ -157,7 +157,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   a.set('ms_max', '100'); eq(a.prog()['Code Generation'].state, 'stale', 'changing the form marks the code stale');
   a.set('ms_max', '200'); eq(a.prog()['Code Generation'].state, 'done', 'putting the value back makes it current');
   a.net('base'); await tick(); eq(a.prog()['Code Generation'].state, 'stale', 'changing the network marks it stale (the chain id is in the Solidity header)');
-  a.net('arc'); await tick(); eq(a.prog()['Code Generation'].state, 'done', 'and back');
+  a.net('arcMain'); await tick(); eq(a.prog()['Code Generation'].state, 'done', 'and back');
   ev("setMultichainMode('portable')"); eq(a.prog()['Code Generation'].state, 'stale', 'changing the Deployment Mode marks it stale (the stamp and the deploy path depend on it)');
   ev("setMultichainMode('single')");
   ev("pendingSource = { name: 'Other', code: 'contract Other {}', template: 'vault' }"); ev('CFBuilder.render("multisend")');

@@ -239,7 +239,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   await a.pick('escrow'); eq(a.prog()['Code Generation'].state, 'stale', 'choosing another template marks the code stale (the panel still shows the old contract)');
   await a.pick('erc20'); eq(a.prog()['Code Generation'].state, 'done', 'and choosing the first again makes it current');
   await a.net('base'); eq(a.prog()['Code Generation'].state, 'stale', 'changing the network marks it stale');
-  await a.net('arc'); eq(a.prog()['Code Generation'].state, 'done', 'and back');
+  await a.net('arcMain'); eq(a.prog()['Code Generation'].state, 'done', 'and back');
   ev("setMultichainMode('portable')"); eq(a.prog()['Code Generation'].state, 'stale', 'changing the Deployment Mode marks it stale');
   ev("setMultichainMode('single')");
   ev("pendingSource = { name: 'Other', code: 'contract Other {}', template: 'vault' }"); ev('CFBuilder.render("simple")');

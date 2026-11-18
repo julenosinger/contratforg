@@ -201,7 +201,7 @@ async function w_try(a, expr) { try { await a.w.eval(expr); return ''; } catch (
   a.set('vault_perf', '900'); eq(a.prog()['Code Generation'].state, 'stale', 'changing the form marks the code stale');
   a.set('vault_perf', '1000'); eq(a.prog()['Code Generation'].state, 'done', 'putting the value back makes it current');
   a.net('base'); await tick(); eq(a.prog()['Code Generation'].state, 'stale', 'changing the network marks the code stale (the asset and the chain id are in it)');
-  a.net('arc'); await tick(); eq(a.prog()['Code Generation'].state, 'done', 'and back');
+  a.net('arcMain'); await tick(); eq(a.prog()['Code Generation'].state, 'done', 'and back');
   ev("setMultichainMode('portable')"); eq(a.prog()['Code Generation'].state, 'stale', 'changing the Deployment Mode marks the code stale');
   ev("setMultichainMode('single')");
   ev("pendingSource = { name: 'Other', code: 'contract Other {}', template: 'treasury' }"); ev('CFBuilder.render("vault")');

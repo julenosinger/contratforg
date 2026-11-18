@@ -69,7 +69,7 @@ function fresh(opts) {
   await a.click('#wz-next'); eq([ev('wizardState.step'), a.rows().Step.text], [2, '3 of 4: Network'], 'Next goes to the network step');
   ok(/switches the app's active network at once/.test(a.notes().join(' ')), 'the network step says that choosing switches the active network');
   await a.click('#wz-next'); eq([ev('wizardState.step'), a.rows().Step.text], [3, '4 of 4: Review & generate'], 'and to the review step');
-  eq([d.getElementById('wz-summary-title').textContent, /Arc Testnet/.test(d.getElementById('wz-summary-sub').textContent)], ['Vault ERC-4626', true], 'the existing review text is still filled');
+  eq([d.getElementById('wz-summary-title').textContent, /Arc Mainnet/.test(d.getElementById('wz-summary-sub').textContent)], ['Vault ERC-4626', true], 'the existing review text is still filled');
   await a.click('#wz-back'); await a.click('#wz-back'); await a.click('#wz-back');
   eq([ev('wizardState.step'), ev('wizardState.category'), ev('wizardState.subtype')], [0, 'defi', 'vault'], 'Back goes to the first step and keeps the choices');
   await a.pickCat('token');
