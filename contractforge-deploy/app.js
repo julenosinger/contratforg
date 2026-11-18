@@ -305,15 +305,81 @@ function mainnetDeployConfirm(details){
   return Promise.resolve(confirm(`⚠ MAINNET DEPLOY on ${net.label}\n\nYou are about to deploy a smart contract using REAL ${net.gasSymbol}.\nThis action cannot be undone.\n\nHave you:\n✓ Audited the contract source?\n✓ Tested on a testnet?\n✓ Reviewed all constructor parameters?\n\nProceed with deployment?`));
 }
 
-/* ---------------- Sidebar navigation ---------------- */
+/* ---------------- URL routing (Phase 11.5) ---------------- */
+/* The single source of truth mapping URL paths to section ids. Every navigable section has a stable URL. */
+const ROUTES = {
+  '/': 'home',
+  '/token-builder': 'simple',
+  '/swap': 'swap',
+  '/treasury': 'treasury',
+  '/vault': 'vault',
+  '/multisend': 'multisend',
+  '/crosschain': 'crosschain',
+  '/compile-deploy': 'deploy',
+  '/ai-auditor': 'auditor',
+  '/abi-playground': 'playground',
+  '/test-lab': 'lab',
+  '/deploy-history': 'history',
+  '/gas-estimator': 'gas',
+  '/verify': 'verify',
+  '/share': 'share',
+  '/contract-wizard': 'wizard',
+  '/ai-solidity': 'nlai',
+  '/analytics': 'analytics',
+  '/test-generator': 'tests',
+};
+const SECTION_PATHS = Object.fromEntries(Object.entries(ROUTES).map(([p, s]) => [s, p]));
+const SECTION_TITLES = {
+  home: 'Home', simple: 'Token / Escrow / NFT', swap: 'Swap / AMM', treasury: 'Treasury',
+  vault: 'Vault (ERC-4626)', multisend: 'MultiSend', crosschain: 'Crosschain (CCTP)', deploy: 'Compile & Deploy',
+  auditor: 'AI Auditor', playground: 'ABI Playground', lab: 'Test Lab', history: 'Deploy History',
+  gas: 'Gas Estimator', verify: 'Verify on Explorer', share: 'Share / Export', wizard: 'Contract Wizard',
+  nlai: 'AI → Solidity', analytics: 'Analytics', tests: 'Test Generator',
+};
+
+/* Show exactly one section, mark its sidebar item active, and set the document title. Pure presentation; the AI
+   workspace observer and the current-contract toolbar react to the section's own display, as before. */
+function showSection(section){
+  const target = document.getElementById('sec-' + section);
+  if(!target) return false;
+  document.querySelectorAll('main section.section').forEach(s => s.style.display = 'none');
+  target.style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === section));
+  if(typeof uiSyncCurrent === 'function') uiSyncCurrent();
+  const title = SECTION_TITLES[section];
+  document.title = (section !== 'home' && title) ? title + ' | ContractForge' : 'ContractForge — On-Chain Contract Foundry';
+  return true;
+}
+
+/* Navigate to a section and reflect it in the URL via the History API. Reaching the same route does not push a
+   redundant history entry. */
+function navigateTo(section, opts){
+  if(!showSection(section)) return;
+  const path = SECTION_PATHS[section] || '/';
+  const url = path + (window.location.hash || '');
+  if(path === window.location.pathname){
+    if(opts && opts.replace) history.replaceState(null, '', url);
+    return;   // same route: no new history entry
+  }
+  if(opts && opts.replace) history.replaceState(null, '', url);
+  else history.pushState(null, '', url);
+}
+
+/* Render the section for the current pathname; an unknown path falls back to Home (a controlled Not Found). */
+function routeFromPath(){
+  const path = window.location.pathname;
+  showSection(ROUTES[path] || 'home');
+}
+
+/* Attach popstate (Back/Forward) and restore the section for the current URL on load. */
+function initRouter(){
+  window.addEventListener('popstate', routeFromPath);
+  routeFromPath();
+}
+
+/* Sidebar navigation goes through the router. */
 document.querySelectorAll('.nav-item').forEach(item=>{
-  item.addEventListener('click',()=>{
-    const target = item.dataset.section;
-    document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-    item.classList.add('active');
-    document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
-    document.getElementById('sec-'+target).style.display='block';
-  });
+  item.addEventListener('click',()=>{ navigateTo(item.dataset.section); });
 });
 
 /* ======================================================================
@@ -3395,10 +3461,7 @@ function copySource(){
 
 /* navigate to deploy section + scroll */
 function deployFromBuffer(){
-  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-  document.querySelector('[data-section="deploy"]').classList.add('active');
-  document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
-  document.getElementById('sec-deploy').style.display='block';
+  navigateTo('deploy');
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -4209,11 +4272,7 @@ function loadHistoryIntoPlayground(i){
   const hist = loadDeployHistory();
   const entry = hist[i];
   if(!entry){ return; }
-  // Navigate to playground
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelector('[data-section="playground"]')?.classList.add('active');
-  document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
-  document.getElementById('sec-playground').style.display='block';
+  navigateTo('playground');
   pgOpenEntry(entry);
 }
 
@@ -5937,10 +5996,7 @@ function wizardGenerate(){
   const sub=wizardState.subtype;
   const isAdv=['swap','vault','treasury','multisend','crosschain'].includes(sub);
   const target=isAdv?sub:'simple';
-  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-  document.querySelector(`[data-section="${target}"]`)?.classList.add('active');
-  document.querySelectorAll('main section.section').forEach(s=>s.style.display='none');
-  document.getElementById('sec-'+target).style.display='block';
+  navigateTo(target);
   if(!isAdv){
     renderSimpleForm(sub);
     setTimeout(()=>{
@@ -7205,5 +7261,6 @@ updateSideNet();
 renderSimpleGrid();
 renderHistory();
 loadFromUrlHash();
+initRouter();
 initTheme();
 renderAnalyticsHistoryPills();

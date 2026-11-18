@@ -4,6 +4,12 @@
   "installCommand": null,
   "buildCommand": null,
   "outputDirectory": "contractforge-deploy",
+  "rewrites": [
+    {
+      "source": "/((?!.*\\.).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
