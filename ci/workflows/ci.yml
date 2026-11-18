@@ -83,6 +83,12 @@ jobs:
         env:
           # the routing test needs Chromium (installed above); a missing browser must fail the job, not skip the test
           REQUIRE_BROWSER: '1'
+      - name: Cloudflare Pages deep-link recovery under a real browser
+        run: node cloudflare-routing-recovery.mjs
+        working-directory: tests
+        env:
+          # the Cloudflare recovery test needs Chromium (installed above); a missing browser must fail the job, not skip the test
+          REQUIRE_BROWSER: '1'
       - name: Golden files are up to date
         run: |
           node golden.mjs --update
