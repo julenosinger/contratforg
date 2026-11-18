@@ -60,14 +60,17 @@ const NETS = (a) => JSON.parse(a.ev('JSON.stringify(Object.entries(NETWORKS).map
     await a.net(k); const b = d.getElementById('netBanner');
     eq([b.classList.contains(main ? 'mainnet' : 'testnet'), b.querySelector('.nb-tag').textContent, b.querySelector('.nb-net').textContent, b.querySelector('.nb-chain').textContent], [true, main ? 'MAINNET' : 'TESTNET', label, 'chain ' + chain], `${k}: tag, name and chain`);
     const note = b.querySelector('.nb-note'); const hidden = cs(a, '#netBanner .nb-note', 'position') === 'absolute' && cs(a, '#netBanner .nb-note', 'width') === '1px';
-    const shownLine = cs(a, '#netBanner .nb-note', 'display') !== 'none' && cs(a, '#netBanner .nb-note', 'position') !== 'absolute';
-    eq([note.textContent, main ? shownLine : hidden], [main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.', true], `${k}: ${main ? 'the real-funds warning is visible' : 'the test-funds note is kept for screen readers only'}`);
+    eq([note.textContent, hidden], [main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.', true], `${k}: the note is screen-reader only on every network`);
+    const tooltip = d.getElementById('netChangeBtn').getAttribute('title');
+    eq(main ? /Real funds/.test(tooltip) : !/Real funds/.test(tooltip), true, `${k}: the ${main ? 'mainnet warning is in the' : 'testnet tooltip omits the'} tooltip`, tooltip);
   }
   await a.net('arc');
   const btn = d.getElementById('netChangeBtn');
   eq([btn.textContent, btn.getAttribute('aria-controls'), btn.getAttribute('aria-expanded'), cs(a, '#netChangeBtn', 'position')], ['Change network', 'netPanel', 'false', 'absolute'], 'the whole card is the (transparent) Change network button, labelled and linked to the panel');
   btn.click(); eq([d.getElementById('netPanel').classList.contains('open'), d.getElementById('netChangeBtn').getAttribute('aria-expanded')], [true, 'true'], 'clicking the card opens the network panel');
-  d.querySelector('#netbar .netbtn').click(); await a.settle(); eq(d.getElementById('netPanel').classList.contains('open'), false, 'choosing a network closes it');
+  a.ev("netFilter='testnet'; renderNetBar();");   // a testnet selection needs no confirmation dialog
+  [...d.querySelectorAll('#netbar .netbtn')].find((b) => !b.classList.contains('active')).click();
+  await a.settle(); eq(d.getElementById('netPanel').classList.contains('open'), false, 'choosing a network closes it');
   d.getElementById('netChangeBtn').click(); a.key(d.body, 'Escape'); eq(d.getElementById('netPanel').classList.contains('open'), false, 'Escape closes it');
   eq([a.ev('typeof window.ethereum'), a.fetches.length], ['undefined', 0], 'changing the network in the page asks no wallet and sends nothing');
 }

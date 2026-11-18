@@ -43,7 +43,7 @@ for (const [name, vp] of [['desktop', { width: 1366, height: 800 }], ['tablet', 
   const nb = await rect('#netBanner'), wb = await rect('.walletbar');
   if (name !== 'phone') ok(nb.b <= g.b + 1 && wb.t >= g.t - 1 && Math.abs((nb.t + nb.b) / 2 - (wb.t + wb.b) / 2) < 30, name + ': network and wallet share the one row', JSON.stringify({ nb, wb }));
   await page.evaluate(() => { activeNetwork = 'arcMain'; updateSideNet(); }); await page.waitForTimeout(150);
-  ok(await page.evaluate(() => /Real funds/.test(document.querySelector('#netBanner .nb-note').textContent) && getComputedStyle(document.querySelector('#netBanner .nb-note')).display !== 'none'), name + ': on a mainnet the real-funds line is visible');
+  ok(await page.evaluate(() => /Real funds/.test(document.getElementById('netChangeBtn').getAttribute('title') || '') && getComputedStyle(document.querySelector('#netBanner .nb-note')).position === 'absolute'), name + ': on a mainnet the real-funds warning is in the tooltip, not a visible line');
   await noSideways('on a mainnet');
   await page.evaluate(() => { activeNetwork = 'arc'; updateSideNet(); renderSimpleForm('erc20'); genSimple('erc20'); }); await page.waitForTimeout(200);
   ok(await rect('#currentContract').then((r) => r && r.h > 0 && r.h <= (name === 'phone' ? 140 : 72)), name + ': level 2 is compact');

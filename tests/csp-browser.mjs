@@ -78,8 +78,13 @@ try {
     await page.waitForSelector('#sec-simple', { state: 'visible', timeout: 5000 });
   });
   await step('connect the wallet', async () => { await page.click('#connectBtn'); await until(() => /Connected/.test(document.getElementById('connectBtn').textContent), null, 10000); });
-  await step('switch to Arc Mainnet through the in-app dialog', async () => {
+  await step('switch mainnets through the in-app dialog (Arc Mainnet is already the default)', async () => {
     await page.evaluate(() => { netFilter = 'mainnet'; toggleNetPanel(true); });
+    await page.click('#netbar .netbtn:has-text("Ethereum")');
+    await page.waitForSelector('#switchConfirm', { timeout: 5000 });
+    await page.click('#scOk, #switchConfirm .dc-ok, #switchConfirm button:last-of-type');
+    await until(() => activeNetwork === 'ethereum', null, 5000);
+    await page.evaluate(() => { toggleNetPanel(true); });
     await page.click('#netbar .netbtn:has-text("Arc Mainnet")');
     await page.waitForSelector('#switchConfirm', { timeout: 5000 });
     await page.click('#scOk, #switchConfirm .dc-ok, #switchConfirm button:last-of-type');

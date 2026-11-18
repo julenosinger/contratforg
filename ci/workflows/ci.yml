@@ -71,6 +71,12 @@ jobs:
         env:
           # the header layout test needs Chromium (installed above); a missing browser must fail the job, not skip the test
           REQUIRE_BROWSER: '1'
+      - name: Network selector stability under a real browser
+        run: node network-selector-stability.mjs
+        working-directory: tests
+        env:
+          # the network selector test needs Chromium (installed above); a missing browser must fail the job, not skip the test
+          REQUIRE_BROWSER: '1'
       - name: Golden files are up to date
         run: |
           node golden.mjs --update

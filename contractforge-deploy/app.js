@@ -184,7 +184,7 @@ function renderNetBar(){
       ${f===netFilter
         ? 'background:var(--vault);border-color:var(--vault-2);color:var(--paper);'
         : 'background:transparent;border-color:#2A3A34;color:#7E8C86;'}`;
-    t.onclick = ()=>{ netFilter=f; renderNetBar(); };
+    t.onclick = (ev)=>{ ev.stopPropagation(); netFilter=f; renderNetBar(); };
     tabs.appendChild(t);
   });
   bar.appendChild(tabs);
@@ -222,23 +222,28 @@ function renderNetBar(){
     if(net.isMainnet) b.style.cssText += ';border-color:#3A2A0A;';
     b.innerHTML = `<span class="chip" style="${net.isMainnet?'background:#C9A24B;':''}"></span>${net.label}
       ${net.isMainnet?'<span style="font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:#C9A24B;margin-left:4px;">LIVE</span>':''}`;
-    b.onclick = async ()=>{
-      if(net.isMainnet && !(await confirmMainnet(net.label))) return;
+    b.onclick = async (ev)=>{
+      ev.stopPropagation();
+      if(key === activeNetwork){ toggleNetPanel(false); return; }   // already active: close, no redundant confirmation
+      if(net.isMainnet && !(await confirmMainnet(net.label))) return;   // cancelled: keep the panel open and the network unchanged
       activeNetwork = key;
       renderNetBar();
       updateSideNet();
       if(account) switchWalletNetwork();
+      toggleNetPanel(false);   // a completed selection closes the panel exactly once
     };
     grid.appendChild(b);
   });
   bar.appendChild(grid);
 }
 
-/* Resolves true when the user agrees to switch to a mainnet (in-app dialog; falls back to confirm()). */
+/* Resolves true when the user agrees to switch to a mainnet (in-app dialog; falls back to confirm()).
+   Passes the source network so the dialog can name where the user is staying. */
 function confirmMainnet(label){
   if(typeof uiConfirmSwitch === 'function'){
     const key = Object.keys(NETWORKS).find(k=>NETWORKS[k].label===label);
-    return uiConfirmSwitch(label, (key && NETWORKS[key].gasSymbol) || 'ETH');
+    const src = NETWORKS[activeNetwork];
+    return uiConfirmSwitch(label, (key && NETWORKS[key].gasSymbol) || 'ETH', src ? src.label : 'testnet');
   }
   return Promise.resolve(confirm(`⚠ Switch to ${label} (MAINNET)?\n\nThis network uses real funds. Any contract you deploy will consume real ${NETWORKS[Object.keys(NETWORKS).find(k=>NETWORKS[k].label===label)]?.gasSymbol||'ETH'}.\n\nProceed?`));
 }

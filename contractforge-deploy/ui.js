@@ -30,12 +30,13 @@ function renderNetBanner(){
   el.className = 'net-banner ' + (main ? 'mainnet' : 'testnet');
   const mode = (typeof multichainMode !== 'undefined' && multichainMode !== 'single' && typeof MC_MODES !== 'undefined')
     ? '<span class="nb-sep">·</span><span class="nb-mode">' + escapeHtml(MC_MODES[multichainMode].label) + ' mode</span>' : '';
+  const note = main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.';
   el.innerHTML = '<span class="nb-tag">' + (main ? 'MAINNET' : 'TESTNET') + '</span>'
     + '<span class="nb-net">' + escapeHtml(net.label) + '</span>'
     + '<span class="nb-sep">·</span><span class="nb-chain">chain ' + escapeHtml(net.chainIdDec) + '</span>'
     + mode
-    + '<button type="button" class="nb-change" id="netChangeBtn" aria-expanded="' + (uiNetPanelOpen() ? 'true' : 'false') + '" aria-controls="netPanel" data-onclick="toggleNetPanel()">Change network</button>'
-    + '<span class="nb-note">' + (main ? 'Real funds. Transactions cannot be undone.' : 'Test funds only.') + '</span>';
+    + '<button type="button" class="nb-change" id="netChangeBtn" aria-expanded="' + (uiNetPanelOpen() ? 'true' : 'false') + '" aria-controls="netPanel" title="' + escapeHtml(net.label + ' · chain ' + net.chainIdDec + (main ? ' — Mainnet: ' + note : '')) + '" data-onclick="toggleNetPanel()">Change network</button>'
+    + '<span class="nb-note">' + note + '</span>';
   if(typeof renderHome === 'function') renderHome();
 }
 
@@ -471,17 +472,18 @@ function uiConfirmAction(opts){
   });
 }
 
-function uiConfirmSwitch(label, gasSymbol){
+function uiConfirmSwitch(label, gasSymbol, sourceLabel){
   return new Promise((resolve) => {
     const prev = document.activeElement;
+    const src = sourceLabel || 'testnet';
     const root = document.createElement('div');
     root.className = 'dc-backdrop'; root.id = 'switchConfirm';
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'scTitle');
     root.innerHTML = '<div class="dc-box dc-small">'
       + '<div class="dc-head"><span class="dc-tag">MAINNET</span><h3 id="scTitle">Switch to ' + escapeHtml(label) + '?</h3></div>'
       + '<p class="dc-warn">This network uses real funds.</p>'
-      + '<p class="dc-text">Any contract you deploy will spend real ' + escapeHtml(gasSymbol) + ' and cannot be undone. Keep testing on a testnet first.</p>'
-      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="scCancel">Stay on testnet</button>'
+      + '<p class="dc-text">You are on ' + escapeHtml(src) + '. Any contract you deploy on ' + escapeHtml(label) + ' will spend real ' + escapeHtml(gasSymbol) + ' and cannot be undone.</p>'
+      + '<div class="dc-actions"><button type="button" class="btn btn-ghost" id="scCancel">Stay on ' + escapeHtml(src) + '</button>'
       + '<button type="button" class="btn btn-primary" id="scOk">Switch to ' + escapeHtml(label) + '</button></div></div>';
     document.body.appendChild(root);
     const ok = root.querySelector('#scOk'), cancel = root.querySelector('#scCancel');
