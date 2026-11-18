@@ -241,7 +241,7 @@
   },
   {
    "file": "ui.js",
-   "hash": "ad8dbedf29ed",
+   "hash": "66805331aeb7",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<span class=\"nb-tag\">' + (main ? 'MAINNET' : 'TESTNET') + '</span>' + '<span class=\"nb-net\">' + escapeHtml(ne"
@@ -311,7 +311,7 @@
   },
   {
    "file": "ui.js",
-   "hash": "dcbf9f73a713",
+   "hash": "6d2bce3d709d",
    "category": "E",
    "why": "Every value that can come from outside (storage, an RPC node, a wallet, an AI answer, an imported ABI, a link) goes through escapeHtml before it reaches the markup; the rest is markup literals and numbers. Exercised with hostile payloads by tests/xss.mjs.",
    "excerpt": "'<div class=\"dc-box dc-small\">' + '<div class=\"dc-head\"><span class=\"dc-tag\">MAINNET</span><h3 id=\"scTitle\">Sw"
