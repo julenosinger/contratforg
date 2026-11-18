@@ -71,7 +71,7 @@ body{min-height:100vh;}
 .net-pill .row{display:flex;justify-content:space-between;gap:8px;}
 
 /* ===== Main ===== */
-main{padding:36px 44px 80px;max-width:1180px;}
+main{padding:36px 44px 80px;max-width:1180px;min-width:0;}
 @media (max-width:700px){main{padding:24px 18px 60px;}}
 
 .page-head{
@@ -845,21 +845,26 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 label .req-star{color:#FF6A39;margin-left:3px;}
 .light .req-reason{background:#FBE3DA;color:#8A2A10;}
 
-/* ---- Unified header and Home (Phase 10.4). Level 1 is .gbar (network, deployment mode, wallet), level 2 is the contract bar. The elements keep their ids; this only lays them out. ---- */
-.sticky-top .gbar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;padding:9px 44px;min-height:60px;background:rgba(10,16,14,.97);border-bottom:1px solid #1F2A26;backdrop-filter:blur(6px);}
-.gbar .gbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;}
-.sticky-top .gbar .walletbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:0;padding:0;border:0;border-radius:0;background:none;backdrop-filter:none;}
+/* ---- Unified header and Home (Phase 10.4). Level 1 is .gbar (network, deployment mode, wallet), level 2 is the contract bar. The elements keep their ids; this only lays them out.
+   Phase 11.3 (header-layout-stability): the level-1 bar is two horizontal regions (LEFT = network + deployment mode, RIGHT = wallet). The wallet has a FIXED width, so its content
+   (connect/disconnect/account/network/balance) can never change the bar's row count or height: the text truncates (ellipsis) inside the fixed footprint, and the only wrap is the
+   viewport-driven one below ~1190px (a fixed flex-basis decision, never content-driven). The network banner and the deployment-mode control are width-capped so a long network name
+   cannot resize the left region. ---- */
+.sticky-top .gbar{display:flex;align-items:center;justify-content:flex-start;gap:10px 16px;flex-wrap:wrap;padding:9px 44px;min-height:60px;background:rgba(10,16,14,.97);border-bottom:1px solid #1F2A26;backdrop-filter:blur(6px);}
+.gbar .gbar-left{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;min-width:0;flex:1 1 auto;}
+.sticky-top .gbar .walletbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:nowrap;flex:0 0 430px;margin:0 0 0 auto;min-width:0;padding:0;border:0;border-radius:0;background:none;backdrop-filter:none;}
 .gbar .walletbar .wb-actions{display:contents;}
-.gbar .walletbar #balanceBadge{order:1;display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #2A3A34;border-radius:12px;background:#0B1210;color:#DCE5E0;font-size:12px;letter-spacing:.04em;text-transform:none;}
-.gbar .walletbar .status{order:2;padding:8px 12px;border:1px solid #1F2D28;border-radius:12px;background:#0B1210;font-size:12px;}
-.gbar .walletbar #connectBtn{order:3;padding:9px 16px;border-radius:12px;font-weight:600;background:var(--signal);border-color:transparent;color:#1a0a04;}
+.gbar .walletbar #balanceBadge{order:1;display:block;align-self:center;min-width:0;max-width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:8px 12px;border:1px solid #2A3A34;border-radius:12px;background:#0B1210;color:#DCE5E0;font-size:12px;letter-spacing:.04em;text-transform:none;}
+.gbar .walletbar .status{order:2;min-width:0;max-width:176px;overflow:hidden;white-space:nowrap;padding:8px 12px;border:1px solid #1F2D28;border-radius:12px;background:#0B1210;font-size:12px;}
+.gbar .walletbar #connectBtn{order:3;flex:0 0 auto;white-space:nowrap;padding:9px 16px;border-radius:12px;font-weight:600;background:var(--signal);border-color:transparent;color:#1a0a04;}
 .gbar .walletbar .status.connected ~ .wb-actions #connectBtn{background:transparent;border-color:#2A3A34;color:#DCE5E0;}
 .gbar .walletbar #connectBtn:focus-visible,.gbar .nb-change:focus-visible{outline:2px solid #34D399;outline-offset:2px;}
-.gbar .dm-mount .dm-trigger{min-height:44px;border-radius:12px;}
+.gbar .dm-mount .dm-trigger{min-height:44px;border-radius:12px;max-width:120px;}
 .gbar .dm-mount .dm-trigger .dm-k{display:none;}
+.gbar .dm-mount .dm-trigger .dm-v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* the network banner is the selector: a compact card; the whole card is the (transparent) Change network button */
-.sticky-top .net-banner{position:relative;display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:1px;min-width:190px;padding:6px 38px 6px 14px;min-height:44px;border:1px solid;border-radius:12px;backdrop-filter:none;font-size:11px;}
-.sticky-top .net-banner .nb-net{order:1;flex:1 0 100%;font-size:13px;line-height:1.25;}
+.sticky-top .net-banner{position:relative;display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:1px;min-width:200px;max-width:220px;padding:6px 38px 6px 14px;min-height:44px;border:1px solid;border-radius:12px;backdrop-filter:none;font-size:11px;}
+.sticky-top .net-banner .nb-net{order:1;flex:1 0 100%;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;line-height:1.25;}
 .sticky-top .net-banner .nb-tag{order:2;padding:1px 6px;border-radius:4px;font-size:9px;letter-spacing:.12em;}
 .sticky-top .net-banner .nb-sep{order:3;}
 .sticky-top .net-banner .nb-chain{order:4;}
@@ -888,7 +893,7 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 .light .cc-menulist{background:#FBF9F2;border-color:#D0C9B8;}
 .light .cc-menulist button{color:#26302B;}
 @media (max-width:900px){.sticky-top .gbar{padding:8px 16px;}.sticky-top .cc-bar{padding:8px 16px;}}
-@media (max-width:640px){.gbar .gbar-left{width:100%;}.gbar .gbar-left .net-banner{flex:1 1 200px;}.sticky-top .gbar .walletbar{width:100%;justify-content:space-between;}.gbar .walletbar .status{flex:1 1 auto;min-width:0;}.cc-actions{width:100%;justify-content:space-between;}.cc-actions .btn-primary{flex:1;justify-content:center;}.cc-menulist{left:0;right:auto;}}
+@media (max-width:640px){.gbar .gbar-left{width:100%;}.gbar .gbar-left .net-banner{flex:1 1 auto;min-width:0;max-width:none;}.sticky-top .gbar .walletbar{width:100%;flex:0 0 auto;margin-left:0;justify-content:space-between;flex-wrap:wrap;}.gbar .walletbar .status{order:1;flex:1 1 100%;max-width:none;min-width:0;}.gbar .walletbar #balanceBadge{order:2;max-width:140px;min-width:0;flex:0 1 auto;}.gbar .walletbar #connectBtn{order:3;}.cc-actions{width:100%;justify-content:space-between;}.cc-actions .btn-primary{flex:1;justify-content:center;}.cc-menulist{left:0;right:auto;}}
 /* Home */
 .home-hero{padding:26px 28px;margin-bottom:22px;border:1px solid #1F2D28;border-radius:16px;background:linear-gradient(135deg,#0E1715 0%,#0A100E 70%);}
 .home-hero h1{font-size:clamp(28px,4vw,42px);}
