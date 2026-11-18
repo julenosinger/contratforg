@@ -154,9 +154,123 @@ function aiRedisStore(url, token, fetchFn) {
   } };
 }
 
+function aiToInt(v) { return Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : 0; }
+
 function aiExtract(data) {
   const block = data && Array.isArray(data.content) ? data.content.find((b) => b && b.type === 'text') : null;
-  return { text: block && typeof block.text === 'string' ? block.text : '', outputTokens: data && data.usage && Number(data.usage.output_tokens) || 0 };
+  const usage = data && data.usage;
+  return {
+    text: block && typeof block.text === 'string' ? block.text : '',
+    outputTokens: usage ? aiToInt(usage.output_tokens) : 0,
+    inputTokens: usage ? aiToInt(usage.input_tokens) : 0,
+  };
+}
+
+/* ---- Multi-provider router (Phase 12.1) ----
+   The browser never chooses the provider, the model or the key: every value is resolved from server configuration only.
+   There is no automatic fallback: a selected provider that fails, times out or has no key fails the request. */
+const AI_PROVIDERS = ['anthropic', 'openai', 'deepseek'];
+const AI_KEY_VARS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', deepseek: 'DEEPSEEK_API_KEY' };
+const AI_TIMEOUT_MS_DEFAULT = 45000;
+
+function aiResolveProvider(read) {
+  const v = String(read('AI_PROVIDER') || '').trim().toLowerCase();
+  if (!v) return 'anthropic';
+  return AI_PROVIDERS.indexOf(v) >= 0 ? v : null;   // unknown -> controlled config error
+}
+
+function aiModelFor(provider, read) {
+  if (provider === 'openai') return String(read('OPENAI_MODEL') || '').trim() || 'gpt-4o-mini';
+  if (provider === 'deepseek') return String(read('DEEPSEEK_MODEL') || '').trim() || 'deepseek-flash';
+  return String(read('AI_MODEL') || '').trim() || 'claude-sonnet-4-6';
+}
+
+function aiTimeoutMs(read) {
+  const n = parseInt(read('AI_TIMEOUT_MS'), 10);
+  return n > 0 ? n : AI_TIMEOUT_MS_DEFAULT;
+}
+
+/* One adapter per provider: `built` ({ system, user, messages, maxTokens }) -> that provider's request; the provider
+   response -> { text, outputTokens, inputTokens }. Usage is normalized from each provider's own fields and is 0 when
+   absent (never fabricated). */
+const AI_ADAPTERS = {
+  anthropic: {
+    endpoint: 'https://api.anthropic.com/v1/messages',
+    headers: (key) => ({ 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }),
+    body: (model, built) => {
+      const p = { model, max_tokens: built.maxTokens, messages: built.messages || [{ role: 'user', content: built.user }] };
+      if (built.system) p.system = built.system;
+      return p;
+    },
+    parse: aiExtract
+  },
+  openai: {
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    headers: (key) => ({ 'content-type': 'application/json', 'authorization': 'Bearer ' + key }),
+    body: (model, built) => {
+      const messages = built.messages ? built.messages.slice() : [{ role: 'user', content: built.user }];
+      if (built.system) messages.unshift({ role: 'system', content: built.system });
+      return { model, max_completion_tokens: built.maxTokens, messages };
+    },
+    parse: (data) => {
+      const msg = data && Array.isArray(data.choices) && data.choices[0] && data.choices[0].message;
+      const usage = data && data.usage;
+      return {
+        text: msg && typeof msg.content === 'string' ? msg.content : '',
+        outputTokens: usage ? aiToInt(usage.completion_tokens) : 0,
+        inputTokens: usage ? aiToInt(usage.prompt_tokens) : 0,
+      };
+    }
+  },
+  deepseek: {
+    endpoint: 'https://api.deepseek.com/chat/completions',
+    headers: (key) => ({ 'content-type': 'application/json', 'authorization': 'Bearer ' + key }),
+    body: (model, built) => {
+      const messages = built.messages ? built.messages.slice() : [{ role: 'user', content: built.user }];
+      if (built.system) messages.unshift({ role: 'system', content: built.system });
+      return { model, max_tokens: built.maxTokens, messages };
+    },
+    parse: (data) => {
+      const msg = data && Array.isArray(data.choices) && data.choices[0] && data.choices[0].message;
+      const usage = data && data.usage;
+      return {
+        text: msg && typeof msg.content === 'string' ? msg.content : '',
+        outputTokens: usage ? aiToInt(usage.completion_tokens) : 0,
+        inputTokens: usage ? aiToInt(usage.prompt_tokens) : 0,
+      };
+    }
+  }
+};
+
+/* Calls the selected provider and returns a normalized result: { ok, text, outputTokens, inputTokens, provider, model }
+   on success, or { ok:false, status, timedOut } on failure. No retry, no fallback. `read` resolves server configuration,
+   `fetchFn` is the fetch implementation (global fetch in production, injected in tests). */
+async function aiCallProvider(provider, built, read, fetchFn) {
+  const adapter = AI_ADAPTERS[provider];
+  const key = read(AI_KEY_VARS[provider]);
+  const model = aiModelFor(provider, read);
+  let controller = null, timer = null;
+  if (typeof AbortController === 'function' && typeof setTimeout === 'function') {
+    controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), aiTimeoutMs(read));
+  }
+  let result;
+  try {
+    const init = { method: 'POST', headers: adapter.headers(key), body: JSON.stringify(adapter.body(model, built)) };
+    if (controller) init.signal = controller.signal;
+    const upstream = await (fetchFn || fetch)(adapter.endpoint, init);
+    if (!upstream.ok) { result = { ok: false, status: upstream.status }; }
+    else {
+      const json = await upstream.json().catch(() => null);
+      const parsed = adapter.parse(json);
+      result = { ok: true, text: parsed.text, outputTokens: parsed.outputTokens, inputTokens: parsed.inputTokens, provider, model };
+    }
+  } catch (e) {
+    result = { ok: false, status: 0, timedOut: !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError')) };
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+  return result;
 }
 // ===== SHARED CORE END =====
 
@@ -187,8 +301,10 @@ module.exports = async function handler(req, res) {
     if (!rl.ok) { res.setHeader('Retry-After', String(rl.retryAfter)); return res.status(429).json({ error: 'Too many requests. Try again later.' }); }
   }
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(503).json({ error: 'AI is not configured on this deployment.' });
+  const read = (k) => process.env[k];
+  const provider = aiResolveProvider(read);
+  if (provider === null) return res.status(503).json({ error: 'AI is not configured on this deployment.' });
+  if (!read(AI_KEY_VARS[provider])) return res.status(503).json({ error: 'AI is not configured on this deployment.' });
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) { body = null; } }
@@ -196,18 +312,7 @@ module.exports = async function handler(req, res) {
   const built = aiBuild(body);
   if (!built.ok) return res.status(built.status).json({ error: built.error });
 
-  const messages = built.messages || [{ role: 'user', content: built.user }];
-  const payload = { model: process.env.AI_MODEL || 'claude-sonnet-4-6', max_tokens: built.maxTokens, messages };
-  if (built.system) payload.system = built.system;
-  try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify(payload),
-    });
-    if (!upstream.ok) return res.status(502).json({ error: 'AI request failed' });
-    return res.status(200).json(aiExtract(await upstream.json().catch(() => null)));
-  } catch (_) {
-    return res.status(502).json({ error: 'AI request failed' });
-  }
+  const result = await aiCallProvider(provider, built, read);
+  if (!result.ok) return res.status(502).json({ error: 'AI request failed' });
+  return res.status(200).json({ text: result.text, outputTokens: result.outputTokens });
 };

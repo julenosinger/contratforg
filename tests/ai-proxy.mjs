@@ -201,6 +201,145 @@ for (const [name, run] of PLATFORMS) {
   eq(anthropic().length, 0, t('a limited request never reaches the provider'));
 }
 
+/* ---- Phase 12.1: multi-provider router (OpenAI / DeepSeek; Anthropic default) ---- */
+{
+  const lastProvider = () => calls.filter((c) => c.payload).slice(-1)[0];
+  const nProvider = () => calls.filter((c) => c.payload).length;
+  const auditReq = () => req({ ip: fresh(), body: { action: 'audit', payload: { name: 'Probe', code: 'contract Probe {}', focus: 'full' } } });
+  const chatReq = () => req({ ip: fresh(), body: { action: 'chat', payload: { messages: [{ role: 'user', content: 'hi' }], network: { label: 'Arc Mainnet', chainId: 5042, usdc: '0x3600000000000000000000000000000000000000' }, complexity: 'simple' } } });
+
+  for (const [name, run] of PLATFORMS) {
+    const t = (m) => name + ' (providers): ' + m;
+    calls.length = 0;
+
+    /* ---- OpenAI: selection, request shaping, normalization ---- */
+    upstream = { status: 200, body: { choices: [{ message: { content: 'openai answer' } }], usage: { prompt_tokens: 11, completion_tokens: 7 } } };
+    let r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    eq(r.status, 200, t('openai: accepted'));
+    eq(JSON.stringify(r.json), JSON.stringify({ text: 'openai answer', outputTokens: 7 }), t('openai: normalized public response'));
+    let c = lastProvider();
+    eq(c.url, 'https://api.openai.com/v1/chat/completions', t('openai: endpoint'));
+    eq(c.headers['authorization'], 'Bearer sk-openai-123', t('openai: bearer authorization'));
+    ok(!JSON.stringify(r.json).includes('sk-openai-123'), t('openai: the key never reaches the client'));
+    eq(c.payload.model, 'gpt-4o-mini', t('openai: default model'));
+    eq(c.payload.max_completion_tokens, 2000, t('openai: max_completion_tokens (audit)'));
+    ok(!('max_tokens' in c.payload), t('openai: no deprecated max_tokens'));
+    ok(c.payload.messages[0].role === 'user' && c.payload.messages[0].content.includes('contract Probe {}'), t('openai: audit prompt built server-side'));
+
+    /* ---- OpenAI model override + chat (system becomes a message) ---- */
+    calls.length = 0;
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123', OPENAI_MODEL: 'gpt-4o' });
+    eq(lastProvider().payload.model, 'gpt-4o', t('openai: OPENAI_MODEL overrides the default'));
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: 'ok' } }], usage: { completion_tokens: 1 } } };
+    r = await run(chatReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    c = lastProvider();
+    eq(c.payload.messages[0].role, 'system', t('openai chat: system message first'));
+    ok(c.payload.messages[0].content.includes('Arc Mainnet'), t('openai chat: system prompt built from the server'));
+    eq(c.payload.messages[1].role, 'user', t('openai chat: user message forwarded'));
+    eq(c.payload.max_completion_tokens, 4096, t('openai chat: max_completion_tokens 4096'));
+
+    /* ---- DeepSeek: selection, request shaping, normalization ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: 'deepseek answer' } }], usage: { prompt_tokens: 5, completion_tokens: 9 } } };
+    r = await run(auditReq(), { AI_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'sk-ds-456' });
+    eq(r.status, 200, t('deepseek: accepted'));
+    eq(JSON.stringify(r.json), JSON.stringify({ text: 'deepseek answer', outputTokens: 9 }), t('deepseek: normalized public response'));
+    c = lastProvider();
+    eq(c.url, 'https://api.deepseek.com/chat/completions', t('deepseek: endpoint'));
+    eq(c.headers['authorization'], 'Bearer sk-ds-456', t('deepseek: bearer authorization'));
+    ok(!JSON.stringify(r.json).includes('sk-ds-456'), t('deepseek: the key never reaches the client'));
+    eq(c.payload.model, 'deepseek-flash', t('deepseek: default model'));
+    eq(c.payload.max_tokens, 2000, t('deepseek: max_tokens (audit)'));
+
+    /* ---- Explicit Anthropic selection behaves like the default ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
+    r = await run(auditReq(), { AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'sk-test-key' });
+    eq(r.status, 200, t('anthropic: explicit selection'));
+    c = lastProvider();
+    eq(c.url, 'https://api.anthropic.com/v1/messages', t('anthropic: endpoint'));
+    eq(c.headers['x-api-key'], 'sk-test-key', t('anthropic: x-api-key header'));
+
+    /* ---- Unknown provider is a controlled config error; nothing reaches a provider ---- */
+    calls.length = 0;
+    r = await run(auditReq(), { AI_PROVIDER: 'mistral', ANTHROPIC_API_KEY: 'sk-test-key' });
+    eq(r.status, 503, t('unknown provider is refused (503)'));
+    eq(nProvider(), 0, t('unknown provider: no request to any provider'));
+
+    /* ---- Missing provider key: 503, no fallback ---- */
+    calls.length = 0;
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', ANTHROPIC_API_KEY: 'sk-test-key' });
+    eq(r.status, 503, t('missing OpenAI key: 503'));
+    eq(nProvider(), 0, t('missing OpenAI key: nothing reached any provider (no fallback)'));
+    calls.length = 0;
+    r = await run(auditReq(), { AI_PROVIDER: 'deepseek', ANTHROPIC_API_KEY: 'sk-test-key' });
+    eq(r.status, 503, t('missing DeepSeek key: 503'));
+    eq(nProvider(), 0, t('missing DeepSeek key: nothing reached any provider'));
+
+    /* ---- The client cannot choose the provider via the payload ---- */
+    calls.length = 0;
+    r = await run(req({ ip: fresh(), body: { action: 'audit', payload: { name: 'Probe', code: 'contract Probe {}', focus: 'full' }, provider: 'openai' } }));
+    eq(r.status, 200, t('a client-sent provider field is ignored'));
+    eq(lastProvider().url, 'https://api.anthropic.com/v1/messages', t('...and the server default (anthropic) is used'));
+
+    /* ---- Missing usage, malformed and empty responses are safe (never fabricated) ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: 'no usage' } }] } };
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    eq(JSON.stringify(r.json), JSON.stringify({ text: 'no usage', outputTokens: 0 }), t('openai: missing usage -> 0 tokens'));
+    calls.length = 0;
+    upstream = { status: 200, body: { not: 'a completion' } };
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    eq(JSON.stringify(r.json), JSON.stringify({ text: '', outputTokens: 0 }), t('openai: malformed response -> empty text'));
+    calls.length = 0;
+    upstream = { status: 200, body: { choices: [{ message: { content: '' } }], usage: { completion_tokens: 0 } } };
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    eq(r.status, 200, t('openai: empty output is safe'));
+    eq(JSON.stringify(r.json), JSON.stringify({ text: '', outputTokens: 0 }), t('openai: empty output -> empty text'));
+    calls.length = 0;
+    upstream = { status: 200, body: null };
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+    eq(JSON.stringify(r.json), JSON.stringify({ text: '', outputTokens: 0 }), t('openai: null body -> empty text'));
+
+    /* ---- Provider HTTP errors map to 502 and never leak ---- */
+    for (const status of [400, 401, 403, 429, 500]) {
+      calls.length = 0;
+      upstream = { status, body: { error: { message: 'secret detail sk-openai-123' } } };
+      r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123' });
+      eq(r.status, 502, t('openai: provider ' + status + ' -> 502'));
+      ok(!JSON.stringify(r.json).includes('secret') && r.json.error === 'AI request failed', t('openai: provider ' + status + ' does not leak'));
+    }
+
+    /* ---- No automatic fallback: a failing selected provider does not try another ---- */
+    calls.length = 0;
+    upstream = { status: 500, body: { error: { message: 'down' } } };
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123', ANTHROPIC_API_KEY: 'sk-test-key' });
+    eq(r.status, 502, t('openai failure: 502'));
+    eq(nProvider(), 1, t('openai failure: exactly one provider call (no fallback)'));
+    eq(lastProvider().url, 'https://api.openai.com/v1/chat/completions', t('openai failure: only OpenAI was called'));
+
+    /* ---- Provider timeout -> 502, no fallback ---- */
+    calls.length = 0;
+    const oldFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => new Promise((resolve, reject) => {
+      const s = init && init.signal;
+      if (s) s.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    });
+    r = await run(auditReq(), { AI_PROVIDER: 'openai', OPENAI_API_KEY: 'sk-openai-123', AI_TIMEOUT_MS: '5' });
+    eq(r.status, 502, t('openai timeout: 502'));
+    globalThis.fetch = oldFetch;
+
+    /* ---- Provider configuration does not leak between requests ---- */
+    calls.length = 0;
+    upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
+    r = await run(auditReq(), {});
+    eq(lastProvider().url, 'https://api.anthropic.com/v1/messages', t('provider config does not leak between requests'));
+  }
+
+  upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
+}
+
 /* ---- shared (Redis) rate limit, Vercel and Cloudflare ---- */
 {
   let count = 0;
