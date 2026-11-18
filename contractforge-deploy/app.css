@@ -867,7 +867,7 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 .sticky-top .net-banner .nb-net{order:1;flex:1 0 100%;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;line-height:1.25;}
 .sticky-top .net-banner .nb-tag{order:2;padding:1px 6px;border-radius:4px;font-size:9px;letter-spacing:.12em;}
 .sticky-top .net-banner .nb-sep{order:3;}
-.sticky-top .net-banner .nb-chain{order:4;}
+.sticky-top .net-banner .nb-chain{order:4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:88px;}
 .sticky-top .net-banner .nb-chain ~ .nb-sep,.sticky-top .net-banner .nb-mode{display:none;}
 .sticky-top .net-banner .nb-change{position:absolute;inset:0;width:100%;margin:0;padding:0;border:0;border-radius:12px;background:transparent;color:transparent;font-size:0;opacity:1;cursor:pointer;}
 .sticky-top .net-banner::after{content:"";position:absolute;right:15px;top:50%;width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-70%) rotate(45deg);opacity:.8;transition:transform .15s;}
