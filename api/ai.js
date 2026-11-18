@@ -242,13 +242,157 @@ const AI_ADAPTERS = {
   }
 };
 
+/* ---- AI model catalog & USDC pricing engine (Phase 12.2) ----
+   Server-controlled. Every financial value is integer micro-USDC (1 USDC = 1,000,000 micro): no floating point.
+   Customer prices are fixed per operation; provider cost is tracked separately and is 'unknown' (null) until a
+   verified rate exists. Nothing here activates billing or charges anyone. */
+const AI_USDC_DECIMALS = 6;
+const AI_MICRO_PER_USDC = 1000000;
+const AI_PRICING_VERSION = 1;
+
+/* Catalog of approved models. An unknown or disabled model is a controlled config error (503). Token/context limits
+   are conservative and documented, not independently verified per model. */
+const AI_CATALOG = {
+  'anthropic:claude-sonnet-4-6': { id: 'anthropic:claude-sonnet-4-6', provider: 'anthropic', model: 'claude-sonnet-4-6', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+  'openai:gpt-4o-mini':          { id: 'openai:gpt-4o-mini', provider: 'openai', model: 'gpt-4o-mini', enabled: true, verified: false, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+  'openai:gpt-4o':               { id: 'openai:gpt-4o', provider: 'openai', model: 'gpt-4o', enabled: true, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+  'deepseek:deepseek-flash':     { id: 'deepseek:deepseek-flash', provider: 'deepseek', model: 'deepseek-flash', enabled: true, verified: true, default: true, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+  'deepseek:deepseek-reasoner':  { id: 'deepseek:deepseek-reasoner', provider: 'deepseek', model: 'deepseek-reasoner', enabled: false, verified: false, default: false, ops: ['chat', 'audit', 'tests', 'generate'], maxInputTokens: 60000, maxOutputTokens: 4096 },
+};
+
+/* Existing wire action -> commercial operation (for pricing/quotes). `chat` defaults to the cheapest operation; a
+   future phase may classify it from content. */
+const AI_ACTION_OP = { chat: 'question', audit: 'review', tests: 'tests', generate: 'generate' };
+
+/* Commercial operation catalog + provisional reference prices in integer micro-USDC (0.02 / 0.20 / 0.05 / 0.15 /
+   0.10 USDC). `explain` has no reference price in the specification and is provisionally priced like `correct`. */
+const AI_OPERATIONS = {
+  question: { label: 'Solidity question', priceMicro: 20000 },
+  generate: { label: 'Contract generation', priceMicro: 200000 },
+  correct:  { label: 'Code correction', priceMicro: 50000 },
+  explain:  { label: 'Code explanation', priceMicro: 50000 },
+  review:   { label: 'AI security review', priceMicro: 150000 },
+  tests:    { label: 'Test generation', priceMicro: 100000 },
+};
+
+/* Provider token rates, versioned. Unverified in this phase: every rate is null, so provider cost is reported as
+   unknown (null), never zero. Replace with verified, sourced rates before any billing. */
+const AI_PROVIDER_COST = {
+  version: 1,
+  verified: false,
+  source: 'provisional (unverified)',
+  effective: '2026-11-18',
+  perMillion: {   // micro-USDC per 1,000,000 tokens; null = unknown
+    anthropic: { input: null, output: null, cachedInput: null },
+    openai: { input: null, output: null, cachedInput: null },
+    deepseek: { input: null, output: null, cachedInput: null },
+  },
+};
+
+/* Billing state machine (design only in this phase; no live reservation/settlement/refund). */
+const AI_BILLING_STATES = ['quoted', 'authorized', 'reserved', 'executing', 'settled', 'rejected', 'expired', 'failed', 'refunded', 'ambiguous'];
+const AI_BILLING_TRANSITIONS = {
+  quoted: ['authorized', 'rejected', 'expired'],
+  authorized: ['reserved', 'rejected', 'expired'],
+  reserved: ['executing', 'failed', 'refunded', 'expired'],
+  executing: ['settled', 'failed', 'ambiguous', 'refunded'],
+  settled: ['refunded'],
+  rejected: [], expired: [], failed: [], refunded: [],
+  ambiguous: ['refunded', 'failed'],
+};
+
+function aiCatalogEntry(provider, model) { return AI_CATALOG[provider + ':' + model] || null; }
+
+/* Exact conversions. `aiUsdcToMicro` accepts an integer micro value or a decimal string ("0.20"); `aiMicroToUsdc`
+   renders integer micro back to a 6-decimal string. Both return null on negative, non-integer or overflow input. */
+function aiUsdcToMicro(v) {
+  if (Number.isSafeInteger(v) && v >= 0) return v;   // already micro
+  const s = String(v == null ? '' : v).trim();
+  const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(s);
+  if (!m) return null;
+  const whole = Number(m[1]), frac = Number((m[2] || '').padEnd(6, '0'));
+  if (!Number.isSafeInteger(whole)) return null;
+  const micro = whole * AI_MICRO_PER_USDC + frac;
+  return Number.isSafeInteger(micro) ? micro : null;
+}
+function aiMicroToUsdc(micro) {
+  if (!Number.isSafeInteger(micro) || micro < 0) return null;
+  const whole = Math.floor(micro / AI_MICRO_PER_USDC);
+  const frac = String(micro % AI_MICRO_PER_USDC).padStart(6, '0');
+  return whole + '.' + frac;
+}
+
+/* Cost of `tokens` at `ratePerMillion` micro-USDC per 1M tokens, ceil-rounded (no free non-zero usage), no floats.
+   Returns null on invalid input or overflow. */
+function aiTokenCost(tokens, ratePerMillion) {
+  if (!Number.isSafeInteger(tokens) || tokens < 0) return null;
+  if (!Number.isSafeInteger(ratePerMillion) || ratePerMillion < 0) return null;
+  const prod = tokens * ratePerMillion;
+  if (!Number.isSafeInteger(prod)) return null;
+  return Math.ceil(prod / AI_MICRO_PER_USDC);
+}
+
+/* Provider cost in micro-USDC from usage. Unknown usage or unverified/absent rates -> null (never zero). */
+function aiProviderCost(provider, usage, rates) {
+  const r = rates || (AI_PROVIDER_COST.verified ? AI_PROVIDER_COST.perMillion[provider] : null);
+  if (!r || r.input == null || r.output == null) return null;
+  const u = usage || {};
+  const input = aiTokenCost(Number.isSafeInteger(u.inputTokens) ? u.inputTokens : 0, r.input);
+  const output = aiTokenCost(Number.isSafeInteger(u.outputTokens) ? u.outputTokens : 0, r.output);
+  const cached = r.cachedInput == null ? 0 : aiTokenCost(Number.isSafeInteger(u.cachedInputTokens) ? u.cachedInputTokens : 0, r.cachedInput);
+  if (input == null || output == null || cached == null) return null;
+  return input + output + cached;
+}
+
+/* Effective output-token cap for an action on a catalog entry (never above the model cap or the action's own cap). */
+function aiEffectiveOutputTokens(action, entry) {
+  const opCap = AI_MAX_TOKENS[action];
+  return Math.min(typeof opCap === 'number' ? opCap : entry.maxOutputTokens, entry.maxOutputTokens);
+}
+
+/* Deterministic server-side quote (simulation only — not wired to /api/ai and not financially binding). The price and
+   max charge are fixed server values; the quote id is unique per call. */
+let AI_QUOTE_SEQ = 0;
+function aiQuote(provider, model, op, opts) {
+  const entry = aiCatalogEntry(provider, model);
+  if (!entry || !entry.enabled) return { ok: false, reason: 'model-unavailable' };
+  const opdef = AI_OPERATIONS[op];
+  if (!opdef) return { ok: false, reason: 'unsupported-operation' };
+  const now = (opts && Number.isSafeInteger(opts.nowMs)) ? opts.nowMs : Date.now();
+  const ttl = (opts && Number.isSafeInteger(opts.ttlMs) && opts.ttlMs > 0) ? opts.ttlMs : 60000;
+  AI_QUOTE_SEQ += 1;
+  return {
+    ok: true,
+    quoteId: 'q_' + AI_QUOTE_SEQ.toString(36) + '_' + now.toString(36),
+    operation: op,
+    provider: provider,
+    model: model,
+    priceMicro: opdef.priceMicro,
+    maxChargeMicro: opdef.priceMicro,
+    pricingVersion: AI_PRICING_VERSION,
+    expiresAt: now + ttl,
+    inputTokenLimit: entry.maxInputTokens,
+    outputTokenLimit: entry.maxOutputTokens,
+    providerCostMicro: aiProviderCost(provider, null),
+  };
+}
+
+function aiCanTransition(from, to) {
+  const t = AI_BILLING_TRANSITIONS[from];
+  return !!t && t.indexOf(to) >= 0;
+}
+
 /* Calls the selected provider and returns a normalized result: { ok, text, outputTokens, inputTokens, provider, model }
-   on success, or { ok:false, status, timedOut } on failure. No retry, no fallback. `read` resolves server configuration,
-   `fetchFn` is the fetch implementation (global fetch in production, injected in tests). */
+   on success, or { ok:false, status, timedOut } on failure. No retry, no fallback. A model not in the catalog (or
+   disabled) is a controlled config error. `read` resolves server configuration, `fetchFn` is the fetch implementation
+   (global fetch in production, injected in tests). */
 async function aiCallProvider(provider, built, read, fetchFn) {
   const adapter = AI_ADAPTERS[provider];
   const key = read(AI_KEY_VARS[provider]);
   const model = aiModelFor(provider, read);
+  const entry = aiCatalogEntry(provider, model);
+  if (!entry || !entry.enabled) return { ok: false, configError: true };
+  const capped = { ...built, maxTokens: Math.min(built.maxTokens, entry.maxOutputTokens) };
   let controller = null, timer = null;
   if (typeof AbortController === 'function' && typeof setTimeout === 'function') {
     controller = new AbortController();
@@ -256,7 +400,7 @@ async function aiCallProvider(provider, built, read, fetchFn) {
   }
   let result;
   try {
-    const init = { method: 'POST', headers: adapter.headers(key), body: JSON.stringify(adapter.body(model, built)) };
+    const init = { method: 'POST', headers: adapter.headers(key), body: JSON.stringify(adapter.body(model, capped)) };
     if (controller) init.signal = controller.signal;
     const upstream = await (fetchFn || fetch)(adapter.endpoint, init);
     if (!upstream.ok) { result = { ok: false, status: upstream.status }; }
@@ -313,6 +457,17 @@ module.exports = async function handler(req, res) {
   if (!built.ok) return res.status(built.status).json({ error: built.error });
 
   const result = await aiCallProvider(provider, built, read);
-  if (!result.ok) return res.status(502).json({ error: 'AI request failed' });
+  if (!result.ok) {
+    if (result.configError) return res.status(503).json({ error: 'AI is not configured on this deployment.' });
+    return res.status(502).json({ error: 'AI request failed' });
+  }
   return res.status(200).json({ text: result.text, outputTokens: result.outputTokens });
+};
+
+/* Test-only introspection: the catalog/pricing pure functions live in the shared core (identical on both platforms);
+   the tests reach them here and through the Cloudflare module's named export. No production code reads this. */
+module.exports.__aiTest = {
+  AI_CATALOG, AI_OPERATIONS, AI_ACTION_OP, AI_PRICING_VERSION, AI_MICRO_PER_USDC,
+  AI_PROVIDER_COST, AI_BILLING_STATES, AI_BILLING_TRANSITIONS,
+  aiCatalogEntry, aiUsdcToMicro, aiMicroToUsdc, aiTokenCost, aiProviderCost, aiEffectiveOutputTokens, aiQuote, aiCanTransition,
 };

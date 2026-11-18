@@ -340,6 +340,31 @@ for (const [name, run] of PLATFORMS) {
   upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
 }
 
+/* ---- Phase 12.2: model catalog validation at the handler (unknown/disabled -> 503; default unchanged) ---- */
+{
+  const auditReq = () => req({ ip: fresh(), body: { action: 'audit', payload: { name: 'Probe', code: 'contract Probe {}', focus: 'full' } } });
+  for (const [name, run] of PLATFORMS) {
+    const t = (m) => name + ' (catalog): ' + m;
+    calls.length = 0;
+    upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
+
+    let r = await run(auditReq(), { AI_MODEL: 'no-such-model-xyz' });
+    eq(r.status, 503, t('unknown Anthropic model is refused (503)'));
+    eq(calls.filter((c) => c.payload).length, 0, t('unknown model: nothing reached a provider'));
+
+    calls.length = 0;
+    r = await run(auditReq(), { AI_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'sk-ds-456', DEEPSEEK_MODEL: 'deepseek-reasoner' });
+    eq(r.status, 503, t('a disabled model is refused (503)'));
+    eq(calls.filter((c) => c.payload).length, 0, t('disabled model: nothing reached a provider'));
+
+    calls.length = 0;
+    r = await run(auditReq(), {});
+    eq(r.status, 200, t('the default model is still accepted'));
+    eq(calls.filter((c) => c.payload).length, 1, t('default model: exactly one provider call'));
+  }
+  upstream = { status: 200, body: { content: [{ type: 'text', text: 'hello' }], usage: { output_tokens: 7 } } };
+}
+
 /* ---- shared (Redis) rate limit, Vercel and Cloudflare ---- */
 {
   let count = 0;
