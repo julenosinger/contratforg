@@ -637,6 +637,144 @@ function agentCompressContext(messages, maxChars) {
   }
   return { objective, recent };
 }
+
+/* ---- Phase 13.2: agent tool execution & secure deployment (foundation, DISABLED by default) ----
+   Deterministic security primitives only: an action allowlist, an execution state machine, an immutable deployment
+   intent with a canonical hash, contract versioning, network validation, a correction-loop bound, and a security review
+   gate. The feature flags are hardcoded false. Nothing here signs, controls keys, or broadcasts — the user remains the
+   final authority; the existing manual Compile & Deploy flow is unchanged and remains the only signing path. */
+const AGENT_TOOL_EXECUTION_ENABLED = false;
+const AGENT_WALLET_DEPLOY_ENABLED = false;
+const AGENT_MAX_CORRECTIONS = 3;
+const ARC_MAINNET_CHAIN_ID = 5042;
+const ARC_TESTNET_CHAIN_ID = 5042002;
+
+const AGENT_TOOL_ACTIONS = ['inspect_contract', 'generate_contract', 'modify_contract', 'compile_contract', 'generate_tests', 'run_tests', 'audit_contract', 'diagnose_errors', 'propose_correction', 'prepare_deployment', 'request_deployment_approval'];
+
+const AGENT_EXEC_STATES = ['created', 'interpreting', 'planning', 'executing', 'validating', 'awaiting_user_approval', 'awaiting_wallet_signature', 'submitted', 'confirming', 'confirmed', 'completed', 'failed', 'cancelled', 'rejected', 'expired', 'ambiguous'];
+const AGENT_EXEC_TRANSITIONS = {
+  created: ['interpreting', 'cancelled', 'expired'],
+  interpreting: ['planning', 'failed'],
+  planning: ['executing', 'failed', 'cancelled'],
+  executing: ['validating', 'failed', 'cancelled'],
+  validating: ['awaiting_user_approval', 'failed', 'cancelled'],
+  awaiting_user_approval: ['awaiting_wallet_signature', 'rejected', 'expired', 'cancelled'],
+  awaiting_wallet_signature: ['submitted', 'rejected', 'expired', 'cancelled', 'failed'],
+  submitted: ['confirming', 'failed', 'ambiguous'],
+  confirming: ['confirmed', 'failed', 'ambiguous'],
+  confirmed: ['completed', 'ambiguous'],
+  completed: [], failed: [], cancelled: [], rejected: [], expired: [],
+  ambiguous: ['failed', 'completed'],
+};
+
+/* Reject any tool action outside the allowlist (the model can never invent an executable tool name). */
+function agentValidateToolAction(action, params) {
+  if (typeof action !== 'string' || AGENT_TOOL_ACTIONS.indexOf(action) < 0) return { ok: false, reason: 'unknown action' };
+  if (params !== undefined && (typeof params !== 'object' || Array.isArray(params))) return { ok: false, reason: 'invalid params' };
+  if (params !== undefined && JSON.stringify(params).length > 4000) return { ok: false, reason: 'params too large' };
+  return { ok: true };
+}
+
+function agentValidateTransition(from, to) {
+  const t = AGENT_EXEC_TRANSITIONS[from];
+  return !!t && t.indexOf(to) >= 0;
+}
+
+/* Stable, key-sorted canonical serialization (no whitespace) — the basis of the immutable deployment intent. */
+function agentCanonicalSerialize(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return JSON.stringify(obj);
+  const keys = Object.keys(obj).sort();
+  let s = '{';
+  let first = true;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v === undefined) continue;
+    s += (first ? '' : ',') + JSON.stringify(k) + ':' + (v && typeof v === 'object' ? agentCanonicalSerialize(v) : JSON.stringify(v));
+    first = false;
+  }
+  return s + '}';
+}
+
+/* cyrb53 (same algorithm as the frontend matHash) — deterministic, enough to bind an intent to one exact value. A
+   cryptographic hash (keccak256) is the documented production upgrade. */
+function agentHashStr(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  const s = String(str == null ? '' : str);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+}
+
+function agentContractVersionId(sourceHash) {
+  return typeof sourceHash === 'string' && sourceHash.length > 0 ? sourceHash.slice(0, 40) : '';
+}
+
+/* Build an immutable deployment intent. The intentHash binds every field; any material change invalidates it. */
+function agentBuildDeploymentIntent(p) {
+  const src = p || {};
+  const now = Number.isInteger(src.now) ? src.now : Date.now();
+  const intent = {
+    operationId: typeof src.operationId === 'string' ? src.operationId : '',
+    walletAddress: typeof src.walletAddress === 'string' ? src.walletAddress : '',
+    contractId: typeof src.contractId === 'string' ? src.contractId : '',
+    contractVersion: typeof src.contractVersion === 'string' ? src.contractVersion : '',
+    sourceHash: typeof src.sourceHash === 'string' ? src.sourceHash : '',
+    compilerVersion: typeof src.compilerVersion === 'string' ? src.compilerVersion : '',
+    bytecodeHash: typeof src.bytecodeHash === 'string' ? src.bytecodeHash : '',
+    constructorArgs: Array.isArray(src.constructorArgs) ? src.constructorArgs : [],
+    chainId: Number.isInteger(src.chainId) ? src.chainId : 0,
+    deploymentMode: typeof src.deploymentMode === 'string' ? src.deploymentMode : '',
+    destination: typeof src.destination === 'string' ? src.destination : '',
+    calldataHash: typeof src.calldataHash === 'string' ? src.calldataHash : '',
+    value: typeof src.value === 'string' ? src.value : '0',
+    gasEstimate: typeof src.gasEstimate === 'string' ? src.gasEstimate : '',
+    createdAt: Number.isInteger(src.createdAt) ? src.createdAt : now,
+    expiresAt: Number.isInteger(src.expiresAt) ? src.expiresAt : now + 300000,
+  };
+  const base = { ...intent };
+  delete base.intentHash;
+  intent.intentHash = agentHashStr(agentCanonicalSerialize(base));
+  return intent;
+}
+
+function agentValidateDeploymentIntent(intent) {
+  if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return { ok: false, reason: 'not an object' };
+  if (typeof intent.walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(intent.walletAddress)) return { ok: false, reason: 'invalid wallet address' };
+  if (!Number.isInteger(intent.chainId) || intent.chainId < 1) return { ok: false, reason: 'invalid chain id' };
+  if (typeof intent.sourceHash !== 'string' || intent.sourceHash.length < 8) return { ok: false, reason: 'missing source hash' };
+  if (typeof intent.bytecodeHash !== 'string' || intent.bytecodeHash.length < 8) return { ok: false, reason: 'missing bytecode hash' };
+  if (typeof intent.intentHash !== 'string' || intent.intentHash.length < 8) return { ok: false, reason: 'missing intent hash' };
+  if (!Number.isInteger(intent.expiresAt) || intent.expiresAt <= intent.createdAt) return { ok: false, reason: 'invalid expiry' };
+  return { ok: true };
+}
+
+/* Detect whether any field of an approved intent changed (approval must be re-obtained). */
+function agentIntentChanged(intent) {
+  if (!intent || typeof intent !== 'object' || typeof intent.intentHash !== 'string') return true;
+  const base = { ...intent };
+  delete base.intentHash;
+  return agentHashStr(agentCanonicalSerialize(base)) !== intent.intentHash;
+}
+
+function agentNetworkMismatch(targetChainId, walletChainId) { return targetChainId !== walletChainId; }
+
+function agentCorrectionAllowed(attempts) { return Number.isInteger(attempts) && attempts >= 0 && attempts < AGENT_MAX_CORRECTIONS; }
+
+/* The security review gate: a deployment is blocked unless every check passes. */
+function agentDeploymentBlocked(s) {
+  const st = s || {};
+  if (st.compileStatus && st.compileStatus !== 'success') return { blocked: true, reason: 'compilation' };
+  if (st.validParams === false) return { blocked: true, reason: 'parameters' };
+  if (st.supportedNetwork === false) return { blocked: true, reason: 'network' };
+  if (st.walletMismatch === true) return { blocked: true, reason: 'wallet' };
+  if (st.intentChanged === true) return { blocked: true, reason: 'intent' };
+  if (st.criticalFinding === true) return { blocked: true, reason: 'security' };
+  return { blocked: false };
+}
 // ===== SHARED CORE END =====
 
 function clientIp(req) {
@@ -694,4 +832,7 @@ module.exports.__aiTest = {
   AGENT_SCHEMA_VERSION, AGENT_INTENTS, AGENT_ACTIONS,
   agentClassifyIntent, agentParseIntent, agentValidateIntent, agentPlanFromText, agentBuildContext, agentNeedsClarification, agentAutonomousIntent, agentProposedActions, agentTargetType, agentChatDirective,
   AGENT_SCHEMA_V2, AGENT_REQ_TYPES, agentValidateSemantic, agentCompressContext,
+  AGENT_TOOL_EXECUTION_ENABLED, AGENT_WALLET_DEPLOY_ENABLED, AGENT_MAX_CORRECTIONS, ARC_MAINNET_CHAIN_ID, ARC_TESTNET_CHAIN_ID,
+  AGENT_TOOL_ACTIONS, AGENT_EXEC_STATES, AGENT_EXEC_TRANSITIONS,
+  agentValidateToolAction, agentValidateTransition, agentCanonicalSerialize, agentHashStr, agentContractVersionId, agentBuildDeploymentIntent, agentValidateDeploymentIntent, agentIntentChanged, agentNetworkMismatch, agentCorrectionAllowed, agentDeploymentBlocked,
 };
