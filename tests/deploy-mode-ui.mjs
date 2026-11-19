@@ -199,7 +199,7 @@ function fresh(loadOpts) {
     d.getElementById('aiComposer').value = 'make a token'; ev('aiChatSend()'); await tick(); await tick();
   }
   const reqs = JSON.parse(ev('JSON.stringify(window.__aiCalls)')).filter((c) => c.action === 'chat');
-  ok(reqs.length === 4 && reqs.every((c) => JSON.stringify(Object.keys(c.payload).sort()) === '["complexity","messages","network"]'), 'AI: the request schema is unchanged in every mode (the mode is not added)');
+  ok(reqs.length === 4 && reqs.every((c) => JSON.stringify(Object.keys(c.payload).sort()) === '["complexity","contract","messages","network"]'), 'AI: the request schema adds only the optional contract field (the mode is not added)');
   ok(!reqs.some((c) => /multichain|deployment mode|portable|crosschain/i.test(JSON.stringify(c.payload).replace(/Generic EVM/g, ''))), 'AI: the mode never leaks into what is sent');
   ok(d.body.classList.contains('ai-workspace') && !!d.getElementById('aiSendBtn') && !!d.getElementById('aiThread') && !!d.getElementById('aiComposer'), 'AI: the fullscreen workspace and its ids are intact');
   ok(getComputedStyleOk(a), 'AI: the toolbar control does not change the workspace layout rules');
