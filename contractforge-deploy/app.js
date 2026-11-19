@@ -3671,7 +3671,7 @@ async function compileSource(name, code, explicitTarget){
     output.errors.forEach(e=>logConsole(e.severity==='error'?'err':'warn', e.formattedMessage.split('\n')[0]));
     if(fatal.length){
       logConsole('err','Compilation failed — fix the errors above.');
-      const err = new Error('Compilation failed'); err.handled = true; throw err;
+      const err = new Error('Compilation failed'); err.handled = true; err.diagnostics = output.errors; throw err;
     }
   }
 
@@ -3692,7 +3692,7 @@ async function compileSource(name, code, explicitTarget){
   const bytecodeKeccak256 = (typeof ethers !== 'undefined' && ethers.utils && ethers.utils.keccak256) ? ethers.utils.keccak256(bytecode) : '';
 
   logConsole('ok','Compiled successfully: '+target+' ('+abi.length+' ABI items).');
-  return { name, target, abi, bytecode, sourceHash: matHash(code), compilerVersion: SOLC_VERSION, compilerSha256: SOLC_SHA256, bytecodeKeccak256 };
+  return { name, target, abi, bytecode, sourceHash: matHash(code), compilerVersion: SOLC_VERSION, compilerSha256: SOLC_SHA256, bytecodeKeccak256, warnings: (output.errors || []).filter(e=>e.severity==='warning') };
 }
 
 async function compilePending(explicitTarget){
