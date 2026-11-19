@@ -697,69 +697,75 @@ function agentCanonicalSerialize(obj) {
   return s + '}';
 }
 
-/* cyrb53 (same algorithm as the frontend matHash) — deterministic, enough to bind an intent to one exact value. A
-   cryptographic hash (keccak256) is the documented production upgrade. */
-function agentHashStr(str) {
-  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-  const s = String(str == null ? '' : str);
-  for (let i = 0; i < s.length; i++) {
-    const ch = s.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
+/* Domain constants for the cryptographic deployment intent (Phase 13.2.1). */
+const AGENT_INTENT_DOMAIN = 'ContractForge.DeploymentIntent';
+const AGENT_INTENT_SCHEMA = 1;
+
+/* Standard SHA-256 via Web Crypto (available in both Node and Cloudflare Workers). Collision-resistant and
+   deterministic — replaces the previous non-cryptographic cyrb53 for security-sensitive intent binding. keccak256 via
+   the vendored @noble/hashes (already used by the auth module) is the Ethereum-native alternative, noted as a future
+   upgrade once the platform module systems are unified. */
+async function agentHashStr(str) {
+  const data = new TextEncoder().encode(String(str == null ? '' : str));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  let s = '';
+  for (const b of new Uint8Array(buf)) s += b.toString(16).padStart(2, '0');
+  return s;
 }
 
 function agentContractVersionId(sourceHash) {
   return typeof sourceHash === 'string' && sourceHash.length > 0 ? sourceHash.slice(0, 40) : '';
 }
 
-/* Build an immutable deployment intent. The intentHash binds every field; any material change invalidates it. */
-function agentBuildDeploymentIntent(p) {
+/* Build an immutable, domain-separated deployment intent. `constructorArgsHash` and `intentHash` are computed from
+   trusted validated values; the raw constructor arguments are not stored. Any material change invalidates the hash. */
+async function agentBuildDeploymentIntent(p) {
   const src = p || {};
   const now = Number.isInteger(src.now) ? src.now : Date.now();
+  const constructorArgs = Array.isArray(src.constructorArgs) ? src.constructorArgs : [];
   const intent = {
-    operationId: typeof src.operationId === 'string' ? src.operationId : '',
-    walletAddress: typeof src.walletAddress === 'string' ? src.walletAddress : '',
+    domain: AGENT_INTENT_DOMAIN,
+    schemaVersion: AGENT_INTENT_SCHEMA,
+    chainId: Number.isInteger(src.chainId) ? src.chainId : 0,
+    walletAddress: (typeof src.walletAddress === 'string' ? src.walletAddress : '').toLowerCase(),
     contractId: typeof src.contractId === 'string' ? src.contractId : '',
     contractVersion: typeof src.contractVersion === 'string' ? src.contractVersion : '',
     sourceHash: typeof src.sourceHash === 'string' ? src.sourceHash : '',
     compilerVersion: typeof src.compilerVersion === 'string' ? src.compilerVersion : '',
     bytecodeHash: typeof src.bytecodeHash === 'string' ? src.bytecodeHash : '',
-    constructorArgs: Array.isArray(src.constructorArgs) ? src.constructorArgs : [],
-    chainId: Number.isInteger(src.chainId) ? src.chainId : 0,
+    constructorArgsHash: await agentHashStr(agentCanonicalSerialize(constructorArgs)),
+    transactionDataHash: typeof src.transactionDataHash === 'string' ? src.transactionDataHash : '',
+    transactionValue: typeof src.value === 'string' ? src.value : '0',
     deploymentMode: typeof src.deploymentMode === 'string' ? src.deploymentMode : '',
-    destination: typeof src.destination === 'string' ? src.destination : '',
-    calldataHash: typeof src.calldataHash === 'string' ? src.calldataHash : '',
-    value: typeof src.value === 'string' ? src.value : '0',
-    gasEstimate: typeof src.gasEstimate === 'string' ? src.gasEstimate : '',
-    createdAt: Number.isInteger(src.createdAt) ? src.createdAt : now,
+    destination: (typeof src.destination === 'string' ? src.destination : '').toLowerCase(),
+    nonce: typeof src.nonce === 'string' ? src.nonce : '',
     expiresAt: Number.isInteger(src.expiresAt) ? src.expiresAt : now + 300000,
   };
-  const base = { ...intent };
-  delete base.intentHash;
-  intent.intentHash = agentHashStr(agentCanonicalSerialize(base));
-  return intent;
+  const intentHash = await agentHashStr(agentCanonicalSerialize(intent));
+  return { ...intent, intentHash };
 }
 
-function agentValidateDeploymentIntent(intent) {
+function agentValidateDeploymentIntent(intent, now) {
   if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return { ok: false, reason: 'not an object' };
+  if (intent.domain !== AGENT_INTENT_DOMAIN) return { ok: false, reason: 'wrong domain' };
+  if (intent.schemaVersion !== AGENT_INTENT_SCHEMA) return { ok: false, reason: 'unsupported schema version' };
   if (typeof intent.walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(intent.walletAddress)) return { ok: false, reason: 'invalid wallet address' };
   if (!Number.isInteger(intent.chainId) || intent.chainId < 1) return { ok: false, reason: 'invalid chain id' };
   if (typeof intent.sourceHash !== 'string' || intent.sourceHash.length < 8) return { ok: false, reason: 'missing source hash' };
   if (typeof intent.bytecodeHash !== 'string' || intent.bytecodeHash.length < 8) return { ok: false, reason: 'missing bytecode hash' };
+  if (typeof intent.constructorArgsHash !== 'string' || intent.constructorArgsHash.length < 8) return { ok: false, reason: 'missing constructor args hash' };
   if (typeof intent.intentHash !== 'string' || intent.intentHash.length < 8) return { ok: false, reason: 'missing intent hash' };
-  if (!Number.isInteger(intent.expiresAt) || intent.expiresAt <= intent.createdAt) return { ok: false, reason: 'invalid expiry' };
+  if (typeof intent.nonce !== 'string' || intent.nonce.length < 1 || intent.nonce.length > 128) return { ok: false, reason: 'invalid nonce' };
+  if (!Number.isInteger(intent.expiresAt) || intent.expiresAt <= (Number.isInteger(now) ? now : Date.now())) return { ok: false, reason: 'expired' };
   return { ok: true };
 }
 
 /* Detect whether any field of an approved intent changed (approval must be re-obtained). */
-function agentIntentChanged(intent) {
+async function agentIntentChanged(intent) {
   if (!intent || typeof intent !== 'object' || typeof intent.intentHash !== 'string') return true;
   const base = { ...intent };
   delete base.intentHash;
-  return agentHashStr(agentCanonicalSerialize(base)) !== intent.intentHash;
+  return (await agentHashStr(agentCanonicalSerialize(base))) !== intent.intentHash;
 }
 
 function agentNetworkMismatch(targetChainId, walletChainId) { return targetChainId !== walletChainId; }
@@ -776,6 +782,33 @@ function agentDeploymentBlocked(s) {
   if (st.intentChanged === true) return { blocked: true, reason: 'intent' };
   if (st.criticalFinding === true) return { blocked: true, reason: 'security' };
   return { blocked: false };
+}
+
+/* Feature flags (Phase 13.2.1): enforced by trusted code, read from server configuration with a secure false default. */
+function agentToolExecutionEnabled(read) {
+  return read && String(read('AGENT_TOOL_EXECUTION_ENABLED') || '').toLowerCase() === 'true';
+}
+function agentWalletDeployEnabled(read) {
+  return read && String(read('AGENT_WALLET_DEPLOY_ENABLED') || '').toLowerCase() === 'true';
+}
+
+/* The trusted tool dispatcher. The model proposes an action; this decides whether it is valid, allowed, and enabled.
+   Returns a structured result and never executes anything itself. */
+function agentDispatchTool(action, params, ctx) {
+  const c = ctx || {};
+  if (!c.toolExecutionEnabled) return { ok: false, status: 'disabled', reason: 'tool execution is disabled' };
+  const v = agentValidateToolAction(action, params);
+  if (!v.ok) return { ok: false, status: 'rejected', reason: v.reason };
+  return { ok: true, status: 'accepted', action, params };
+}
+
+/* Validate a tool result's provenance — a result that claims success must be verifiable, never fabricated. */
+function agentValidateToolResult(r) {
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return { ok: false, reason: 'not an object' };
+  if (typeof r.tool !== 'string' || AGENT_TOOL_ACTIONS.indexOf(r.tool) < 0) return { ok: false, reason: 'unknown tool' };
+  if (r.status !== 'completed' && r.status !== 'failed' && r.status !== 'unavailable') return { ok: false, reason: 'invalid status' };
+  if (r.status === 'completed' && (typeof r.sourceHash !== 'string' || r.sourceHash.length < 8)) return { ok: false, reason: 'a completed result must carry its source hash' };
+  return { ok: true };
 }
 // ===== SHARED CORE END =====
 
@@ -849,4 +882,5 @@ export const __aiTest = {
   AGENT_TOOL_EXECUTION_ENABLED, AGENT_WALLET_DEPLOY_ENABLED, AGENT_MAX_CORRECTIONS, ARC_MAINNET_CHAIN_ID, ARC_TESTNET_CHAIN_ID,
   AGENT_TOOL_ACTIONS, AGENT_EXEC_STATES, AGENT_EXEC_TRANSITIONS,
   agentValidateToolAction, agentValidateTransition, agentCanonicalSerialize, agentHashStr, agentContractVersionId, agentBuildDeploymentIntent, agentValidateDeploymentIntent, agentIntentChanged, agentNetworkMismatch, agentCorrectionAllowed, agentDeploymentBlocked,
+  AGENT_INTENT_DOMAIN, AGENT_INTENT_SCHEMA, agentToolExecutionEnabled, agentWalletDeployEnabled, agentDispatchTool, agentValidateToolResult,
 };

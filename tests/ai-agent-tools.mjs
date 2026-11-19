@@ -54,21 +54,31 @@ for (const [name, T] of [['vercel', V], ['cloudflare', C]]) {
   ok(!T.agentValidateTransition('completed', 'submitted'), t('completed is terminal'));
   ok(!T.agentValidateTransition('rejected', 'executing'), t('rejected is terminal'));
 
-  /* deployment intent: immutable + hashed */
-  const intent = T.agentBuildDeploymentIntent({
-    operationId: 'op1', walletAddress: '0x1111111111111111111111111111111111111111', contractId: 'c1',
+  /* deployment intent: cryptographic (SHA-256), domain-separated, immutable */
+  const intent = await T.agentBuildDeploymentIntent({
+    walletAddress: '0x1111111111111111111111111111111111111111', contractId: 'c1',
     contractVersion: 'v1', sourceHash: 'abcdef1234567890', compilerVersion: '0.8.24', bytecodeHash: 'deadbeefdeadbeef',
-    constructorArgs: ['0x00'], chainId: 5042, deploymentMode: 'single', destination: '', calldataHash: 'beef', value: '0', gasEstimate: '100000',
+    constructorArgs: ['0x00'], chainId: 5042, deploymentMode: 'create', destination: '', transactionDataHash: 'beef', value: '0', nonce: 'n1',
   });
-  ok(T.agentValidateDeploymentIntent(intent).ok, t('a complete intent validates'));
-  eq(T.agentIntentChanged(intent), false, t('an unmodified intent does not change'));
-  const tampered = { ...intent, value: '999' };
-  ok(T.agentIntentChanged(tampered), t('changing the value invalidates the intent'));
-  ok(T.agentIntentChanged({ ...intent, destination: '0x2222222222222222222222222222222222222222' }), t('changing the destination invalidates the intent'));
-  ok(T.agentIntentChanged({ ...intent, constructorArgs: ['0x01'] }), t('changing constructor args invalidates the intent'));
-  eq(T.agentValidateDeploymentIntent({ ...intent, walletAddress: 'nope' }).ok, false, t('an invalid wallet address is rejected'));
-  eq(T.agentValidateDeploymentIntent({ ...intent, chainId: 0 }).ok, false, t('an invalid chain id is rejected'));
-  eq(T.agentValidateDeploymentIntent({ ...intent, expiresAt: intent.createdAt }).ok, false, t('a non-expiring intent is rejected'));
+  eq(intent.domain, 'ContractForge.DeploymentIntent', t('the intent carries the domain'));
+  eq(intent.schemaVersion, 1, t('the intent carries the schema version'));
+  eq(intent.intentHash.length, 64, t('the intent hash is a 256-bit hex digest'));
+  eq(intent.constructorArgsHash.length, 64, t('the constructor args hash is a 256-bit hex digest'));
+  ok(T.agentValidateDeploymentIntent(intent, 1700000000000).ok, t('a complete intent validates'));
+  eq(await T.agentIntentChanged(intent), false, t('an unmodified intent does not change'));
+  ok(await T.agentIntentChanged({ ...intent, transactionValue: '999' }), t('changing the value invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, destination: '0x2222222222222222222222222222222222222222' }), t('changing the destination invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, bytecodeHash: 'f'.repeat(64) }), t('changing the bytecode invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, constructorArgsHash: 'e'.repeat(64) }), t('changing the constructor args invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, transactionDataHash: 'cafe' }), t('changing the calldata invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, chainId: 1 }), t('changing the chain id invalidates the intent'));
+  ok(await T.agentIntentChanged({ ...intent, walletAddress: '0x3333333333333333333333333333333333333333' }), t('changing the wallet invalidates the intent'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, walletAddress: 'nope' }, 1700000000000).ok, false, t('an invalid wallet address is rejected'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, chainId: 0 }, 1700000000000).ok, false, t('an invalid chain id is rejected'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, domain: 'Evil.Domain' }, 1700000000000).ok, false, t('a wrong domain is rejected'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, schemaVersion: 2 }, 1700000000000).ok, false, t('an unsupported schema version is rejected'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, nonce: '' }, 1700000000000).ok, false, t('an invalid nonce is rejected'));
+  eq(T.agentValidateDeploymentIntent({ ...intent, expiresAt: 1700000000000 }, 1700000000001).ok, false, t('an expired intent is rejected'));
 
   /* contract versioning */
   eq(T.agentContractVersionId('abcdef1234567890abcdef1234567890abcdef12'), 'abcdef1234567890abcdef1234567890abcdef12', t('a contract version id is the source hash'));
@@ -97,8 +107,26 @@ for (const [name, T] of [['vercel', V], ['cloudflare', C]]) {
 
   /* canonical serialization is key-order-independent */
   eq(T.agentCanonicalSerialize({ a: 1, b: 2 }), T.agentCanonicalSerialize({ b: 2, a: 1 }), t('canonical serialization is key-order independent'));
-  eq(T.agentHashStr('abc'), T.agentHashStr('abc'), t('the hash is deterministic'));
-  ok(T.agentHashStr('abc') !== T.agentHashStr('abd'), t('the hash changes when the input changes'));
+  eq(await T.agentHashStr('abc'), await T.agentHashStr('abc'), t('the hash is deterministic'));
+  ok((await T.agentHashStr('abc')) !== (await T.agentHashStr('abd')), t('the hash changes when the input changes'));
+
+  /* Phase 13.2.1 — trusted dispatcher and feature flags */
+  eq(T.agentToolExecutionEnabled(() => undefined), false, t('the tool flag is false by default'));
+  eq(T.agentToolExecutionEnabled(() => 'true'), true, t('the tool flag is env-driven'));
+  eq(T.agentWalletDeployEnabled(() => undefined), false, t('the wallet deploy flag is false by default'));
+  ok(!T.agentWalletDeployEnabled(() => 'false'), t('a false wallet flag stays false'));
+
+  eq(T.agentDispatchTool('compile_contract', {}, { toolExecutionEnabled: false }).status, 'disabled', t('dispatch is disabled when the flag is off'));
+  eq(T.agentDispatchTool('compile_contract', {}, { toolExecutionEnabled: true }).status, 'accepted', t('dispatch accepts an allowlisted action when enabled'));
+  eq(T.agentDispatchTool('deploy_contract', {}, { toolExecutionEnabled: true }).status, 'rejected', t('dispatch rejects an unknown action'));
+  eq(T.agentDispatchTool('execute_shell', {}, { toolExecutionEnabled: true }).status, 'rejected', t('dispatch rejects shell execution'));
+
+  /* Phase 13.2.1 — tool result provenance (no fabricated success) */
+  ok(T.agentValidateToolResult({ tool: 'compile_contract', status: 'completed', sourceHash: 'abcdef1234567890' }).ok, t('a completed compile with a source hash validates'));
+  eq(T.agentValidateToolResult({ tool: 'compile_contract', status: 'completed' }).ok, false, t('a completed result without a source hash is rejected (no fabricated success)'));
+  eq(T.agentValidateToolResult({ tool: 'compile_contract', status: 'maybe' }).ok, false, t('an unknown status is rejected'));
+  eq(T.agentValidateToolResult({ tool: 'evil_tool', status: 'completed', sourceHash: 'abcdef1234567890' }).ok, false, t('an unknown tool is rejected'));
+  ok(T.agentValidateToolResult({ tool: 'audit_contract', status: 'failed', error: 'x' }).ok, t('a failed result is valid (no fabricated success)'));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
