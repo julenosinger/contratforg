@@ -317,7 +317,13 @@ const send = async (a, text) => { a.d.getElementById('aiComposer').value = text;
   await send(a, 'a vault');
   const p = a.calls()[0].payload;
   eq([p.network.label, p.network.chainId, p.network.usdc, p.complexity], [ev('NETWORKS.sepolia.label'), ev('NETWORKS.sepolia.chainIdDec'), ev("NETWORKS.sepolia.usdc || ''"), 'advanced'], 'context: the chosen network and complexity are sent');
-  eq(Object.keys(p).sort(), ['complexity', 'messages', 'network'], 'context: the request schema is unchanged');
+  eq(Object.keys(p).sort(), ['complexity', 'contract', 'messages', 'network'], 'context: the request schema adds the optional contract field');
+  ok(p.contract === null, 'context: no contract is sent when the editor is empty');
+  // the editor contract is sent (bounded) as a separate contract field
+  ev("pendingSource = { name: 'ForgeDollar', code: 'contract ForgeDollar {}', template: 'erc20' };");
+  await send(a, 'add a burn function');
+  const p2 = a.calls().pop().payload;
+  ok(p2.contract && p2.contract.name === 'ForgeDollar' && p2.contract.code === 'contract ForgeDollar {}', 'context: the editor contract is sent as a bounded contract field');
   // attach
   ev("pendingSource = { name: 'Wizard', code: 'pragma solidity ^0.8.24;\\ncontract Wizard { uint256 a; }', template: 'erc20' };");
   const ta = d.getElementById('aiComposer'); const chip = d.getElementById('aiContextChip');

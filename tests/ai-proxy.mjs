@@ -136,6 +136,24 @@ for (const [name, run] of PLATFORMS) {
   p = anthropic()[0].payload;
   ok(!JSON.stringify(p).includes('EVIL') && p.model === 'claude-sonnet-4-6' && p.max_tokens === 8192, t('chat: a client system/model/messages are ignored'));
   eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')], { extra: 'x', tools: ['evil'] }) }))).status, 200, t('chat: extra fields are ignored'));
+
+  /* ---- Phase 13.1: multilingual semantic prompt + contract awareness ---- */
+  calls.length = 0;
+  r = await run(req({ ip: fresh(), body: chat([m('user', 'Create a token')]) }));
+  p = anthropic()[0].payload;
+  ok(p.system.includes('respond in the language of the user') && p.system.includes('contradict') && p.system.includes('outline the plan'), t('chat: the multilingual/semantic/planning prompt is present'));
+  ok(!p.system.includes('current editor contract is'), t('chat: no contract context when none is provided'));
+
+  calls.length = 0;
+  r = await run(req({ ip: fresh(), body: chat([m('user', 'Add a burn function')], { contract: { name: 'ForgeDollar', code: 'contract ForgeDollar {}' } }) }));
+  eq(r.status, 200, t('chat: a contract field is accepted'));
+  p = anthropic()[0].payload;
+  ok(p.system.includes('current editor contract is "ForgeDollar"'), t('chat: the contract name is in the prompt'));
+  ok(p.messages[p.messages.length - 1].content.includes('contract ForgeDollar {}'), t('chat: the contract source is appended as DATA'));
+
+  calls.length = 0;
+  eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')], { contract: { name: 'Bad Name!', code: 'x' } }) }))).status, 400, t('chat: an invalid contract name is refused'));
+  eq((await run(req({ ip: fresh(), body: chat([m('user', 'hi')], { contract: { name: 'Ok', code: '' } }) }))).status, 400, t('chat: an empty contract source is refused'));
   for (const [label, msgs] of [
     ['assistant first', [m('assistant', 'x'), m('user', 'y')]],
     ['two assistants in a row', [m('user', 'x'), m('assistant', 'y'), m('assistant', 'z')]],

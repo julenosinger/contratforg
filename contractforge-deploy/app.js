@@ -6756,7 +6756,12 @@ async function aiChatSend(){
     const net = NETWORKS[netKey] || NETWORKS.arc;
     const complexity = document.getElementById('nl_complexity')?.value || 'moderate';
     const messages = aiBuildRequestMessages(conv.msgs);
-    const data = await aiFetch('chat', { messages, network: { label: net.label, chainId: net.chainIdDec, usdc: net.usdc || '' }, complexity });
+    // Attach the current editor contract (bounded) so the model can reference it ("modify this contract"). Untrusted on
+    // the server; never sent when absent or empty.
+    const contract = (typeof pendingSource !== 'undefined' && pendingSource && pendingSource.code && pendingSource.name)
+      ? { name: pendingSource.name, code: pendingSource.code.slice(0, AI_ATTACH_MAX) }
+      : null;
+    const data = await aiFetch('chat', { messages, network: { label: net.label, chainId: net.chainIdDec, usdc: net.usdc || '' }, complexity, contract });
     if (!data.text || !data.text.trim()) throw new Error('The AI returned an empty answer.');
     conv.msgs.push({ role: 'assistant', content: data.text });
   } catch (e) {

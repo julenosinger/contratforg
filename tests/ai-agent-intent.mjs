@@ -102,6 +102,32 @@ for (const [name, T] of [['vercel', V], ['cloudflare', C]]) {
   eq(T.agentChatDirective('Create an ERC-20 token'), '', t('generation has no extra directive (prompt unchanged)'));
   ok(T.agentChatDirective('Add a burn function').indexOf('Preserve all existing functionality') >= 0, t('modify gets a preservation directive'));
   ok(T.agentChatDirective('Deploy my contract').indexOf('never deploys or signs autonomously') >= 0, t('deploy gets an authorization directive'));
+
+  /* Phase 13.1 — semantic schema v2 validation (rejects malformed / unsafe / injection) */
+  const sem = () => ({ schemaVersion: 2, language: 'pt', intent: 'multi_step', goal: 'Create and validate a staking contract', requirements: [{ id: 'r1', type: 'feature', description: 'ERC-20 staking' }], constraints: ['Preserve existing'], target: { type: 'current_contract', version: null }, missingInformation: [], requiresClarification: false, proposedActions: ['inspect_contract', 'generate', 'compile', 'test', 'audit'] });
+  ok(T.agentValidateSemantic(sem()).ok, t('a valid semantic object validates'));
+  eq(T.agentValidateSemantic({ ...sem(), schemaVersion: 1 }).ok, false, t('schema v1 is rejected by the v2 validator'));
+  eq(T.agentValidateSemantic({ ...sem(), proposedActions: ['deploy'] }).ok, false, t('a deploy action is rejected'));
+  eq(T.agentValidateSemantic({ ...sem(), proposedActions: ['execute_shell'] }).ok, false, t('a shell action is rejected (injection)'));
+  eq(T.agentValidateSemantic({ ...sem(), intent: 'evil' }).ok, false, t('an unknown intent is rejected'));
+  eq(T.agentValidateSemantic({ ...sem(), requirements: [{ id: 'r1', type: 'evil', description: 'x' }] }).ok, false, t('an unknown requirement type is rejected'));
+  eq(T.agentValidateSemantic({ ...sem(), target: { type: 'evil' } }).ok, false, t('an invalid target type is rejected'));
+  eq(T.agentValidateSemantic({ ...sem(), language: 'x'.repeat(100) }).ok, false, t('an overlong language code is rejected'));
+  eq(T.agentValidateSemantic(null).ok, false, t('a null semantic object is rejected'));
+  eq(T.agentValidateSemantic({ ...sem(), requiresClarification: 'yes' }).ok, false, t('a non-boolean clarification flag is rejected'));
+
+  /* Phase 13.1 — bounded context compaction (keeps objective + recent turns, drops older ones) */
+  const long = [
+    { role: 'user', content: 'Create a token named Forge Dollar' },
+    { role: 'assistant', content: '```solidity\ncontract ForgeDollar {}\n```' },
+    { role: 'user', content: 'Add a burn function' },
+  ];
+  const c1 = T.agentCompressContext(long, 1000);
+  eq(c1.objective, 'Create a token named Forge Dollar', t('compaction keeps the objective'));
+  ok(c1.recent.length >= 1 && c1.recent[c1.recent.length - 1].content.includes('Add a burn function'), t('compaction keeps the most recent turn'));
+  ok(c1.recent.reduce((n, m) => n + m.content.length, 0) <= 1000 + 400, t('compaction respects the budget'));
+  eq(T.agentCompressContext([], 1000).recent.length, 0, t('an empty conversation compacts to nothing'));
+  ok(T.agentCompressContext(long, 1).objective.length <= 400, t('the objective is independently bounded'));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
