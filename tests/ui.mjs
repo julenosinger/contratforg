@@ -14,7 +14,7 @@ const key = (el, k) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k,
 const SECTIONS = ['home','simple','swap','treasury','vault','multisend','crosschain','deploy','auditor','playground','history','gas','verify','share','wizard','nlai','analytics','tests','lab'];
 const items = [...doc.querySelectorAll('.nav-item')];
 eq(items.map((i) => i.dataset.section).sort(), [...SECTIONS].sort(), 'all 18 sections plus Home are in the menu');
-eq([...doc.querySelectorAll('.nav-group h4')].map((h) => h.textContent), ['Start here', 'Create', 'Publish', 'Check & analyze'], 'menu groups');
+eq([...doc.querySelectorAll('.nav-group h4')].map((h) => h.textContent), ['Home', 'Build', 'Deploy', 'Analyze'], 'menu groups');
 for (const s of SECTIONS) ok(!!doc.getElementById('sec-' + s), `section sec-${s} exists`);
 eq(doc.querySelector('.nav-item.active')?.dataset.section, 'home', 'Home is the landing page');
 eq([...doc.querySelectorAll('main section.section')].filter((x) => x.style.display !== 'none').map((x) => x.id), ['sec-home'], 'only Home is visible at start');

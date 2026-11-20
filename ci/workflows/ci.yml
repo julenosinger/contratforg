@@ -77,6 +77,12 @@ jobs:
         env:
           # the theme toggle test needs Chromium (installed above); a missing browser must fail the job, not skip the test
           REQUIRE_BROWSER: '1'
+      - name: Collapsible sidebar under a real browser
+        run: node sidebar-browser.mjs
+        working-directory: tests
+        env:
+          # the sidebar test needs Chromium (installed above); a missing browser must fail the job, not skip the test
+          REQUIRE_BROWSER: '1'
       - name: Network selector stability under a real browser
         run: node network-selector-stability.mjs
         working-directory: tests

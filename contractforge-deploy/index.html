@@ -21,57 +21,65 @@
 <div class="app">
 
   <!-- ===================== SIDEBAR ===================== -->
-  <aside class="spine">
+  <aside class="spine" id="sidebar">
     <div class="brand">
+      <span class="mark-short" aria-hidden="true">C<span class="dot">.</span></span>
       <div class="mark">ContractForge<span class="dot">.</span></div>
       <div class="tag">On-Chain Contract Foundry</div>
+      <button type="button" class="sb-collapse" id="sbCollapse" aria-controls="mainNav" aria-expanded="true" aria-label="Collapse sidebar"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button>
     </div>
 
+    <div class="spine-body" id="spineBody">
     <nav class="nav" aria-label="Sections">
-    <div class="nav-group">
-      <h4>Start here</h4>
-      <div class="nav-item active" data-section="home"><span class="num">⌂</span> Home</div>
-      <div class="nav-item" data-section="wizard"><span class="num">14</span> Contract Wizard</div>
-      <div class="nav-item" data-section="nlai"><span class="num">15</span> AI → Solidity</div>
-    </div>
-
-    <div class="nav-group">
-      <h4>Create</h4>
-      <div class="nav-item" data-section="simple"><span class="num">01</span> Token / Escrow / NFT</div>
-      <div class="nav-item" data-section="swap"><span class="num">02</span> Swap / AMM</div>
-      <div class="nav-item" data-section="treasury"><span class="num">03</span> Treasury</div>
-      <div class="nav-item" data-section="vault"><span class="num">04</span> Vault (ERC-4626)</div>
-      <div class="nav-item" data-section="multisend"><span class="num">05</span> MultiSend</div>
-      <div class="nav-item" data-section="crosschain"><span class="num">06</span> Crosschain (CCTP)</div>
-    </div>
-
-    <div class="nav-group">
-      <h4>Publish</h4>
-      <div class="nav-item" data-section="deploy"><span class="num">07</span> Compile &amp; Deploy</div>
-      <div class="nav-item" data-section="history"><span class="num">10</span> Deploy History</div>
-      <div class="nav-item" data-section="verify"><span class="num">12</span> Verify on Explorer</div>
-      <div class="nav-item" data-section="share"><span class="num">13</span> Share / Export</div>
-    </div>
-
-    <div class="nav-group">
-      <h4>Check &amp; analyze</h4>
-      <div class="nav-item" data-section="lab"><span class="num">18</span> Test Lab</div>
-      <div class="nav-item" data-section="auditor"><span class="num">08</span> AI Auditor</div>
-      <div class="nav-item" data-section="playground"><span class="num">09</span> ABI Playground</div>
-      <div class="nav-item" data-section="gas"><span class="num">11</span> Gas Estimator</div>
-      <div class="nav-item" data-section="analytics"><span class="num">16</span> Analytics</div>
-      <div class="nav-item" data-section="tests"><span class="num">17</span> Test Generator</div>
-    </div>
-
+      <div class="nav-group" data-group="home" role="group" aria-labelledby="ng-home">
+        <h4 id="ng-home" class="sb-sronly">Home</h4>
+        <div class="nav-group-items" id="ngi-home">
+        <div class="nav-item active" data-section="home"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span class="num" aria-hidden="true">⌂</span> <span class="nav-label">Home</span></div>
+        </div>
+      </div>
+      <div class="nav-group" data-group="build" role="group" aria-labelledby="ng-build">
+        <h4 id="ng-build"><button type="button" class="nav-group-toggle" aria-expanded="true" aria-controls="ngi-build"><span class="nav-label">Build</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h4>
+        <div class="nav-group-items" id="ngi-build">
+        <div class="nav-item" data-section="wizard"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 19L19 5"/><path d="M15 5l4 4"/><path d="M6 4v3M4.5 5.5h3M18 16v3M16.5 17.5h3"/></svg><span class="num" aria-hidden="true">14</span> <span class="nav-label">Contract Wizard</span></div>
+        <div class="nav-item" data-section="nlai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v11H9l-5 4z"/><path d="M8.5 10.5h7"/></svg><span class="num" aria-hidden="true">15</span> <span class="nav-label">AI → Solidity</span></div>
+        <div class="nav-item" data-section="simple"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h5"/></svg><span class="num" aria-hidden="true">01</span> <span class="nav-label">Token / Escrow / NFT</span></div>
+        <div class="nav-item" data-section="swap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/></svg><span class="num" aria-hidden="true">02</span> <span class="nav-label">Swap / AMM</span></div>
+        <div class="nav-item" data-section="treasury"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 3v6c0 4.5-3.4 7.8-8 9-4.6-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span class="num" aria-hidden="true">03</span> <span class="nav-label">Treasury</span></div>
+        <div class="nav-item" data-section="vault"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg><span class="num" aria-hidden="true">04</span> <span class="nav-label">Vault (ERC-4626)</span></div>
+        <div class="nav-item" data-section="multisend"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12h6"/><path d="M10 12l8-6M10 12h8M10 12l8 6"/></svg><span class="num" aria-hidden="true">05</span> <span class="nav-label">MultiSend</span></div>
+        <div class="nav-item" data-section="crosschain"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.5 14.5l5-5"/><path d="M8 11l-2.5 2.5a3.2 3.2 0 004.5 4.5L12.5 15.5"/><path d="M16 13l2.5-2.5a3.2 3.2 0 00-4.5-4.5L11.5 8.5"/></svg><span class="num" aria-hidden="true">06</span> <span class="nav-label">Crosschain (CCTP)</span></div>
+        </div>
+      </div>
+      <div class="nav-group" data-group="deploy" role="group" aria-labelledby="ng-deploy">
+        <h4 id="ng-deploy"><button type="button" class="nav-group-toggle" aria-expanded="true" aria-controls="ngi-deploy"><span class="nav-label">Deploy</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h4>
+        <div class="nav-group-items" id="ngi-deploy">
+        <div class="nav-item" data-section="deploy"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span class="num" aria-hidden="true">07</span> <span class="nav-label">Compile &amp; Deploy</span></div>
+        <div class="nav-item" data-section="history"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span class="num" aria-hidden="true">10</span> <span class="nav-label">Deploy History</span></div>
+        <div class="nav-item" data-section="verify"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span class="num" aria-hidden="true">12</span> <span class="nav-label">Verify on Explorer</span></div>
+        <div class="nav-item" data-section="share"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/></svg><span class="num" aria-hidden="true">13</span> <span class="nav-label">Share / Export</span></div>
+        </div>
+      </div>
+      <div class="nav-group" data-group="analyze" role="group" aria-labelledby="ng-analyze">
+        <h4 id="ng-analyze"><button type="button" class="nav-group-toggle" aria-expanded="true" aria-controls="ngi-analyze"><span class="nav-label">Analyze</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></h4>
+        <div class="nav-group-items" id="ngi-analyze">
+        <div class="nav-item" data-section="lab"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 3h6M10 3v6l-5 9a2 2 0 001.8 3h10.4a2 2 0 001.8-3l-5-9V3"/><path d="M8 15h8"/></svg><span class="num" aria-hidden="true">18</span> <span class="nav-label">Test Lab</span></div>
+        <div class="nav-item" data-section="auditor"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg><span class="num" aria-hidden="true">08</span> <span class="nav-label">AI Auditor</span></div>
+        <div class="nav-item" data-section="playground"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6l6 6-6 6"/><path d="M13 18h6"/></svg><span class="num" aria-hidden="true">09</span> <span class="nav-label">ABI Playground</span></div>
+        <div class="nav-item" data-section="gas"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V5a1 1 0 011-1h7a1 1 0 011 1v15"/><path d="M4 20h11M14 9h2.5a1.5 1.5 0 011.5 1.5V16a1.5 1.5 0 003 0V9l-3-3"/><path d="M7 8h5"/></svg><span class="num" aria-hidden="true">11</span> <span class="nav-label">Gas Estimator</span></div>
+        <div class="nav-item" data-section="analytics"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span class="num" aria-hidden="true">16</span> <span class="nav-label">Analytics</span></div>
+        <div class="nav-item" data-section="tests"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 6l2 2 3-3M5 14l2 2 3-3"/><path d="M13 7h6M13 15h6"/></svg><span class="num" aria-hidden="true">17</span> <span class="nav-label">Test Generator</span></div>
+        </div>
+      </div>
     </nav>
 
-    <div class="net-pill">
-      <div class="row"><span>active network</span><b id="sidenet">Arc Mainnet</b></div>
-      <div class="row"><span>chain id</span><b id="sidechain">5042</b></div>
-      <div class="row"><span>gas token</span><b id="sidegas">USDC</b></div>
-    </div>
-    <div class="tier-widget">
-      <button class="theme-btn" id="resetSavedBtn" type="button" style="margin-top:8px;">Reset saved data</button>
+      <div class="net-pill">
+        <div class="row"><span>active network</span><b id="sidenet">Arc Mainnet</b></div>
+        <div class="row"><span>chain id</span><b id="sidechain">5042</b></div>
+        <div class="row"><span>gas token</span><b id="sidegas">USDC</b></div>
+      </div>
+      <div class="tier-widget">
+        <button class="theme-btn" id="resetSavedBtn" type="button" style="margin-top:8px;"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 108-8"/><path d="M4 4v5h5"/></svg><span class="nav-label">Reset saved data</span></button>
+      </div>
     </div>
   </aside>
 

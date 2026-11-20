@@ -22,17 +22,17 @@ body{min-height:100vh;}
 }
 
 /* ===== Layout shell ===== */
-.app{display:grid;grid-template-columns:280px 1fr;min-height:100vh;}
+.app{--sb-w:248px;display:grid;grid-template-columns:var(--sb-w) 1fr;min-height:100vh;}
 @media (max-width:980px){.app{grid-template-columns:1fr;}}
 
 /* ===== Sidebar (ledger spine) ===== */
 .spine{
   background:#070B0A;
   border-right:1px solid #1F2A26;
-  padding:28px 20px;
-  position:sticky;top:0;height:100vh;overflow-y:auto;
+  padding:0;
+  position:sticky;top:0;height:100vh;overflow:hidden;
+  display:flex;flex-direction:column;min-width:0;
 }
-@media (max-width:980px){.spine{position:relative;height:auto;border-right:none;border-bottom:1px solid #1F2A26;}}
 
 .brand{display:flex;flex-direction:column;gap:4px;margin-bottom:34px;}
 .brand .mark{
@@ -661,13 +661,14 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .cs-item{text-align:left;justify-content:flex-start;font-family:var(--mono);font-size:12px;}
 
 /* ---- Mobile menu ---- */
-.nav-toggle{display:none;margin-top:10px;width:100%;padding:9px 12px;font-family:var(--mono);font-size:12px;border:1px solid #2a3a33;border-radius:var(--radius);background:transparent;color:var(--paper);cursor:pointer;}
+.nav-toggle{display:none;margin-top:0;width:auto;padding:9px 12px;font-family:var(--mono);font-size:12px;border:1px solid #2a3a33;border-radius:var(--radius);background:transparent;color:var(--paper);cursor:pointer;}
 .nav-toggle:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 @media (max-width:980px){
   .nav-toggle{display:block;}
   .nav{display:none;}
   .nav.open{display:block;}
 }
+/* the mobile top bar is 53px tall: the sticky page header sits right under it (see the sidebar block at the end of this file) */
 
 
 /* ---- Activity console ---- */
@@ -844,6 +845,269 @@ input.invalid,textarea.invalid,select.invalid{border-color:#B8483A !important;bo
 .btn:disabled{opacity:.45;cursor:not-allowed;}
 label .req-star{color:#FF6A39;margin-left:3px;}
 .light .req-reason{background:#FBE3DA;color:#8A2A10;}
+
+/* ======================================================================
+   LIGHT MODE READABILITY (WCAG AA)
+   The dark palette hardcodes its greys, gold and orange for text; on the light surfaces those read at 1:1 to 4:1. Every rule below is scoped to
+   .light, changes only the colour (or border colour / opacity) of the declaration that paints the failing text, and leaves Dark Mode untouched.
+   Targets: 4.5:1 for text, 3:1 for icons and for the box of a form field. Measured by tests/light-contrast-browser.mjs on every page and overlay.
+   ====================================================================== */
+
+/* ink: text that was paper-white on a light surface (logo, ghost buttons, headings) */
+.light .brand .mark,
+.light .mark-short,
+.light .btn-ghost,
+.light .head-meta b,
+.light .home-net.current,
+.light .net-panel-note b,
+.light .wstep.active .label,
+.light .lab-card code,
+.light .lab-time,
+.light .nav-toggle,
+.light .gbar .walletbar .status.connected ~ .wb-actions #connectBtn,
+.light .dc-ack{color:#10201A;}
+.light .brand .mark .dot,
+.light .mark-short .dot,
+.light .page-head .eyebrow,
+.light .home-card .hc-num,
+.light .section-head .n,
+.light label .req-star{color:#A14324;}
+.light .brand .tag,
+.light .net-pill,
+.light .dm-trigger .dm-caret,
+.light .hr-main span,
+.light .home-builders .hc-cat,
+.light .net-panel-note,
+.light .dm-trigger .dm-k,
+.light .field label,
+.light #sec-history .hist-stat .hist-s,
+.light #sec-history .hist-count,
+.light .lab-card h4,
+.light .dc-row span,
+.light .dc-sub{color:#59635F;}
+.light .nav-group h4,
+.light .cc-label,
+.light .head-meta,
+.light .tcard .tag,
+.light .console-tools .console-title{color:#57635F;}
+.light .net-pill b,
+.light.mainnet-mode .page-head h1,
+.light .md-live,
+.light a,
+.light .net-panel-note b.gold,
+.light .hist-row .haddr,
+.light .bld#sec-auditor .bld-sub b,
+.light .bld#sec-gas .bld-sub code,
+.light .bld#sec-analytics .bld-sub code,
+.light .bld#sec-tests .bld-sub code,
+.light .btn-ghost:hover{color:#79612D;}
+.light .net-banner .nb-sep{opacity:1;}
+.light .page-head p,
+.light .home-steps li,
+.light .home-card,
+.light .home-net,
+.light details.adv > summary,
+.light #sec-history .hist-intro,
+.light .lab-status,
+.light .lab-note,
+.light .lab-check,
+.light .dc-arg span{color:#606A65;}
+.light .home-builders .hc-ico{color:#269A70;}
+.light .foot-note b,
+.light .home-continue .hc-label,
+.light .tcard p,
+.light #sec-history .hist-segbtn,
+.light .hist-row .hbtn,
+.light #sec-history .hist-link,
+.light #sec-history .hist-row .htime,
+.light .pill{color:#616B66;}
+.light .wstep .dot{color:#7B8782;}
+.light #sec-nlai .ai-search,
+.light #sec-nlai .ai-ctl{border-color:#878379;}
+.light #sec-nlai .ai-convs-empty,
+.light #sec-nlai .ai-history-note,
+.light .bld.dpl-ws .dpl-chip i{color:#5E6962;}
+.light #sec-nlai .ai-steps b,
+.light .bld .bld-stages li[data-state="done"] .bld-dot,
+.light .bld .bld-n,
+.light #sec-swap .swb-stages li[data-state="done"] .swb-dot,
+.light #sec-swap .swb-n,
+.light #sec-swap .swb-count,
+.light #sec-swap .swb-pct,
+.light .bld .bld-pct,
+.light .bld .bld-count,
+.light .bld.dpl-ws .dpl-n{color:#0A6F4E;}
+.light #sec-nlai .ai-box{border-color:#8D887A;}
+.light .bld .codepanel .bld-lang,
+.light #sec-swap .codepanel .swb-lang,
+.light .bld.dpl-ws .dpl-src summary{color:#7D8883;}
+.light .bld .codepanel .bld-warn{color:#A77D2F;}
+.light .bld.dpl-ws .dpl-chip.lvl-experimental b,
+.light .bld.dpl-ws .dpl-chip.live b{color:#8C600F;}
+.light #sec-history .hist-stat .hist-k,
+.light #sec-history .hist-kind,
+.light #sec-history .hist-tx{color:#616E68;}
+.light #sec-history .hist-segbtn[aria-pressed="true"]{color:#1D7454;}
+body.light #sec-history .hist-bar select,
+body.light #sec-history .hist-bar input,
+body.light .pg-search{border-color:#8D897D;}
+.light #sec-history .hist-live{color:#87662B;}
+.light #sec-history .hist-row .hbtn-del{color:#965C48;}
+.light .dc-warn{color:#85674F;}
+.light .dc-check,
+.light .dc-type{color:#676F6B;}
+
+/* placeholders: the browser default grey is 3.9:1 on the light field fill */
+.light input::placeholder,
+.light textarea::placeholder{color:#636363;}
+
+/* Inline colours. Some text carries its colour in a style attribute (written in index.html or by app.js), which only !important can beat.
+   Each rule matches one exact inline colour, so it cannot touch anything else. */
+.light [style^="color:#5C6B65" i],
+.light [style*=";color:#5C6B65" i],
+.light [style*="; color:#5C6B65" i],
+.light [style^="color: rgb(92, 107, 101)"],
+.light [style*="; color: rgb(92, 107, 101)"]{color:#586761 !important;}
+.light [style^="color:#7E8C86" i],
+.light [style*=";color:#7E8C86" i],
+.light [style*="; color:#7E8C86" i],
+.light [style^="color: rgb(126, 140, 134)"],
+.light [style*="; color: rgb(126, 140, 134)"]{color:#5C6662 !important;}
+.light [style^="color:#92A199" i],
+.light [style*=";color:#92A199" i],
+.light [style*="; color:#92A199" i],
+.light [style^="color: rgb(146, 161, 153)"],
+.light [style*="; color: rgb(146, 161, 153)"]{color:#5C6560 !important;}
+.light [style^="color:#C9A24B" i],
+.light [style*=";color:#C9A24B" i],
+.light [style*="; color:#C9A24B" i],
+.light [style^="color: rgb(201, 162, 75)"],
+.light [style*="; color: rgb(201, 162, 75)"]{color:#79612D !important;}
+.light .codehead [style^="color:#5C6B65" i],
+.light .codehead [style*=";color:#5C6B65" i]{color:#7B8782 !important;}
+.light [style^="color:#A06050" i],
+.light [style*=";color:#A06050" i]{color:#AE786A !important;}
+
+/* surfaces that stay dark in Light Mode keep their light inline text */
+.light #sideMainnetBadge{color:#C9A24B !important;}
+.light .netbtn [style^="color:#C9A24B" i],
+.light .netbtn [style*=";color:#C9A24B" i],
+.light .netbtn [style^="color: rgb(201, 162, 75)"],
+.light .netbtn [style*="; color: rgb(201, 162, 75)"]{color:#C9A24B !important;}
+.light #mainnetWarn,
+.light #mainnetDeployBanner{color:#E08A6B;}
+/* controls that are dark in Light Mode */
+.light .netbtn.active .md-live{color:#C9A24B;}
+.light .wstep.active .dot{color:#F4F1E8;}
+.light .pill.active{color:#F4F1E8;}
+.light #shareUrl::placeholder{color:#9AA7A1;}
+
+/* console lines, ABI Playground cards and wizard steps (same method: the rule that paints the text, with .light in front) */
+.light .console .line.step .msg,
+.light .fn-chip{color:#5C6560;}
+.light .console .line.ok .msg{color:#4F6957;}
+.light .console .line.warn .msg,
+.light .console .line .log-link,
+.light .fn-card h4,
+.light .fn-kind-event{color:#79612D;}
+.light .console .line.err .msg{color:#8B5642;}
+.light .pgc-warn{color:#82654D;}
+.light .fn-group,
+.light .fn-card .fn-row label{color:#626D69;}
+.light .fn-kind-read{color:#3D6E96;}
+.light .fn-kind-write{color:#B24A28;}
+.light .fn-card input::placeholder{color:#9AA7A1;}
+.light .wstep.done .dot{color:#1A0A04;}
+
+/* hover states that kept their dark-theme colours */
+.light .home-builders .home-card:hover .hc-go,
+.light .home-builders .home-card:focus-visible .hc-go{color:#1D7454;}
+.light #sec-history .hist-segbtn:hover{color:#10201A;}
+.light #sec-history .hist-link:hover{color:#79612D;}
+.light .pill:hover:not(.active){background:#DDD7C6;border-color:#8F8977;color:#10201A;}
+
+/* ======================================================================
+   SIDEBAR: collapsible rail (desktop) and drawer (phones and small tablets)
+   Width comes from one variable on .app (--sb-w): 248px expanded, 68px collapsed. The navigation items, their data-section hooks and the
+   router are unchanged; only presentation and a few classes (sb-collapsed, is-closed, drawer-open) are added.
+   ====================================================================== */
+.sb-sronly{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.brand{position:relative;margin-bottom:0;padding:22px 52px 14px 18px;gap:2px;flex:none;}
+.brand .mark{font-size:24px;}
+.brand .tag{font-size:9px;letter-spacing:.14em;}
+.mark-short{display:none;font-family:var(--display);font-size:24px;line-height:1;color:var(--paper);}
+.mark-short .dot{color:var(--signal);}
+.sb-collapse{position:absolute;top:20px;right:12px;width:28px;height:28px;display:grid;place-items:center;padding:0;border:1px solid #1F2A26;border-radius:6px;background:transparent;color:#8E9D96;cursor:pointer;transition:color .15s,border-color .15s,background .15s;}
+.sb-collapse:hover{color:var(--paper);border-color:#2E5C4D;background:#101A17;}
+.sb-collapse:focus-visible,.nav-group-toggle:focus-visible,.spine #resetSavedBtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.sb-collapse svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .19s ease;}
+.spine-body{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;padding:6px 12px 20px;scrollbar-width:thin;scrollbar-color:#2A3A34 transparent;}
+.nav-group{margin-bottom:8px;}
+.nav-group h4{margin:0;color:#7A8882;}
+.nav-group-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:var(--radius);background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-align:left;cursor:pointer;transition:color .15s;}
+.nav-group-toggle:hover{color:var(--paper);}
+.chev{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .19s ease;}
+.nav-group.is-closed .chev{transform:rotate(-90deg);}
+.nav-group-items{display:grid;gap:2px;}
+.nav-group.is-closed .nav-group-items{display:none;}
+.nav-group.is-closed.has-active .nav-group-toggle .nav-label::after{content:"";display:inline-block;width:6px;height:6px;margin-left:8px;border-radius:50%;background:var(--signal);vertical-align:middle;}
+.nav-item{position:relative;height:40px;padding:0 10px;gap:12px;}
+.nav-item .ico,.tier-widget .ico{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.nav-item .num{order:3;width:auto;min-width:18px;margin-left:auto;text-align:right;font-size:10px;letter-spacing:.04em;color:#7A8882;}
+.nav-item .nav-label{flex:1 1 auto;}
+.nav-item.active .num{color:var(--paper);}
+.light .nav-item .num{color:#5C6662;}
+.light .nav-item.active .num{color:#fff;}
+.nav-label{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.nav-item.active{box-shadow:inset 3px 0 0 var(--signal);}
+.tier-widget .theme-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:0;}
+.light .nav-item:hover{background:#DDD7C6;}
+.light .sb-collapse{color:#4A5550;border-color:#C5BFB0;}
+.light .sb-collapse:hover{color:#10201A;background:#DDD7C6;border-color:#8F8977;}
+.light .nav-group-toggle:hover{color:#10201A;}
+.light .tier-widget{background:#EDE9DF;border-color:#C5BFB0;}
+.light .spine .theme-btn{color:#3F4A45;}
+.sb-tip{position:fixed;z-index:200;max-width:260px;padding:6px 10px;border:1px solid #2E5C4D;border-radius:6px;background:#0B1110;color:#F4F1E8;font:12px/1.3 var(--mono);white-space:nowrap;pointer-events:none;opacity:0;transform:translateX(-4px);transition:opacity .12s ease,transform .12s ease;}
+.sb-tip.show{opacity:1;transform:none;}
+.sb-backdrop{display:none;}
+
+@media (min-width:981px){
+  .app.sb-ready{transition:grid-template-columns .19s ease;}
+  .app.sb-collapsed{--sb-w:68px;}
+  .sb-collapsed .brand{padding:16px 0 10px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .sb-collapsed .brand .mark,.sb-collapsed .brand .tag{display:none;}
+  .sb-collapsed .mark-short{display:block;}
+  .sb-collapsed .sb-collapse{position:static;}
+  .sb-collapsed .sb-collapse svg{transform:rotate(180deg);}
+  .sb-collapsed .spine-body{padding:4px 11px 16px;}
+  .sb-collapsed .nav-group{margin-bottom:0;}
+  .sb-collapsed .nav-group h4{height:1px;margin:8px 6px;background:#1F2A26;overflow:hidden;}
+  .sb-collapsed .nav-group[data-group="home"] h4{margin:0;background:none;}
+  .sb-collapsed .nav-group h4 > .nav-group-toggle{display:none;}
+  .sb-collapsed .nav-group.is-closed .nav-group-items{display:grid;}
+  .sb-collapsed .nav-item{justify-content:center;gap:0;padding:0;}
+  .sb-collapsed .nav-item .num{display:none;}
+  .sb-collapsed .nav-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+  .sb-collapsed .net-pill{display:none;}
+  .sb-collapsed .tier-widget{margin-top:8px;padding:0;background:none;border:0;}
+  .sb-collapsed .tier-widget .theme-btn{width:40px;height:40px;padding:0;margin:0 auto;}
+  .light .sb-collapsed .nav-group h4{background:#C5BFB0;}
+}
+@media (max-width:980px){
+  .spine{position:sticky;top:0;z-index:70;height:auto;overflow:visible;display:block;border-right:none;border-bottom:1px solid #1F2A26;}
+  .brand{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;height:52px;padding:0 16px;}
+  .brand .tag,.mark-short,.sb-collapse{display:none;}
+  .spine-body{position:fixed;top:0;left:0;bottom:0;z-index:90;width:min(300px,86vw);padding:16px 12px 24px;background:#070B0A;border-right:1px solid #1F2A26;box-shadow:12px 0 32px rgba(0,0,0,.45);transform:translateX(-104%);visibility:hidden;transition:transform .19s ease,visibility 0s linear .19s;}
+  .spine.drawer-open .spine-body{transform:none;visibility:visible;transition:transform .19s ease;}
+  .light .spine-body{background:#E8E4D9;border-color:#D0C9B8;box-shadow:12px 0 32px rgba(0,0,0,.18);}
+  .sb-backdrop{display:block;position:fixed;inset:0;z-index:65;background:rgba(5,9,8,.62);opacity:0;visibility:hidden;transition:opacity .19s ease,visibility 0s linear .19s;}
+  .sb-backdrop.show{opacity:1;visibility:visible;transition:opacity .19s ease;}
+  body.sb-lock{overflow:hidden;}
+  .sticky-top{top:53px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .app.sb-ready,.spine-body,.sb-backdrop,.sb-tip,.chev,.sb-collapse svg,.nav-item,.nav-group-toggle{transition:none;}
+}
 
 /* ---- Unified header and Home (Phase 10.4). Level 1 is .gbar (network, deployment mode, wallet), level 2 is the contract bar. The elements keep their ids; this only lays them out.
    Phase 11.3 (header-layout-stability): the level-1 bar is two horizontal regions (LEFT = network + deployment mode, RIGHT = wallet). The wallet has a FIXED width, so its content
@@ -1516,7 +1780,7 @@ body.ai-workspace #netBanner,body.ai-workspace #currentContract,body.ai-workspac
 body.ai-workspace .gbar-left{display:none;}
 body.ai-workspace .sticky-top .gbar{justify-content:flex-end;}
 /* the grid column must be allowed to shrink (minmax(0,1fr)): otherwise one long line of code in a reply widens the whole page */
-body.ai-workspace .app{grid-template-columns:280px minmax(0,1fr);}
+body.ai-workspace .app{grid-template-columns:var(--sb-w) minmax(0,1fr);}
 @media (max-width:980px){body.ai-workspace .app{grid-template-columns:minmax(0,1fr);}}
 /* main is exactly one screen tall and scrolls by itself when the chat's minimum height plus the footer does not fit, so nothing is clipped or overlapped */
 body.ai-workspace main{display:flex;flex-direction:column;height:100vh;height:100dvh;min-width:0;max-width:none;padding:0;overflow-x:hidden;overflow-y:auto;}
@@ -1542,158 +1806,3 @@ body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:360px;min
 #sec-nlai .dm-trigger:hover,#sec-nlai .dm-trigger[aria-expanded="true"]{border-color:var(--ai-emerald-dim);background:var(--ai-raise);}
 #sec-nlai .dm-trigger .dm-k{color:var(--ai-dim);}
 @media (max-width:760px){#sec-nlai .dm-trigger .dm-k{display:none;}}
-
-/* ======================================================================
-   LIGHT MODE READABILITY (WCAG AA)
-   The dark palette hardcodes its greys, gold and orange for text; on the light surfaces those read at 1:1 to 4:1. Every rule below is scoped to
-   .light, changes only the colour (or border colour / opacity) of the declaration that paints the failing text, and leaves Dark Mode untouched.
-   Targets: 4.5:1 for text, 3:1 for icons and for the box of a form field. Measured by tests/light-contrast-browser.mjs on every page and overlay.
-   ====================================================================== */
-
-/* ink: text that was paper-white on a light surface (logo, ghost buttons, headings) */
-.light .brand .mark,
-.light .btn-ghost,
-.light .head-meta b,
-.light .home-net.current,
-.light .net-panel-note b,
-.light .wstep.active .label,
-.light .lab-card code,
-.light .lab-time,
-.light .nav-toggle,
-.light .gbar .walletbar .status.connected ~ .wb-actions #connectBtn,
-.light .dc-ack{color:#10201A;}
-.light .brand .mark .dot,
-.light .page-head .eyebrow,
-.light .home-card .hc-num,
-.light .section-head .n,
-.light label .req-star{color:#A14324;}
-.light .brand .tag,
-.light .net-pill,
-.light .dm-trigger .dm-caret,
-.light .hr-main span,
-.light .home-builders .hc-cat,
-.light .net-panel-note,
-.light .dm-trigger .dm-k,
-.light .field label,
-.light #sec-history .hist-stat .hist-s,
-.light #sec-history .hist-count,
-.light .lab-card h4,
-.light .dc-row span,
-.light .dc-sub{color:#59635F;}
-.light .nav-group h4,
-.light .cc-label,
-.light .head-meta,
-.light .tcard .tag,
-.light .console-tools .console-title{color:#57635F;}
-.light .nav-item.active .num{color:#FFC0AC;}
-.light .net-pill b,
-.light.mainnet-mode .page-head h1,
-.light .md-live,
-.light a,
-.light .net-panel-note b.gold,
-.light .hist-row .haddr,
-.light .bld#sec-auditor .bld-sub b,
-.light .bld#sec-gas .bld-sub code,
-.light .bld#sec-analytics .bld-sub code,
-.light .bld#sec-tests .bld-sub code,
-.light .btn-ghost:hover{color:#79612D;}
-.light .net-banner .nb-sep{opacity:1;}
-.light .page-head p,
-.light .home-steps li,
-.light .home-card,
-.light .home-net,
-.light details.adv > summary,
-.light #sec-history .hist-intro,
-.light .lab-status,
-.light .lab-note,
-.light .lab-check,
-.light .dc-arg span{color:#606A65;}
-.light .home-builders .hc-ico{color:#269A70;}
-.light .foot-note b,
-.light .home-continue .hc-label,
-.light .tcard p,
-.light #sec-history .hist-segbtn,
-.light .hist-row .hbtn,
-.light #sec-history .hist-link,
-.light #sec-history .hist-row .htime,
-.light .pill{color:#616B66;}
-.light .wstep .dot{color:#7B8782;}
-.light #sec-nlai .ai-search,
-.light #sec-nlai .ai-ctl{border-color:#878379;}
-.light #sec-nlai .ai-convs-empty,
-.light #sec-nlai .ai-history-note,
-.light .bld.dpl-ws .dpl-chip i{color:#5E6962;}
-.light #sec-nlai .ai-steps b,
-.light .bld .bld-stages li[data-state="done"] .bld-dot,
-.light .bld .bld-n,
-.light #sec-swap .swb-stages li[data-state="done"] .swb-dot,
-.light #sec-swap .swb-n,
-.light #sec-swap .swb-count,
-.light #sec-swap .swb-pct,
-.light .bld .bld-pct,
-.light .bld .bld-count,
-.light .bld.dpl-ws .dpl-n{color:#0A6F4E;}
-.light #sec-nlai .ai-box{border-color:#8D887A;}
-.light .bld .codepanel .bld-lang,
-.light #sec-swap .codepanel .swb-lang,
-.light .bld.dpl-ws .dpl-src summary{color:#7D8883;}
-.light .bld .codepanel .bld-warn{color:#A77D2F;}
-.light .bld.dpl-ws .dpl-chip.lvl-experimental b,
-.light .bld.dpl-ws .dpl-chip.live b{color:#8C600F;}
-.light #sec-history .hist-stat .hist-k,
-.light #sec-history .hist-kind,
-.light #sec-history .hist-tx{color:#616E68;}
-.light #sec-history .hist-segbtn[aria-pressed="true"]{color:#1D7454;}
-body.light #sec-history .hist-bar select,
-body.light #sec-history .hist-bar input,
-body.light .pg-search{border-color:#8D897D;}
-.light #sec-history .hist-live{color:#87662B;}
-.light #sec-history .hist-row .hbtn-del{color:#965C48;}
-.light .dc-warn{color:#85674F;}
-.light .dc-check,
-.light .dc-type{color:#676F6B;}
-
-/* placeholders: the browser default grey is 3.9:1 on the light field fill */
-.light input::placeholder,
-.light textarea::placeholder{color:#636363;}
-
-/* Inline colours. Some text carries its colour in a style attribute (written in index.html or by app.js), which only !important can beat.
-   Each rule matches one exact inline colour, so it cannot touch anything else. */
-.light [style^="color:#5C6B65" i],
-.light [style*=";color:#5C6B65" i],
-.light [style*="; color:#5C6B65" i],
-.light [style^="color: rgb(92, 107, 101)"],
-.light [style*="; color: rgb(92, 107, 101)"]{color:#586761 !important;}
-.light [style^="color:#7E8C86" i],
-.light [style*=";color:#7E8C86" i],
-.light [style*="; color:#7E8C86" i],
-.light [style^="color: rgb(126, 140, 134)"],
-.light [style*="; color: rgb(126, 140, 134)"]{color:#5C6662 !important;}
-.light [style^="color:#92A199" i],
-.light [style*=";color:#92A199" i],
-.light [style*="; color:#92A199" i],
-.light [style^="color: rgb(146, 161, 153)"],
-.light [style*="; color: rgb(146, 161, 153)"]{color:#5C6560 !important;}
-.light [style^="color:#C9A24B" i],
-.light [style*=";color:#C9A24B" i],
-.light [style*="; color:#C9A24B" i],
-.light [style^="color: rgb(201, 162, 75)"],
-.light [style*="; color: rgb(201, 162, 75)"]{color:#79612D !important;}
-.light .codehead [style^="color:#5C6B65" i],
-.light .codehead [style*=";color:#5C6B65" i]{color:#7B8782 !important;}
-.light [style^="color:#A06050" i],
-.light [style*=";color:#A06050" i]{color:#AE786A !important;}
-
-/* surfaces that stay dark in Light Mode keep their light inline text */
-.light #sideMainnetBadge{color:#C9A24B !important;}
-.light .netbtn [style^="color:#C9A24B" i],
-.light .netbtn [style*=";color:#C9A24B" i],
-.light .netbtn [style^="color: rgb(201, 162, 75)"],
-.light .netbtn [style*="; color: rgb(201, 162, 75)"]{color:#C9A24B !important;}
-.light #mainnetWarn,
-.light #mainnetDeployBanner{color:#E08A6B;}
-/* controls that are dark in Light Mode */
-.light .netbtn.active .md-live{color:#C9A24B;}
-.light .wstep.active .dot{color:#F4F1E8;}
-.light .pill.active{color:#F4F1E8;}
-.light #shareUrl::placeholder{color:#9AA7A1;}

@@ -13,7 +13,9 @@ export async function startServer() {
   { let cur = false; for (const l of fs.readFileSync(path.join(dir, '_headers'), 'utf8').split('\n')) { if (l.startsWith('/')) { cur = l.trim() === '/*'; continue; } const m = l.match(/^\s+([A-Za-z-]+):\s*(.*)$/); if (cur && m) headers[m[1]] = m[2]; } }
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
   const server = http.createServer((req, res) => {
-    const u = req.url.split('?')[0]; const f = path.join(dir, u === '/' ? 'index.html' : u);
+    const u = req.url.split('?')[0]; let f = path.join(dir, u === '/' ? 'index.html' : u);
+    // like the host's _redirects rule: a path without a file extension is the app (client-side routes)
+    if (f.startsWith(dir) && !path.extname(f) && (!fs.existsSync(f) || fs.statSync(f).isDirectory())) f = path.join(dir, 'index.html');
     if (!f.startsWith(dir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { ...headers, 'Content-Type': types[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(fs.readFileSync(f));
   });
@@ -211,4 +213,17 @@ export const fingerprintInPage = (full) => {
   }
   let h = 2166136261; for (const l of lines) for (let i = 0; i < l.length; i++) { h ^= l.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
   return full ? { hash: h.toString(16), count: lines.length, lines } : { hash: h.toString(16), count: lines.length };
+};
+
+// Dark Mode preservation: a hash of every painted colour of every element OUTSIDE the sidebar (the sidebar was redesigned on purpose), per scenario.
+export const darkFingerprintInPage = () => {
+  const props = ['color', 'backgroundColor', 'backgroundImage', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'outlineColor', 'opacity', 'boxShadow', 'fill', 'stroke', 'textDecorationColor', 'colorScheme'];
+  let h = 2166136261, n = 0;
+  for (const e of document.querySelectorAll('html, body, body *')) {
+    if (['SCRIPT', 'STYLE'].includes(e.tagName)) continue;
+    if (e.closest('.spine') || e.classList.contains('sb-backdrop') || e.classList.contains('sb-tip')) continue;
+    const cs = getComputedStyle(e); const l = e.tagName + (e.id ? '#' + e.id : '') + '|' + props.map((p) => cs[p]).join('|'); n++;
+    for (let i = 0; i < l.length; i++) { h ^= l.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  }
+  return h.toString(16) + ':' + n;
 };

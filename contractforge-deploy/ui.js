@@ -168,6 +168,7 @@ function uiSyncCurrent(){
   document.querySelectorAll('.nav-item').forEach(el => {
     if(el.classList.contains('active')) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
   });
+  if(typeof sbSyncActive === 'function') sbSyncActive();
 }
 
 function initUiAccessibility(){
@@ -641,15 +642,117 @@ function initMobileMenu(){
   const brand = document.querySelector('.brand');
   const nav = document.querySelector('.nav');
   if(!brand || !nav || document.getElementById('navToggle')) return;
+  const spine = document.getElementById('sidebar');
+  const panel = document.getElementById('spineBody') || nav;
   const btn = document.createElement('button');
   btn.type = 'button'; btn.id = 'navToggle'; btn.className = 'nav-toggle';
   btn.setAttribute('aria-controls', 'mainNav'); btn.setAttribute('aria-expanded', 'false');
   btn.textContent = 'Menu';
   nav.id = 'mainNav';
   brand.appendChild(btn);
-  const set = (open) => { nav.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? 'Close' : 'Menu'; };
-  btn.addEventListener('click', () => set(!nav.classList.contains('open')));
-  nav.addEventListener('click', (e) => { if(e.target.closest('.nav-item')) set(false); });
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sb-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(backdrop);
+  const main = document.querySelector('main');
+  const mq = window.matchMedia ? window.matchMedia(SB_MQ) : null;
+  const isOpen = () => nav.classList.contains('open');
+  // On a phone the open menu is a modal drawer: the page behind it is inert, Tab stays inside it, Escape and a tap outside close it.
+  const set = (open, restoreFocus) => {
+    nav.classList.toggle('open', open); btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? 'Close' : 'Menu';
+    if(spine) spine.classList.toggle('drawer-open', open);
+    backdrop.classList.toggle('show', open);
+    document.body.classList.toggle('sb-lock', open);
+    if(main) main.inert = open;
+    brand.inert = open;
+    if(open){ panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Navigation'); }
+    else { panel.removeAttribute('role'); panel.removeAttribute('aria-modal'); panel.removeAttribute('aria-label'); }
+    sbHideTip();
+    if(open){ const first = nav.querySelector('.nav-item.active') || nav.querySelector('.nav-item'); if(first && first.focus) first.focus(); }
+    else if(restoreFocus && btn.focus) btn.focus();
+  };
+  btn.addEventListener('click', () => set(!isOpen(), true));
+  nav.addEventListener('click', (e) => { if(e.target.closest('.nav-item')) set(false, true); });
+  backdrop.addEventListener('click', () => set(false, true));
+  document.addEventListener('keydown', (e) => {
+    if(!isOpen()) return;
+    if(e.key === 'Escape'){ e.preventDefault(); set(false, true); return; }
+    if(e.key !== 'Tab') return;
+    const f = [...panel.querySelectorAll('a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el => el.getClientRects().length);
+    if(!f.length) return;
+    const a = document.activeElement;
+    if(!panel.contains(a)){ e.preventDefault(); f[0].focus(); }
+    else if(e.shiftKey && a === f[0]){ e.preventDefault(); f[f.length - 1].focus(); }
+    else if(!e.shiftKey && a === f[f.length - 1]){ e.preventDefault(); f[0].focus(); }
+  });
+  if(mq && mq.addEventListener) mq.addEventListener('change', () => { if(!mq.matches && isOpen()) set(false, false); });
+}
+
+/* ---- Sidebar: collapsible rail on desktop. One saved preference, in its own versioned key; nothing else reads or writes it. ---- */
+const SB_KEY = 'cf_sidebar_v1';
+const SB_MQ = '(max-width:980px)';
+function sbRead(){
+  try{ const o = JSON.parse(localStorage.getItem(SB_KEY) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; }
+  catch(_){ return {}; }
+}
+function sbWrite(o){ try{ localStorage.setItem(SB_KEY, JSON.stringify(o)); }catch(_){ /* storage unavailable: the preference just is not kept */ } }
+function sbIsRail(){
+  const app = document.querySelector('.app');
+  return !!(app && app.classList.contains('sb-collapsed')) && !(window.matchMedia && window.matchMedia(SB_MQ).matches);
+}
+let sbTip = null;
+function sbHideTip(){ if(sbTip) sbTip.classList.remove('show'); }
+function sbShowTip(el){
+  if(!sbIsRail()) return;
+  const lab = el.querySelector && el.querySelector('.nav-label');
+  const text = (lab ? lab.textContent : el.getAttribute('aria-label') || '').trim();
+  if(!text) return;
+  if(!sbTip){ sbTip = document.createElement('div'); sbTip.className = 'sb-tip'; sbTip.id = 'sbTip'; sbTip.setAttribute('role', 'tooltip'); document.body.appendChild(sbTip); }
+  sbTip.textContent = text;
+  const r = el.getBoundingClientRect();
+  sbTip.style.left = Math.round(r.right + 10) + 'px';
+  sbTip.style.top = Math.round(r.top + r.height / 2 - sbTip.offsetHeight / 2) + 'px';
+  sbTip.classList.add('show');
+}
+/* the group that holds the open page gets a dot when it is folded, so the current page is never lost */
+function sbSyncActive(){
+  document.querySelectorAll('.nav-group').forEach(g => g.classList.toggle('has-active', !!g.querySelector('.nav-item.active')));
+}
+function initSidebar(){
+  const app = document.querySelector('.app'), spine = document.getElementById('sidebar'), btn = document.getElementById('sbCollapse');
+  if(!app || !spine || !btn || spine.dataset.sbReady) return;
+  spine.dataset.sbReady = '1';
+  const saved = sbRead();
+  const closed = (saved.closed && typeof saved.closed === 'object' && !Array.isArray(saved.closed)) ? saved.closed : {};
+  const save = () => sbWrite({ v: 1, collapsed: app.classList.contains('sb-collapsed'), closed });
+  const setCollapsed = (c, persist) => {
+    app.classList.toggle('sb-collapsed', c);
+    const label = c ? 'Expand sidebar' : 'Collapse sidebar';
+    btn.setAttribute('aria-expanded', String(!c)); btn.setAttribute('aria-label', label);
+    sbHideTip();
+    if(persist) save();
+  };
+  const setGroup = (g, isClosed, persist) => {
+    g.classList.toggle('is-closed', isClosed);
+    const t = g.querySelector('.nav-group-toggle'); if(t) t.setAttribute('aria-expanded', String(!isClosed));
+    if(persist){ const k = g.dataset.group; if(isClosed) closed[k] = true; else delete closed[k]; save(); }
+  };
+  setCollapsed(saved.collapsed === true, false);
+  document.querySelectorAll('.nav-group[data-group]').forEach(g => { if(g.querySelector('.nav-group-toggle')) setGroup(g, closed[g.dataset.group] === true, false); });
+  sbSyncActive();
+  btn.addEventListener('click', () => setCollapsed(!app.classList.contains('sb-collapsed'), true));
+  spine.addEventListener('click', (e) => {
+    const t = e.target.closest('.nav-group-toggle'); if(!t) return;
+    const g = t.closest('.nav-group'); setGroup(g, !g.classList.contains('is-closed'), true);
+  });
+  const tipTarget = (e) => (e.target.closest ? e.target.closest('.spine .nav-item, .spine .sb-collapse, .spine #resetSavedBtn') : null);
+  document.addEventListener('mouseover', (e) => { const t = tipTarget(e); if(t) sbShowTip(t); });
+  document.addEventListener('mouseout', (e) => { if(tipTarget(e)) sbHideTip(); });
+  document.addEventListener('focusin', (e) => { const t = tipTarget(e); if(t) sbShowTip(t); else sbHideTip(); });
+  document.addEventListener('focusout', (e) => { if(tipTarget(e)) sbHideTip(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') sbHideTip(); });
+  const body = document.getElementById('spineBody'); if(body) body.addEventListener('scroll', sbHideTip);
+  // let the width settle without animating the very first paint
+  (window.requestAnimationFrame || setTimeout)(() => app.classList.add('sb-ready'));
 }
 
 /* ---- Deploy results card ---- */
@@ -796,6 +899,7 @@ if(typeof document !== 'undefined'){
   initHome();
   initFieldValidation();
   initMobileMenu();
+  initSidebar();
   initConsoleTools();
   initSession();
   renderCurrentContract();

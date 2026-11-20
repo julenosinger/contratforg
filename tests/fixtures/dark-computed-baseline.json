@@ -1,344 +1,113 @@
 {
- "390": {
-  "home": {
-   "hash": "9d066531",
-   "count": 2495
-  },
-  "home-testnet": {
-   "hash": "e97c0881",
-   "count": 2604
-  },
-  "home-connected": {
-   "hash": "51eaa157",
-   "count": 2605
-  },
-  "net-panel": {
-   "hash": "9d066531",
-   "count": 2495
-  },
-  "wizard": {
-   "hash": "b1f3eda9",
-   "count": 2495
-  },
-  "nlai": {
-   "hash": "b3fe4ef5",
-   "count": 2495
-  },
-  "simple": {
-   "hash": "d61bf7c6",
-   "count": 2590
-  },
-  "simple-dao-error": {
-   "hash": "a49e6aff",
-   "count": 2616
-  },
-  "swap": {
-   "hash": "6b5a0027",
-   "count": 2536
-  },
-  "treasury": {
-   "hash": "75e82939",
-   "count": 2534
-  },
-  "vault": {
-   "hash": "eeb79b83",
-   "count": 2536
-  },
-  "multisend": {
-   "hash": "6c7c9d7f",
-   "count": 2536
-  },
-  "crosschain": {
-   "hash": "481d2b9b",
-   "count": 2560
-  },
-  "deploy": {
-   "hash": "ee9f671d",
-   "count": 2608
-  },
-  "history": {
-   "hash": "9a64e69c",
-   "count": 2495
-  },
-  "verify": {
-   "hash": "17dd0bb1",
-   "count": 2495
-  },
-  "share": {
-   "hash": "1a0d3f7",
-   "count": 2594
-  },
-  "lab": {
-   "hash": "77647691",
-   "count": 2495
-  },
-  "auditor": {
-   "hash": "41590d71",
-   "count": 2495
-  },
-  "playground": {
-   "hash": "70af9889",
-   "count": 2495
-  },
-  "gas": {
-   "hash": "74410e79",
-   "count": 2495
-  },
-  "analytics": {
-   "hash": "be53de81",
-   "count": 2495
-  },
-  "tests": {
-   "hash": "8fe50741",
-   "count": 2495
-  },
-  "mode-popover": {
-   "hash": "903720c3",
-   "count": 2495
-  },
-  "actions-menu": {
-   "hash": "82d10b70",
-   "count": 2590
-  },
-  "modal-mainnet": {
-   "hash": "a5a9dbc9",
-   "count": 2632
-  },
-  "modal-gate": {
-   "hash": "d7ba6580",
-   "count": 2518
-  },
-  "modal-action": {
-   "hash": "67838092",
-   "count": 2509
-  }
- },
- "768": {
-  "home": {
-   "hash": "dedd436a",
-   "count": 2495
-  },
-  "home-testnet": {
-   "hash": "e600a7c2",
-   "count": 2604
-  },
-  "home-connected": {
-   "hash": "1384593e",
-   "count": 2605
-  },
-  "net-panel": {
-   "hash": "dedd436a",
-   "count": 2495
-  },
-  "wizard": {
-   "hash": "114ad962",
-   "count": 2495
-  },
-  "nlai": {
-   "hash": "9a22e8f6",
-   "count": 2495
-  },
-  "simple": {
-   "hash": "85e9dcc1",
-   "count": 2590
-  },
-  "simple-dao-error": {
-   "hash": "11374ac8",
-   "count": 2616
-  },
-  "swap": {
-   "hash": "cc1a79b0",
-   "count": 2536
-  },
-  "treasury": {
-   "hash": "343acab2",
-   "count": 2534
-  },
-  "vault": {
-   "hash": "d452eb54",
-   "count": 2536
-  },
-  "multisend": {
-   "hash": "aeaa3d48",
-   "count": 2536
-  },
-  "crosschain": {
-   "hash": "7db8908c",
-   "count": 2560
-  },
-  "deploy": {
-   "hash": "36ab897e",
-   "count": 2608
-  },
-  "history": {
-   "hash": "e24a74d7",
-   "count": 2495
-  },
-  "verify": {
-   "hash": "6fea9ea",
-   "count": 2495
-  },
-  "share": {
-   "hash": "6e3f9440",
-   "count": 2594
-  },
-  "lab": {
-   "hash": "8f14534a",
-   "count": 2495
-  },
-  "auditor": {
-   "hash": "53eadaa",
-   "count": 2495
-  },
-  "playground": {
-   "hash": "db18ec42",
-   "count": 2495
-  },
-  "gas": {
-   "hash": "ebf4bdf2",
-   "count": 2495
-  },
-  "analytics": {
-   "hash": "6ef4cbfa",
-   "count": 2495
-  },
-  "tests": {
-   "hash": "751388ba",
-   "count": 2495
-  },
-  "mode-popover": {
-   "hash": "c2211e6",
-   "count": 2495
-  },
-  "actions-menu": {
-   "hash": "e33223e3",
-   "count": 2590
-  },
-  "modal-mainnet": {
-   "hash": "3edb16dc",
-   "count": 2632
-  },
-  "modal-gate": {
-   "hash": "d8c8db8b",
-   "count": 2518
-  },
-  "modal-action": {
-   "hash": "32eb8d75",
-   "count": 2509
-  }
- },
- "1440": {
-  "home": {
-   "hash": "7a4d3750",
-   "count": 2495
-  },
-  "home-testnet": {
-   "hash": "33f4ca74",
-   "count": 2604
-  },
-  "home-connected": {
-   "hash": "33eef570",
-   "count": 2605
-  },
-  "net-panel": {
-   "hash": "7a4d3750",
-   "count": 2495
-  },
-  "wizard": {
-   "hash": "aabcdfa0",
-   "count": 2495
-  },
-  "nlai": {
-   "hash": "f355df6c",
-   "count": 2495
-  },
-  "simple": {
-   "hash": "ea33f787",
-   "count": 2590
-  },
-  "simple-dao-error": {
-   "hash": "da4e8342",
-   "count": 2616
-  },
-  "swap": {
-   "hash": "f16e8756",
-   "count": 2536
-  },
-  "treasury": {
-   "hash": "fe8e1f5c",
-   "count": 2534
-  },
-  "vault": {
-   "hash": "a74743c2",
-   "count": 2536
-  },
-  "multisend": {
-   "hash": "bb31035e",
-   "count": 2536
-  },
-  "crosschain": {
-   "hash": "5760b6c6",
-   "count": 2560
-  },
-  "deploy": {
-   "hash": "9420dcd0",
-   "count": 2608
-  },
-  "history": {
-   "hash": "53005635",
-   "count": 2495
-  },
-  "verify": {
-   "hash": "403d4cc8",
-   "count": 2495
-  },
-  "share": {
-   "hash": "7183a67e",
-   "count": 2594
-  },
-  "lab": {
-   "hash": "e3b27fd8",
-   "count": 2495
-  },
-  "auditor": {
-   "hash": "f15a6340",
-   "count": 2495
-  },
-  "playground": {
-   "hash": "584f830",
-   "count": 2495
-  },
-  "gas": {
-   "hash": "d8682c68",
-   "count": 2495
-  },
-  "analytics": {
-   "hash": "323379a8",
-   "count": 2495
-  },
-  "tests": {
-   "hash": "d687b770",
-   "count": 2495
-  },
-  "mode-popover": {
-   "hash": "5e795264",
-   "count": 2495
-  },
-  "actions-menu": {
-   "hash": "a0af46c9",
-   "count": 2590
-  },
-  "modal-mainnet": {
-   "hash": "b77813e6",
-   "count": 2632
-  },
-  "modal-gate": {
-   "hash": "bd79e595",
-   "count": 2518
-  },
-  "modal-action": {
-   "hash": "a9de2143",
-   "count": 2509
+ "note": "Hash of every painted colour (color, backgrounds, borders, outline, opacity, shadow, fill, stroke) of every element outside the sidebar, per scenario and viewport, in Dark Mode, captured before the Light Mode contrast and sidebar work. Regenerate only for an intentional Dark Mode change.",
+ "hashes": {
+  "390": {
+   "home": "75b7a821:2384",
+   "home-testnet": "754a020b:2488",
+   "home-connected": "4b76e5cb:2489",
+   "net-panel": "75b7a821:2384",
+   "wizard": "75b7a821:2384",
+   "nlai": "7feaab05:2384",
+   "simple": "90f024:2474",
+   "simple-dao-error": "f3b8c8aa:2499",
+   "swap": "5dd31e1b:2425",
+   "treasury": "99d53a1f:2423",
+   "vault": "c487f74f:2425",
+   "multisend": "a9660be9:2425",
+   "crosschain": "413c8827:2449",
+   "deploy": "a355480f:2492",
+   "history": "3e051dc4:2384",
+   "verify": "75b7a821:2384",
+   "share": "f8bebfb:2478",
+   "lab": "75b7a821:2384",
+   "auditor": "75b7a821:2384",
+   "playground": "75b7a821:2384",
+   "gas": "75b7a821:2384",
+   "analytics": "75b7a821:2384",
+   "tests": "75b7a821:2384",
+   "wizard-step": "aebac821:2396",
+   "simple-open": "87c9c81a:2510",
+   "builders-open": "3e051dc4:2384",
+   "field-error": "27a17919:2474",
+   "deploy-console": "b19eac9e:2511",
+   "playground-loaded": "8f2568d8:2474",
+   "mode-popover": "387172d5:2384",
+   "actions-menu": "90f024:2474",
+   "modal-mainnet": "e6ca1bad:2515",
+   "modal-gate": "6f247c7e:2405",
+   "modal-action": "f5f8c6e2:2398"
+  },
+  "768": {
+   "home": "cf8aac98:2384",
+   "home-testnet": "40c43f2a:2488",
+   "home-connected": "74c86d58:2489",
+   "net-panel": "cf8aac98:2384",
+   "wizard": "cf8aac98:2384",
+   "nlai": "8938e754:2384",
+   "simple": "e03a5089:2474",
+   "simple-dao-error": "2d298d7:2499",
+   "swap": "d77deeb2:2425",
+   "treasury": "1bdd190e:2423",
+   "vault": "382dc0be:2425",
+   "multisend": "5f901400:2425",
+   "crosschain": "c7fb9fd6:2449",
+   "deploy": "3c45307e:2492",
+   "history": "19856429:2384",
+   "verify": "cf8aac98:2384",
+   "share": "f80a3612:2478",
+   "lab": "cf8aac98:2384",
+   "auditor": "cf8aac98:2384",
+   "playground": "cf8aac98:2384",
+   "gas": "cf8aac98:2384",
+   "analytics": "cf8aac98:2384",
+   "tests": "cf8aac98:2384",
+   "wizard-step": "107dcc98:2396",
+   "simple-open": "d6102f07:2510",
+   "builders-open": "19856429:2384",
+   "field-error": "80062970:2474",
+   "deploy-console": "ad2ac18f:2511",
+   "playground-loaded": "cdecd25:2474",
+   "mode-popover": "87e025a4:2384",
+   "actions-menu": "e03a5089:2474",
+   "modal-mainnet": "ee0a74c:2515",
+   "modal-gate": "f1a6d6e3:2405",
+   "modal-action": "eefec953:2398"
+  },
+  "1440": {
+   "home": "cf8aac98:2384",
+   "home-testnet": "40c43f2a:2488",
+   "home-connected": "74c86d58:2489",
+   "net-panel": "cf8aac98:2384",
+   "wizard": "cf8aac98:2384",
+   "nlai": "8938e754:2384",
+   "simple": "e03a5089:2474",
+   "simple-dao-error": "2d298d7:2499",
+   "swap": "d77deeb2:2425",
+   "treasury": "1bdd190e:2423",
+   "vault": "382dc0be:2425",
+   "multisend": "5f901400:2425",
+   "crosschain": "c7fb9fd6:2449",
+   "deploy": "3c45307e:2492",
+   "history": "19856429:2384",
+   "verify": "cf8aac98:2384",
+   "share": "f80a3612:2478",
+   "lab": "cf8aac98:2384",
+   "auditor": "cf8aac98:2384",
+   "playground": "cf8aac98:2384",
+   "gas": "cf8aac98:2384",
+   "analytics": "cf8aac98:2384",
+   "tests": "cf8aac98:2384",
+   "wizard-step": "107dcc98:2396",
+   "simple-open": "d6102f07:2510",
+   "builders-open": "19856429:2384",
+   "field-error": "80062970:2474",
+   "deploy-console": "ad2ac18f:2511",
+   "playground-loaded": "cdecd25:2474",
+   "mode-popover": "87e025a4:2384",
+   "actions-menu": "e03a5089:2474",
+   "modal-mainnet": "ee0a74c:2515",
+   "modal-gate": "f1a6d6e3:2405",
+   "modal-action": "eefec953:2398"
   }
  }
 }
