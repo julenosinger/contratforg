@@ -448,7 +448,7 @@ a:hover{border-bottom-color:var(--gold);}
 .light .nav-item.active{background:#2E5C4D!important;color:#fff!important;}
 .light .net-pill{border-color:#D0C9B8!important;background:#EDE9DF!important;}
 .light .walletbar,.light .form-panel,.light .tcard,.light .fn-card,.light .hist-row,.light .gas-card,.light .share-box{background:#F8F5EC!important;border-color:#D0C9B8!important;}
-.light .field input,.light .field select,.light .field textarea{background:#EDE9DF!important;border-color:#C5BFB0!important;color:#0B1110!important;}
+.light .field input,.light .field select,.light .field textarea{background:#EDE9DF!important;border-color:#8F8977!important;color:#0B1110!important;}
 .light .codepanel{background:#EDE9DF!important;border-color:#D0C9B8!important;}
 .light .codepanel pre{color:#2A3830!important;}
 .light .console,.light .pay-log{background:#EDE9DF!important;color:#4A5550!important;}
@@ -1542,3 +1542,158 @@ body.ai-workspace #sec-nlai .ai-chat{flex:1 1 0;height:auto;min-height:360px;min
 #sec-nlai .dm-trigger:hover,#sec-nlai .dm-trigger[aria-expanded="true"]{border-color:var(--ai-emerald-dim);background:var(--ai-raise);}
 #sec-nlai .dm-trigger .dm-k{color:var(--ai-dim);}
 @media (max-width:760px){#sec-nlai .dm-trigger .dm-k{display:none;}}
+
+/* ======================================================================
+   LIGHT MODE READABILITY (WCAG AA)
+   The dark palette hardcodes its greys, gold and orange for text; on the light surfaces those read at 1:1 to 4:1. Every rule below is scoped to
+   .light, changes only the colour (or border colour / opacity) of the declaration that paints the failing text, and leaves Dark Mode untouched.
+   Targets: 4.5:1 for text, 3:1 for icons and for the box of a form field. Measured by tests/light-contrast-browser.mjs on every page and overlay.
+   ====================================================================== */
+
+/* ink: text that was paper-white on a light surface (logo, ghost buttons, headings) */
+.light .brand .mark,
+.light .btn-ghost,
+.light .head-meta b,
+.light .home-net.current,
+.light .net-panel-note b,
+.light .wstep.active .label,
+.light .lab-card code,
+.light .lab-time,
+.light .nav-toggle,
+.light .gbar .walletbar .status.connected ~ .wb-actions #connectBtn,
+.light .dc-ack{color:#10201A;}
+.light .brand .mark .dot,
+.light .page-head .eyebrow,
+.light .home-card .hc-num,
+.light .section-head .n,
+.light label .req-star{color:#A14324;}
+.light .brand .tag,
+.light .net-pill,
+.light .dm-trigger .dm-caret,
+.light .hr-main span,
+.light .home-builders .hc-cat,
+.light .net-panel-note,
+.light .dm-trigger .dm-k,
+.light .field label,
+.light #sec-history .hist-stat .hist-s,
+.light #sec-history .hist-count,
+.light .lab-card h4,
+.light .dc-row span,
+.light .dc-sub{color:#59635F;}
+.light .nav-group h4,
+.light .cc-label,
+.light .head-meta,
+.light .tcard .tag,
+.light .console-tools .console-title{color:#57635F;}
+.light .nav-item.active .num{color:#FFC0AC;}
+.light .net-pill b,
+.light.mainnet-mode .page-head h1,
+.light .md-live,
+.light a,
+.light .net-panel-note b.gold,
+.light .hist-row .haddr,
+.light .bld#sec-auditor .bld-sub b,
+.light .bld#sec-gas .bld-sub code,
+.light .bld#sec-analytics .bld-sub code,
+.light .bld#sec-tests .bld-sub code,
+.light .btn-ghost:hover{color:#79612D;}
+.light .net-banner .nb-sep{opacity:1;}
+.light .page-head p,
+.light .home-steps li,
+.light .home-card,
+.light .home-net,
+.light details.adv > summary,
+.light #sec-history .hist-intro,
+.light .lab-status,
+.light .lab-note,
+.light .lab-check,
+.light .dc-arg span{color:#606A65;}
+.light .home-builders .hc-ico{color:#269A70;}
+.light .foot-note b,
+.light .home-continue .hc-label,
+.light .tcard p,
+.light #sec-history .hist-segbtn,
+.light .hist-row .hbtn,
+.light #sec-history .hist-link,
+.light #sec-history .hist-row .htime,
+.light .pill{color:#616B66;}
+.light .wstep .dot{color:#7B8782;}
+.light #sec-nlai .ai-search,
+.light #sec-nlai .ai-ctl{border-color:#878379;}
+.light #sec-nlai .ai-convs-empty,
+.light #sec-nlai .ai-history-note,
+.light .bld.dpl-ws .dpl-chip i{color:#5E6962;}
+.light #sec-nlai .ai-steps b,
+.light .bld .bld-stages li[data-state="done"] .bld-dot,
+.light .bld .bld-n,
+.light #sec-swap .swb-stages li[data-state="done"] .swb-dot,
+.light #sec-swap .swb-n,
+.light #sec-swap .swb-count,
+.light #sec-swap .swb-pct,
+.light .bld .bld-pct,
+.light .bld .bld-count,
+.light .bld.dpl-ws .dpl-n{color:#0A6F4E;}
+.light #sec-nlai .ai-box{border-color:#8D887A;}
+.light .bld .codepanel .bld-lang,
+.light #sec-swap .codepanel .swb-lang,
+.light .bld.dpl-ws .dpl-src summary{color:#7D8883;}
+.light .bld .codepanel .bld-warn{color:#A77D2F;}
+.light .bld.dpl-ws .dpl-chip.lvl-experimental b,
+.light .bld.dpl-ws .dpl-chip.live b{color:#8C600F;}
+.light #sec-history .hist-stat .hist-k,
+.light #sec-history .hist-kind,
+.light #sec-history .hist-tx{color:#616E68;}
+.light #sec-history .hist-segbtn[aria-pressed="true"]{color:#1D7454;}
+body.light #sec-history .hist-bar select,
+body.light #sec-history .hist-bar input,
+body.light .pg-search{border-color:#8D897D;}
+.light #sec-history .hist-live{color:#87662B;}
+.light #sec-history .hist-row .hbtn-del{color:#965C48;}
+.light .dc-warn{color:#85674F;}
+.light .dc-check,
+.light .dc-type{color:#676F6B;}
+
+/* placeholders: the browser default grey is 3.9:1 on the light field fill */
+.light input::placeholder,
+.light textarea::placeholder{color:#636363;}
+
+/* Inline colours. Some text carries its colour in a style attribute (written in index.html or by app.js), which only !important can beat.
+   Each rule matches one exact inline colour, so it cannot touch anything else. */
+.light [style^="color:#5C6B65" i],
+.light [style*=";color:#5C6B65" i],
+.light [style*="; color:#5C6B65" i],
+.light [style^="color: rgb(92, 107, 101)"],
+.light [style*="; color: rgb(92, 107, 101)"]{color:#586761 !important;}
+.light [style^="color:#7E8C86" i],
+.light [style*=";color:#7E8C86" i],
+.light [style*="; color:#7E8C86" i],
+.light [style^="color: rgb(126, 140, 134)"],
+.light [style*="; color: rgb(126, 140, 134)"]{color:#5C6662 !important;}
+.light [style^="color:#92A199" i],
+.light [style*=";color:#92A199" i],
+.light [style*="; color:#92A199" i],
+.light [style^="color: rgb(146, 161, 153)"],
+.light [style*="; color: rgb(146, 161, 153)"]{color:#5C6560 !important;}
+.light [style^="color:#C9A24B" i],
+.light [style*=";color:#C9A24B" i],
+.light [style*="; color:#C9A24B" i],
+.light [style^="color: rgb(201, 162, 75)"],
+.light [style*="; color: rgb(201, 162, 75)"]{color:#79612D !important;}
+.light .codehead [style^="color:#5C6B65" i],
+.light .codehead [style*=";color:#5C6B65" i]{color:#7B8782 !important;}
+.light [style^="color:#A06050" i],
+.light [style*=";color:#A06050" i]{color:#AE786A !important;}
+
+/* surfaces that stay dark in Light Mode keep their light inline text */
+.light #sideMainnetBadge{color:#C9A24B !important;}
+.light .netbtn [style^="color:#C9A24B" i],
+.light .netbtn [style*=";color:#C9A24B" i],
+.light .netbtn [style^="color: rgb(201, 162, 75)"],
+.light .netbtn [style*="; color: rgb(201, 162, 75)"]{color:#C9A24B !important;}
+.light #mainnetWarn,
+.light #mainnetDeployBanner{color:#E08A6B;}
+/* controls that are dark in Light Mode */
+.light .netbtn.active .md-live{color:#C9A24B;}
+.light .wstep.active .dot{color:#F4F1E8;}
+.light .pill.active{color:#F4F1E8;}
+.light #shareUrl::placeholder{color:#9AA7A1;}
