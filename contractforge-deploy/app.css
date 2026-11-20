@@ -854,9 +854,18 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 .gbar .gbar-left{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;min-width:0;flex:1 1 auto;}
 .sticky-top .gbar .walletbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:nowrap;flex:0 0 430px;margin:0 0 0 auto;min-width:0;padding:0;border:0;border-radius:0;background:none;backdrop-filter:none;}
 .gbar .walletbar .wb-actions{display:contents;}
+/* the theme toggle adds 46px to the wallet row: where the bar has room (it wraps below ~1210px, a viewport decision) the wallet region grows by the same amount so the wallet status keeps its full text */
+@media (min-width:1240px){.sticky-top .gbar .walletbar{flex-basis:476px;}}
 .gbar .walletbar #balanceBadge{order:1;display:block;align-self:center;min-width:0;max-width:120px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:8px 12px;border:1px solid #2A3A34;border-radius:12px;background:#0B1210;color:#DCE5E0;font-size:12px;letter-spacing:.04em;text-transform:none;}
 .gbar .walletbar .status{order:2;min-width:0;max-width:176px;overflow:hidden;white-space:nowrap;padding:8px 12px;border:1px solid #1F2D28;border-radius:12px;background:#0B1210;font-size:12px;}
-.gbar .walletbar #connectBtn{order:3;flex:0 0 auto;white-space:nowrap;padding:9px 16px;border-radius:12px;font-weight:600;background:var(--signal);border-color:transparent;color:#1a0a04;}
+.gbar .walletbar #themeBtn{order:3;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:1px solid #2A3A34;border-radius:12px;background:#0B1210;color:#DCE5E0;cursor:pointer;transition:border-color .15s,color .15s;}
+.gbar .walletbar #themeBtn:hover{border-color:var(--gold);color:var(--gold);}
+.gbar .walletbar #themeBtn:focus-visible{outline:2px solid #34D399;outline-offset:2px;}
+.gbar .walletbar #themeBtn .ti-moon{display:none;}
+.light .gbar .walletbar #themeBtn .ti-sun{display:none;}
+.light .gbar .walletbar #themeBtn .ti-moon{display:block;}
+.light .gbar .walletbar #themeBtn{background:#F8F5EC;border-color:#D0C9B8;color:#26302B;}
+.gbar .walletbar #connectBtn{order:4;flex:0 0 auto;white-space:nowrap;padding:9px 16px;border-radius:12px;font-weight:600;background:var(--signal);border-color:transparent;color:#1a0a04;}
 .gbar .walletbar .status.connected ~ .wb-actions #connectBtn{background:transparent;border-color:#2A3A34;color:#DCE5E0;}
 .gbar .walletbar #connectBtn:focus-visible,.gbar .nb-change:focus-visible{outline:2px solid #34D399;outline-offset:2px;}
 .gbar .dm-mount .dm-trigger{min-height:44px;border-radius:12px;max-width:120px;}
@@ -893,7 +902,7 @@ label .req-star{color:#FF6A39;margin-left:3px;}
 .light .cc-menulist{background:#FBF9F2;border-color:#D0C9B8;}
 .light .cc-menulist button{color:#26302B;}
 @media (max-width:900px){.sticky-top .gbar{padding:8px 16px;}.sticky-top .cc-bar{padding:8px 16px;}}
-@media (max-width:640px){.gbar .gbar-left{width:100%;}.gbar .gbar-left .net-banner{flex:1 1 auto;min-width:0;max-width:none;}.sticky-top .gbar .walletbar{width:100%;flex:0 0 auto;margin-left:0;justify-content:space-between;flex-wrap:wrap;}.gbar .walletbar .status{order:1;flex:1 1 100%;max-width:none;min-width:0;}.gbar .walletbar #balanceBadge{order:2;max-width:140px;min-width:0;flex:0 1 auto;}.gbar .walletbar #connectBtn{order:3;}.cc-actions{width:100%;justify-content:space-between;}.cc-actions .btn-primary{flex:1;justify-content:center;}.cc-menulist{left:0;right:auto;}}
+@media (max-width:640px){.gbar .gbar-left{width:100%;}.gbar .gbar-left .net-banner{flex:1 1 auto;min-width:0;max-width:none;}.sticky-top .gbar .walletbar{width:100%;flex:0 0 auto;margin-left:0;justify-content:space-between;flex-wrap:wrap;}.gbar .walletbar .status{order:1;flex:1 1 100%;max-width:none;min-width:0;}.gbar .walletbar #balanceBadge{order:2;max-width:140px;min-width:0;flex:0 1 auto;}.gbar .walletbar #themeBtn{order:3;width:44px;height:44px;}.gbar .walletbar #connectBtn{order:4;}.cc-actions{width:100%;justify-content:space-between;}.cc-actions .btn-primary{flex:1;justify-content:center;}.cc-menulist{left:0;right:auto;}}
 /* Home */
 .home-hero{padding:26px 28px;margin-bottom:22px;border:1px solid #1F2D28;border-radius:16px;background:linear-gradient(135deg,#0E1715 0%,#0A100E 70%);}
 .home-hero h1{font-size:clamp(28px,4vw,42px);}

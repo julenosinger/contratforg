@@ -71,8 +71,6 @@
       <div class="row"><span>gas token</span><b id="sidegas">USDC</b></div>
     </div>
     <div class="tier-widget">
-      <div class="tier-label">Appearance</div>
-      <button class="theme-btn" id="themeBtn" data-onclick="toggleTheme()">☀ Light mode</button>
       <button class="theme-btn" id="resetSavedBtn" type="button" style="margin-top:8px;">Reset saved data</button>
     </div>
   </aside>
@@ -93,6 +91,7 @@
           </div>
           <div class="wb-actions">
             <span class="badge" id="balanceBadge">— USDC</span>
+            <button type="button" class="theme-toggle" id="themeBtn" data-onclick="toggleTheme()" aria-label="Switch to light mode" title="Switch to light mode"><svg class="ti-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ti-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
             <button class="btn btn-ghost" id="connectBtn" data-onclick="connectWallet()">Connect Wallet</button>
           </div>
         </div>

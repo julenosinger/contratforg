@@ -43,7 +43,7 @@ const NETS = (a) => JSON.parse(a.ev('JSON.stringify(Object.entries(NETWORKS).map
   ok(!!d.querySelector('#globalBar > .gbar-left > #netBanner') && !!d.querySelector('#globalBar > .gbar-left > #gbarMode.dm-mount') && !!d.querySelector('#globalBar > .walletbar > #walletStatus') && !!d.querySelector('#globalBar #balanceBadge') && !!d.querySelector('#globalBar #connectBtn'), 'level 1 holds the network card, the deployment mode and the wallet controls');
   eq(['netBanner', 'netPanel', 'netChangeBtn', 'currentContract', 'walletStatus', 'balanceBadge', 'connectBtn', 'globalBar'].map((id) => d.querySelectorAll('#' + id).length), [1, 1, 1, 1, 1, 1, 1, 1], 'every id exists once');
   eq(d.getElementById('connectBtn').getAttribute('data-onclick'), 'connectWallet()', 'Connect Wallet keeps its handler');
-  eq(['order'].map(() => ['#balanceBadge', '#walletStatus', '#connectBtn'].map((s) => cs(a, s, 'order'))), [['1', '2', '3']], 'the wallet controls read: balance, status, connect');
+  eq(['order'].map(() => ['#balanceBadge', '#walletStatus', '#themeBtn', '#connectBtn'].map((s) => cs(a, s, 'order'))), [['1', '2', '3', '4']], 'the wallet controls read: balance, status, theme toggle, connect');
   eq([cs(a, '#netBanner', 'display'), cs(a, '#gbarMode .dm-trigger', 'display') !== 'none'], ['flex', true], 'the banner is still a flex row and the mode trigger is drawn');
   ok(!d.querySelector('#globalBar').outerHTML.match(/\son[a-z]+="/i) && !/style=/.test(d.querySelector('#globalBar .wb-actions').outerHTML), 'csp: no inline handler, and no inline style on the wallet actions');
   const blk = css.slice(css.indexOf('/* ---- Unified header and Home (Phase 10.4)'), css.indexOf('/* ---- Deploy History (section 10)'));

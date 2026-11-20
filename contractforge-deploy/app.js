@@ -5010,16 +5010,23 @@ function payLog(msg){ console.log('[payLog]', msg); }
    THEME TOGGLE
    ====================================================================== */
 let isDark = true;
+function syncThemeBtn(){
+  // The header button shows the icon of the mode it switches to (CSS, by the .light class); only its accessible name is set here.
+  const btn = document.getElementById('themeBtn');
+  if(!btn) return;
+  const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+}
 function toggleTheme(){
   isDark = !isDark;
   document.body.classList.toggle('light', !isDark);
-  const btn = document.getElementById('themeBtn');
-  if(btn) btn.textContent = isDark ? '☀ Light mode' : '☾ Dark mode';
+  syncThemeBtn();
   localStorage.setItem('cf_theme', isDark?'dark':'light');
 }
 function initTheme(){
   const saved = localStorage.getItem('cf_theme');
-  if(saved==='light'){ isDark=false; document.body.classList.add('light'); const btn=document.getElementById('themeBtn'); if(btn) btn.textContent='☾ Dark mode'; }
+  if(saved==='light'){ isDark=false; document.body.classList.add('light'); syncThemeBtn(); }
 }
 
 /* ======================================================================

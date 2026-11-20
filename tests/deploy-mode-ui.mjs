@@ -26,7 +26,7 @@ function fresh(loadOpts) {
 {
   const a = fresh(); const { d } = a;
   ok(!d.getElementById('mcSelector') && !d.querySelector('.spine .mc-box, .spine .mc-btn, .spine .mc-seg, .spine .dm-mount'), 'sidebar: the four-button Multichain mode panel is gone');
-  ok(!!d.querySelector('.spine .net-pill') && !!d.getElementById('themeBtn') && !!d.getElementById('resetSavedBtn'), 'sidebar: active network, Appearance and Reset saved data are still there');
+  ok(!!d.querySelector('.spine .net-pill') && !d.querySelector('.spine #themeBtn') && !!d.querySelector('#globalBar #themeBtn') && !!d.querySelector('.spine #resetSavedBtn'), 'sidebar: active network and Reset saved data are still there (the theme toggle moved to the header)');
   eq(d.querySelectorAll('[data-mode]:not(.home-card):not(.dm-opt)').length, 0, 'sidebar: no stray mode buttons anywhere');
 }
 
